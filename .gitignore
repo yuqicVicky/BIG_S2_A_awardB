@@ -1,9 +1,36 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.venv/
+venv/
+env/
+*.egg-info/
+dist/
+build/
+
+# Jupyter
+.ipynb_checkpoints/
+
+# Environment
+.env
+.env.*
+.DS_Store
+
+# Outputs
+outputs/artifacts/*
+outputs/logs/*
+outputs/reports/*
+
+# Keep output folders
+!outputs/artifacts/.gitkeep
+!outputs/logs/.gitkeep
+!outputs/reports/.gitkeep
+
+# Large data
 data/*
 !data/.gitkeep
 
-outputs/
-__pycache__/
-*.pyc
-.ipynb_checkpoints/
-.DS_Store
-.env
+# Claude local/session files if any
+.claude/settings.local.json
