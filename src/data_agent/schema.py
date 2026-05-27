@@ -92,9 +92,17 @@ def discover_schema(data_dir: Path) -> SchemaSpec:
         target_col=target_col,
         description=description,
     )
+    # Columns shared between target file and sample submission but absent from
+    # covariates (so not join keys) may still be category/block dimensions.
+    non_key_shared = [
+        col for col in target_profile["columns"]
+        if col in sample_profile["columns"]
+        and col not in join_keys
+        and col not in {row_id_col, target_col}
+    ]
     time_col = _infer_special_column(join_keys, "time", description)
-    category_col = _infer_special_column(join_keys, "category", description)
-    block_col = _infer_block_column(join_keys, category_col, description)
+    category_col = _infer_special_column(join_keys, "category", description, extra_candidates=non_key_shared)
+    block_col = _infer_block_column(join_keys, category_col, description, extra_candidates=non_key_shared)
 
     notes = []
     for label, profile in [
@@ -204,6 +212,14 @@ def _choose_row_id(columns: list[str], description: str) -> str:
 
 
 def _choose_target_column(columns: list[str], row_id_col: str, description: str) -> str:
+    # Strongest signal: explicit verb directive like "Predict `column`" or "Fill `column`"
+    for verb in ["predict", "fill", "estimate", "forecast"]:
+        m = re.search(rf'\b{verb}\b[^.`]{{0,30}}`([^`]+)`', description, re.I)
+        if m:
+            col = m.group(1).strip()
+            if col in columns and col != row_id_col:
+                return col
+
     direct = _direct_column_match(
         description,
         ["target column", "target", "prediction column", "outcome column", "response column"],
@@ -212,7 +228,7 @@ def _choose_target_column(columns: list[str], row_id_col: str, description: str)
         return direct
     described = _description_column(
         description,
-        ["target", "prediction", "submission", "must look like", "column"],
+        ["target", "prediction", "must look like"],
     )
     if described and described in columns and described != row_id_col:
         return described
@@ -221,7 +237,7 @@ def _choose_target_column(columns: list[str], row_id_col: str, description: str)
         return non_id[0]
     for col in non_id:
         ncol = _norm(col)
-        if any(token in ncol for token in ["target", "rate", "value", "score", "count", "y"]):
+        if any(token in ncol for token in ["target", "rate", "value", "score", "count"]):
             return col
     return non_id[-1]
 
@@ -322,24 +338,30 @@ def _infer_join_keys(
     return keys
 
 
-def _infer_special_column(keys: list[str], kind: str, description: str) -> str | None:
+def _infer_special_column(
+    keys: list[str], kind: str, description: str, extra_candidates: list[str] | None = None
+) -> str | None:
     if kind == "time":
         patterns = ["period", "date", "month", "week", "time", "year", "quarter"]
     else:
         patterns = ["category", "type", "group", "class", "segment", "series", "measure"]
-    for col in keys:
+    all_candidates = list(keys) + (extra_candidates or [])
+    for col in all_candidates:
         ncol = _norm(col)
         if any(pattern in ncol for pattern in patterns):
             return col
     described = _description_column(description, patterns)
-    if described in keys:
+    if described in set(all_candidates):
         return described
     return None
 
 
-def _infer_block_column(keys: list[str], category_col: str | None, description: str) -> str | None:
+def _infer_block_column(
+    keys: list[str], category_col: str | None, description: str, extra_candidates: list[str] | None = None
+) -> str | None:
+    all_candidates = list(keys) + (extra_candidates or [])
     described = _description_column(description, ["block", "category", "group"])
-    if described in keys:
+    if described in set(all_candidates):
         return described
     return category_col
 
