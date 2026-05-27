@@ -1,123 +1,102 @@
-# STAI-X Challenge 2026 — Award B Submission
+# STAI-X Challenge 2026 — Award B Automation Agent
 
-## Pipeline Overview
+This repository contains a Claude Code automation pipeline for the STAI-X
+Award B evaluation. The evaluation harness places a hidden dataset under
+`data/`, adds `data/DATA_DESCRIPTION.md`, opens this repository in Claude Code,
+and issues one prompt:
 
-This repository implements a **general-purpose AI automation pipeline** for
-longitudinal panel forecasting. When invoked with the single prompt
-`"Do the data analysis"`, the agent autonomously:
-
-1. Reads `data/DATA_DESCRIPTION.md` to understand the task schema
-2. Runs exploratory data analysis (correlation, time series structure)
-3. Engineers temporal features and trains a gradient boosting ensemble
-4. Applies recursive gap filling for multi-step-ahead forecasting
-5. Writes `submission.csv` and `report.pdf` to the repo root
-
-No human intervention is required after the initial prompt.
-
----
-
-## Architecture
-
-```
-User prompt: "Do the data analysis"
-        │
-        ▼
-  ┌─────────────────────────────────────────────────────┐
-  │  CLAUDE.md  (Agent Standard Operating Procedure)    │
-  │                                                     │
-  │  Phase 0: Parse DATA_DESCRIPTION.md                 │
-  │     → infer file paths, column names, target        │
-  │                                                     │
-  │  Phase 1: scripts/eda.py                            │
-  │     → time series plots, correlation heatmaps       │
-  │     → covariate analysis, outputs/ saved            │
-  │                                                     │
-  │  Phase 2: scripts/forecast.py                       │
-  │     → lag/trend features, walk-forward CV           │
-  │     → LightGBM + XGBoost + CatBoost ensemble        │
-  │     → recursive gap fill → submission.csv           │
-  │                                                     │
-  │  Phase 3: scripts/generate_report.py                │
-  │     → collect EDA figures + model metrics           │
-  │     → write report.pdf                              │
-  │                                                     │
-  │  Phase 4: Verification                              │
-  │     → assert submission.csv + report.pdf valid      │
-  └─────────────────────────────────────────────────────┘
+```text
+Do the data analysis
 ```
 
-### Agent Components
+The agent should then run the deterministic Python entry point:
 
-| Component | Implementation |
-|---|---|
-| Brain / LLM | Claude Sonnet 4.6 (medium effort) |
-| Memory | CLAUDE.md as persistent SOP; `outputs/eda/eda_summary.json` stores EDA facts across phases |
-| Planning | CLAUDE.md decomposes task into 4 sequential phases; each phase has explicit success criteria |
-| Action | Bash execution of Python scripts; inline Python when scripts need repair |
-| Execution | Claude Code with `--dangerously-skip-permissions`; sandboxed Linux environment |
-| Observation | Script stdout/stderr inspected after each run; verification assertions in Phase 4 |
+```bash
+python main.py
+```
 
----
+The run writes two required files to the repository root:
+
+- `submission.csv` with exactly `row_id,<target_column_name>`
+- `report.pdf` describing the data, modeling procedure, metrics, and checks
+
+## How The Pipeline Works
+
+1. Parse `data/DATA_DESCRIPTION.md` and inspect files under `data/`.
+2. Infer the train target table, covariates tables, sample submission, target
+   column, row id column, join keys, time column, and category/block column.
+3. Build train and prediction feature frames without using validation targets.
+4. Train baselines and a small candidate model pool.
+5. Select the best model by internal holdout MAE or block-averaged MAE.
+6. Refit the selected model on all training data and generate predictions.
+7. Validate the submission schema and generate a dynamic PDF report.
 
 ## Repository Structure
 
-```
+```text
 .
-├── CLAUDE.md                   ← Agent SOP (read this first)
-├── README.md                   ← This file
-├── data/                       ← Empty at submission; organizers populate
-│   └── .gitkeep
-├── scripts/
-│   ├── eda.py                  ← General-purpose EDA for panel data
-│   ├── forecast.py             ← Walk-forward CV + ensemble forecasting
-│   └── generate_report.py      ← report.pdf generation (reportlab)
-├── .claude/
-│   └── settings.json           ← Claude Code permissions config
-└── outputs/                    ← Created at runtime (not committed)
-    └── eda/
+├── main.py                    # single deterministic entry point
+├── src/data_agent/            # generic Award B pipeline implementation
+├── scripts/award_a_reference/ # original Award A scripts kept as reference only
+├── data/                      # empty at submission; organizers populate
+├── outputs/                   # runtime artifacts/logs/reports
+├── CLAUDE.md                  # Claude Code operating instructions
+├── .claude/                   # Claude Code agent config
+└── requirements.txt
 ```
 
----
+## Setup
 
-## How to Run (Reproduction)
-
-### Setup
 ```bash
-git clone https://github.com/[org]/[repo]
-cd [repo]
-pip install lightgbm xgboost catboost reportlab pandas numpy scipy scikit-learn matplotlib seaborn --break-system-packages
+pip install -r requirements.txt
 ```
 
-### Populate data directory
+For the optional LightGBM candidate:
+
 ```bash
-cp /path/to/competition/data/* data/
-cp /path/to/DATA_DESCRIPTION.md data/
+pip install -r requirements-optional.txt
 ```
 
-### Run the agent
+If LightGBM is unavailable, the pipeline falls back to scikit-learn models. If
+scikit-learn is unavailable, it still produces a valid submission using
+baseline mean models.
+
+## Local Reproduction
+
+Place a hidden-style dataset in `data/`:
+
+```text
+data/
+├── DATA_DESCRIPTION.md
+├── ... training target table ...
+├── ... training covariates table ...
+├── ... validation covariates table ...
+└── ... sample submission table ...
+```
+
+Then run:
+
 ```bash
-claude --dangerously-skip-permissions
-# Then type: Do the data analysis
+python main.py
 ```
 
-### Expected outputs
-- `./submission.csv` — predictions with schema `(row_id, <target_col>)`
-- `./report.pdf` — data analysis report
+Expected outputs:
 
----
+```text
+submission.csv
+report.pdf
+outputs/logs/<run_id>_*.json
+outputs/reports/<run_id>_report.md
+outputs/reports/<run_id>_report.pdf
+```
 
-## Design Principles
+## Design Notes
 
-**Domain-agnostic**: The pipeline infers all column names and file paths from
-`DATA_DESCRIPTION.md` at runtime. It makes no assumptions about the data domain.
-
-**Robust to errors**: CLAUDE.md includes explicit fallback instructions. If a script
-fails, the agent reads the traceback, diagnoses the issue, and either repairs the
-script or writes an inline replacement.
-
-**Temporal integrity**: Walk-forward cross-validation respects the time axis — no
-future data leaks into training folds. Recursive gap filling handles the case where
-lag features reference periods with no observed target values.
-
-**Hierarchy-aware**: If nested categories are described (e.g., subcategory ≤ total),
-predictions are clipped to enforce the constraint.
+- The implementation does not assume overdose-specific column names.
+- The target column and output schema come from `DATA_DESCRIPTION.md` and the
+  sample submission.
+- Row count is never hardcoded.
+- Baseline models are evaluated before candidate models.
+- Candidate models are selected by internal holdout performance, not by a fixed
+  preferred algorithm.
+- No external data is used.

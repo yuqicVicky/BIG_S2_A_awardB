@@ -22,6 +22,8 @@ build/
 outputs/artifacts/*
 outputs/logs/*
 outputs/reports/*
+submission.csv
+report.pdf
 
 # Keep output folders
 !outputs/artifacts/.gitkeep
