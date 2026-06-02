@@ -8,8 +8,9 @@ from reportlab.lib.enums import TA_LEFT, TA_CENTER
 from reportlab.lib.pagesizes import A4
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib.units import cm
+from reportlab.lib.utils import ImageReader
 from reportlab.platypus import (
-    BaseDocTemplate, Frame, PageTemplate, Paragraph,
+    BaseDocTemplate, Frame, Image, PageTemplate, Paragraph,
     Spacer, Table, TableStyle, HRFlowable, PageBreak,
 )
 
@@ -204,6 +205,23 @@ def parse_markdown(md_text: str, styles):
             story.append(Spacer(1, 5))
             story.append(Paragraph(sanitize(line[4:]), styles["h3"]))
             story.append(Spacer(1, 2))
+            i += 1
+            continue
+
+        # Image: ![alt](path) — embed if the file exists, else skip silently
+        m = re.match(r"^!\[(.*?)\]\((.+?)\)\s*$", line)
+        if m:
+            alt, img_path = m.group(1), m.group(2)
+            if os.path.exists(img_path):
+                try:
+                    iw, ih = ImageReader(img_path).getSize()
+                    scale = min(1.0, (usable_w * 0.78) / iw)
+                    story.append(Image(img_path, width=iw * scale, height=ih * scale))
+                    if alt:
+                        story.append(Paragraph(sanitize(alt), styles["body"]))
+                    story.append(Spacer(1, 6))
+                except Exception:
+                    pass
             i += 1
             continue
 

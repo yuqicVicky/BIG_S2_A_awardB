@@ -72,14 +72,20 @@ def _build_markdown(
     repo_root: Path,
 ) -> str:
     scores = model_result.get("model_scores", [])
+    metric_name = model_result.get("metric_name", "mae")
+    task_type = model_result.get("task_type", profile.get("task_type", "regression"))
+    output_kind = model_result.get("output_kind", profile.get("output_kind", "value"))
+    secondary_name = _secondary_metric_name(metric_name, task_type, scores)
+
     score_rows = []
     for score in scores:
         if score.get("status") == "ok":
-            metric_name = model_result.get("metric_name", "mae")
-            score_rows.append(
-                f"| {score['name']} | ok | {score.get('mae', float('nan')):.4f} | "
-                f"{score.get(metric_name, score.get('mae', float('nan'))):.4f} |"
-            )
+            detail = score.get("detail", {})
+            primary = score.get("score")
+            sec = detail.get(secondary_name) if secondary_name else None
+            primary_str = f"{primary:.4f}" if primary is not None else "—"
+            sec_str = f"{sec:.4f}" if sec is not None else "—"
+            score_rows.append(f"| {score['name']} | ok | {primary_str} | {sec_str} |")
         else:
             score_rows.append(f"| {score.get('name')} | failed | — | — |")
 
@@ -88,11 +94,24 @@ def _build_markdown(
     numeric_count = len(profile.get("numeric_columns", []))
     categorical_count = len(profile.get("categorical_columns", []))
 
+    selected_metrics = model_result.get("selected_metrics", {})
+    selected_primary = selected_metrics.get(metric_name)
+    selected_str = f"{selected_primary:.4f}" if isinstance(selected_primary, (int, float)) else "—"
+
+    if task_type in ("binary_classification", "multiclass_classification"):
+        target_label = "Class distribution"
+        target_block = json.dumps(profile.get("target_distribution") or {}, indent=2)
+    else:
+        target_label = "Target summary"
+        target_block = json.dumps(target_summary, indent=2)
+
+    secondary_header = _cap(secondary_name) if secondary_name else "—"
+
     return f"""# Award B Automated Data Analysis Report
 
 ## Executive Summary
 
-Target column: `{schema.get('target_column')}`. Selected model: `{model_result.get('selected_model_name')}` (metric: `{model_result.get('metric_name')}`). All submission validation checks passed.
+Task type: `{task_type}` (detected from DATA_DESCRIPTION.md + data). Target column: `{schema.get('target_column')}`. Submission output: `{output_kind}`. Selected model: `{model_result.get('selected_model_name')}` with holdout `{metric_name}` = {selected_str}. All submission validation checks passed.
 
 ## Data & Schema
 
@@ -104,6 +123,8 @@ Target column: `{schema.get('target_column')}`. Selected model: `{model_result.g
 | Sample submission file | `{_rel(schema.get('sample_submission_file'), repo_root)}` |
 | Row id column | `{schema.get('row_id_column')}` |
 | Target column | `{schema.get('target_column')}` |
+| Task type | `{task_type}` |
+| Selection metric | `{metric_name}` |
 | Join keys | `{', '.join(schema.get('join_keys') or [])}` |
 | Time column | `{schema.get('time_column') or '—'}` |
 | Block/category column | `{schema.get('block_column') or '—'}` |
@@ -112,10 +133,10 @@ Target column: `{schema.get('target_column')}`. Selected model: `{model_result.g
 
 Training rows: {profile.get('train_rows')} | Prediction rows: {profile.get('prediction_rows')} | Features: {feature_count} ({numeric_count} numeric, {categorical_count} categorical).
 
-Target summary:
+{target_label}:
 
 ```json
-{json.dumps(target_summary, indent=2)}
+{target_block}
 ```
 
 ## Model Selection
@@ -126,11 +147,11 @@ Holdout strategy:
 {json.dumps(model_result.get('holdout_strategy'), indent=2)}
 ```
 
-| Model | Status | MAE | Selection Metric |
+| Model | Status | {_cap(metric_name)} | {secondary_header} |
 |---|---:|---:|---:|
 {chr(10).join(score_rows)}
 
-Selected: `{model_result.get('selected_model_name')}`
+Selected: `{model_result.get('selected_model_name')}` (higher is better: {model_result.get('greater_is_better')})
 
 ## Submission Validation
 
@@ -140,7 +161,7 @@ Selected: `{model_result.get('selected_model_name')}`
 
 ## Limitations
 
-Domain-agnostic pipeline. No external data. No causal claims. Prediction quality depends on covariate signal in held-out periods.
+Domain-agnostic pipeline. The task type, metric, and output format are inferred from `DATA_DESCRIPTION.md` with a data-driven fallback. No external data and no causal claims. Prediction quality depends on the signal available in the supplied covariates.
 """
 
 
@@ -157,10 +178,12 @@ def _build_pdf(
     styles = _make_styles()
     story: list = []
 
+    task_type = model_result.get("task_type", profile.get("task_type", "regression"))
+
     # Title banner
     story += _title_banner(
         title="Award B Analysis Report",
-        subtitle=f"Target: {schema.get('target_column', '—')}  |  Model: {model_result.get('selected_model_name', '—')}  |  Metric: {model_result.get('metric_name', '—')}",
+        subtitle=f"Task: {task_type}  |  Target: {schema.get('target_column', '—')}  |  Model: {model_result.get('selected_model_name', '—')}  |  Metric: {model_result.get('metric_name', '—')}",
         styles=styles,
     )
     story.append(Spacer(1, 6 * mm))
@@ -207,12 +230,25 @@ def _build_pdf(
     feat_items = [
         ("Numeric features", str(len(profile.get("numeric_columns", [])))),
         ("Categorical features", str(len(profile.get("categorical_columns", [])))),
-        ("Target mean ± std", f"{ts.get('mean', 0):.3f} ± {ts.get('std', 0):.3f}" if ts.get("mean") is not None else "—"),
-        ("Target range", f"{ts.get('min', 0):.3f} – {ts.get('max', 0):.3f}" if ts.get("min") is not None else "—"),
-        ("Target missing", f"{ts.get('missing', 0):,}"),
+        ("Task type", task_type),
     ]
-    story.append(_kv_table(feat_items, styles))
-    story.append(Spacer(1, 3 * mm))
+    if task_type in ("binary_classification", "multiclass_classification"):
+        dist = profile.get("target_distribution") or {}
+        feat_items.append(("Number of classes", str(dist.get("n_classes", "—"))))
+        feat_items.append(("Majority class rate", f"{dist.get('majority_class_rate', 0):.3f}" if dist else "—"))
+        feat_items.append(("Target missing", f"{ts.get('missing', 0):,}"))
+        story.append(_kv_table(feat_items, styles))
+        story.append(Spacer(1, 3 * mm))
+        dist_table = _class_dist_table(dist, styles)
+        if dist_table is not None:
+            story.append(dist_table)
+            story.append(Spacer(1, 3 * mm))
+    else:
+        feat_items.append(("Target mean ± std", f"{ts.get('mean', 0):.3f} ± {ts.get('std', 0):.3f}" if ts.get("mean") is not None else "—"))
+        feat_items.append(("Target range", f"{ts.get('min', 0):.3f} – {ts.get('max', 0):.3f}" if ts.get("min") is not None else "—"))
+        feat_items.append(("Target missing", f"{ts.get('missing', 0):,}"))
+        story.append(_kv_table(feat_items, styles))
+        story.append(Spacer(1, 3 * mm))
     story.append(Paragraph("Numeric values: median-imputed. Categorical: most-frequent-imputed, one-hot encoded (unknown categories ignored at predict time). Time ordinal features added when a time column is detected.", styles["Body"]))
     story.append(Spacer(1, 5 * mm))
 
@@ -229,7 +265,8 @@ def _build_pdf(
     scores = model_result.get("model_scores", [])
     selected = model_result.get("selected_model_name", "")
     metric_name = model_result.get("metric_name", "mae")
-    story.append(_model_scores_table(scores, selected, metric_name, styles))
+    secondary_name = _secondary_metric_name(metric_name, task_type, scores)
+    story.append(_model_scores_table(scores, selected, metric_name, secondary_name, styles))
     story.append(Spacer(1, 5 * mm))
 
     # Submission validation
@@ -371,10 +408,48 @@ def _kv_table(items: list[tuple[str, str]], styles: dict) -> Table:
     return table
 
 
+def _secondary_metric_name(metric_name: str, task_type: str, scores: list[dict]) -> str | None:
+    available: set[str] = set()
+    for score in scores:
+        if score.get("status") == "ok":
+            available |= set(score.get("detail", {}).keys())
+    if task_type == "regression":
+        return "mae" if (metric_name != "mae" and "mae" in available) else None
+    for candidate in ("accuracy", "roc_auc", "f1", "f1_macro"):
+        if candidate != metric_name and candidate in available:
+            return candidate
+    return None
+
+
+def _class_dist_table(dist: dict, styles: dict) -> Table | None:
+    classes = (dist or {}).get("classes") or []
+    if not classes:
+        return None
+    header = ["Class", "Count", "Fraction"]
+    rows = [[Paragraph(h, styles["TableHeader"]) for h in header]]
+    for entry in classes[:12]:
+        rows.append([
+            Paragraph(str(entry.get("label")), styles["TableCellMono"]),
+            Paragraph(f"{entry.get('count', 0):,}", styles["TableCell"]),
+            Paragraph(f"{entry.get('fraction', 0):.3f}", styles["TableCell"]),
+        ])
+    table = Table(rows, colWidths=[CONTENT_W * 0.40, CONTENT_W * 0.30, CONTENT_W * 0.30], repeatRows=1)
+    table.setStyle(TableStyle([
+        ("BACKGROUND", (0, 0), (-1, 0), _NAVY),
+        ("GRID", (0, 0), (-1, -1), 0.4, _GRID),
+        ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+        ("TOPPADDING", (0, 0), (-1, -1), 4),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
+        ("LEFTPADDING", (0, 0), (-1, -1), 6),
+        ("RIGHTPADDING", (0, 0), (-1, -1), 6),
+    ]))
+    return table
+
+
 def _model_scores_table(
-    scores: list[dict], selected: str, metric_name: str, styles: dict
+    scores: list[dict], selected: str, metric_name: str, secondary_name: str | None, styles: dict
 ) -> Table:
-    header = ["Model", "Status", "MAE", _cap(metric_name)]
+    header = ["Model", "Status", _cap(metric_name), _cap(secondary_name) if secondary_name else "—"]
     col_w = [CONTENT_W * 0.40, CONTENT_W * 0.15, CONTENT_W * 0.22, CONTENT_W * 0.23]
 
     rows = [
@@ -383,13 +458,20 @@ def _model_scores_table(
     for score in scores:
         name = score.get("name", "")
         status = score.get("status", "failed")
-        mae = f"{score.get('mae', 0):.4f}" if status == "ok" else "—"
-        sel_metric = f"{score.get(metric_name, score.get('mae', 0)):.4f}" if status == "ok" else "—"
+        if status == "ok":
+            primary = score.get("score")
+            detail = score.get("detail", {})
+            primary_str = f"{primary:.4f}" if isinstance(primary, (int, float)) else "—"
+            sec_val = detail.get(secondary_name) if secondary_name else None
+            sec_str = f"{sec_val:.4f}" if isinstance(sec_val, (int, float)) else "—"
+        else:
+            primary_str = "—"
+            sec_str = "—"
         rows.append([
             Paragraph(name, styles["TableCellMono"]),
             Paragraph(status, styles["TableCell"]),
-            Paragraph(mae, styles["TableCell"]),
-            Paragraph(sel_metric, styles["TableCell"]),
+            Paragraph(primary_str, styles["TableCell"]),
+            Paragraph(sec_str, styles["TableCell"]),
         ])
 
     table = Table(rows, colWidths=col_w, repeatRows=1)

@@ -22,6 +22,15 @@ Do **not** run this skill before:
 
 This skill does not apply to `descriptive` tasks. If `task_type` is `descriptive`, halt and return an error.
 
+> **Implementation note (Award-B mode).** When the analysis is schema-driven (a hidden
+> `data/DATA_DESCRIPTION.md` plus a sample submission), the proven engine
+> `models.train_and_predict` uses a single internal stratified/time/random holdout to
+> select the model, then refits the selected model on all training rows before
+> predicting the unlabeled competition test set. In that mode `state.splits` carries the
+> internal holdout, and the `val`/`test` metrics in `state.evaluation` reference that
+> same held-out split (the Kaggle test labels are hidden, so only predictions are
+> produced for them). The leakage rules below are unchanged.
+
 ---
 
 ## Inputs
@@ -382,17 +391,17 @@ Write results to `state.models` and `state.evaluation`.
     "baseline": {
       "model_name": "DummyClassifier",
       "hyperparameters": {"strategy": "stratified", "random_state": 42},
-      "val_metrics":  {"split": "val",  "accuracy": 0.508, "f1_weighted": 0.501, "auc_roc": 0.500},
-      "test_metrics": {"split": "test", "accuracy": 0.511, "f1_weighted": 0.503, "auc_roc": 0.501}
+      "val_metrics":  {"split": "val",  "accuracy": 0.508, "f1_weighted": 0.501, "roc_auc": 0.500},
+      "test_metrics": {"split": "test", "accuracy": 0.511, "f1_weighted": 0.503, "roc_auc": 0.501}
     },
     "candidate": {
       "model_name": "RandomForestClassifier",
       "hyperparameters": {"n_estimators": 100, "random_state": 42, "class_weight": null},
       "cv_strategy": "none",
-      "val_metrics":  {"split": "val",  "accuracy": 0.821, "f1_weighted": 0.819, "auc_roc": 0.876},
-      "test_metrics": {"split": "test", "accuracy": 0.810, "f1_weighted": 0.808, "auc_roc": 0.864},
+      "val_metrics":  {"split": "val",  "accuracy": 0.821, "f1_weighted": 0.819, "roc_auc": 0.876},
+      "test_metrics": {"split": "test", "accuracy": 0.810, "f1_weighted": 0.808, "roc_auc": 0.864},
       "baseline_comparison": {
-        "metric": "auc_roc",
+        "metric": "roc_auc",
         "split": "test",
         "baseline": 0.501,
         "candidate": 0.864,
@@ -403,12 +412,12 @@ Write results to `state.models` and `state.evaluation`.
     }
   },
   "evaluation": {
-    "primary_metric": "auc_roc",
+    "primary_metric": "roc_auc",
     "split": "test",
     "baseline_vs_candidate": [
       {"metric": "accuracy",    "split": "test", "baseline": 0.511, "candidate": 0.810, "delta": 0.299},
       {"metric": "f1_weighted", "split": "test", "baseline": 0.503, "candidate": 0.808, "delta": 0.305},
-      {"metric": "auc_roc",     "split": "test", "baseline": 0.501, "candidate": 0.864, "delta": 0.363}
+      {"metric": "roc_auc",     "split": "test", "baseline": 0.501, "candidate": 0.864, "delta": 0.363}
     ],
     "artifacts": {
       "confusion_matrix": "outputs/artifacts/run_20240115_a3f7_confusion_matrix.png",
@@ -432,7 +441,7 @@ Every metric value, wherever it appears in `state`, must follow this schema:
 
 ```json
 {
-  "metric_name": "auc_roc",
+  "metric_name": "roc_auc",
   "value": 0.864,
   "split": "test"
 }

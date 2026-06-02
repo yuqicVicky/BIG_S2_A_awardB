@@ -238,7 +238,7 @@ Write the result to `state.task`. All fields are required.
     "Cabin":       "critical_missing"
   },
   "confidence": 0.92,
-  "recommended_metrics": ["auc_roc", "f1_weighted", "accuracy", "confusion_matrix"],
+  "recommended_metrics": ["roc_auc", "f1_weighted", "accuracy", "confusion_matrix"],
   "class_imbalance_detected": false,
   "unsupported_but_detected_task_types": [],
   "warnings": [

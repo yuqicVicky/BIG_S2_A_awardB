@@ -12,7 +12,7 @@ Use this skill as the very first step of every analysis run, immediately after r
 ## Python Function
 
 ```python
-from data_agent.skills.load_data import load_dataset
+from src.data_agent.skills.load_data import load_dataset
 
 result = load_dataset(file_path)
 # result.df          — raw, unmodified DataFrame

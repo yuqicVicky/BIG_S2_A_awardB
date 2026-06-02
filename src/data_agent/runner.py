@@ -41,22 +41,35 @@ def run_analysis(repo_root: Path) -> dict[str, Any]:
     print(f"Prediction rows: {bundle.profile['prediction_rows']}")
     print(f"Features: {len(bundle.feature_columns)}")
 
+    print(f"Task type: {bundle.task.task_type} | metric: {bundle.task.metric} | output: {bundle.task.output_kind}")
+
     model_result = train_and_predict(bundle, block_column=schema.block_column)
     model_result_dict = {
+        "task_type": model_result.task_type,
+        "output_kind": model_result.output_kind,
         "selected_model_name": model_result.selected_model_name,
+        "metric_name": model_result.metric_name,
+        "greater_is_better": model_result.greater_is_better,
+        "selected_metrics": model_result.extra_metrics,
         "model_scores": model_result.model_scores,
         "holdout_strategy": model_result.holdout_strategy,
-        "metric_name": model_result.metric_name,
         "target_clip_min": model_result.target_clip_min,
         "target_clip_max": model_result.target_clip_max,
     }
     _write_json(model_result_dict, logs_dir / f"{run_id}_model_selection.json")
-    print(f"Selected model: {model_result.selected_model_name}")
+    print(f"Selected model: {model_result.selected_model_name} (metric {model_result.metric_name})")
+    selected_score = _selected_score(model_result)
+    if selected_score is not None:
+        print(f"Holdout {model_result.metric_name}: {selected_score:.4f}")
 
     submission_path = repo_root / "submission.csv"
-    submission = _build_submission(bundle, schema.row_id_column, schema.target_column, model_result.predictions)
+    submission = _build_submission(
+        bundle, schema.row_id_column, schema.target_column, model_result.predictions, model_result.output_kind
+    )
     submission.to_csv(submission_path, index=False)
-    submission_check = _validate_submission(bundle.sample_submission, submission, schema.row_id_column, schema.target_column)
+    submission_check = _validate_submission(
+        bundle.sample_submission, submission, schema.row_id_column, schema.target_column, model_result.output_kind
+    )
     _write_json(submission_check, logs_dir / f"{run_id}_submission_check.json")
     print(f"Submission written: {submission_path}")
 
@@ -85,11 +98,19 @@ def run_analysis(repo_root: Path) -> dict[str, Any]:
     return manifest
 
 
+def _selected_score(model_result) -> float | None:
+    for score in model_result.model_scores:
+        if score.get("name") == model_result.selected_model_name and score.get("status") == "ok":
+            return score.get("score")
+    return None
+
+
 def _build_submission(
     bundle,
     row_id_column: str,
     target_column: str,
     predictions: np.ndarray,
+    output_kind: str,
 ) -> pd.DataFrame:
     sample = bundle.sample_submission.copy()
     if row_id_column not in sample.columns:
@@ -98,13 +119,36 @@ def _build_submission(
         raise ValueError(
             f"Prediction count {len(predictions)} does not match sample submission rows {len(sample)}."
         )
+    values = _format_predictions(predictions, output_kind, sample, target_column)
     output = pd.DataFrame(
         {
             row_id_column: sample[row_id_column].values,
-            target_column: predictions,
+            target_column: values,
         }
     )
     return output
+
+
+def _format_predictions(
+    predictions: np.ndarray, output_kind: str, sample: pd.DataFrame, target_column: str
+) -> np.ndarray:
+    """Coerce predictions to the format/dtype the submission requires.
+
+    Class labels are cast to the sample submission's target dtype (e.g. integer
+    0/1 for accuracy-scored tasks); values and probabilities stay float.
+    """
+    if output_kind == "label":
+        series = pd.Series(predictions)
+        if target_column in sample.columns:
+            target_dtype = sample[target_column].dtype
+            try:
+                if pd.api.types.is_integer_dtype(target_dtype):
+                    return pd.to_numeric(series, errors="coerce").round().astype("int64").to_numpy()
+                return series.astype(target_dtype).to_numpy()
+            except Exception:
+                return series.to_numpy()
+        return series.to_numpy()
+    return np.asarray(predictions, dtype=float)
 
 
 def _validate_submission(
@@ -112,30 +156,54 @@ def _validate_submission(
     submission: pd.DataFrame,
     row_id_column: str,
     target_column: str,
+    output_kind: str,
 ) -> dict[str, Any]:
     expected_columns = [row_id_column, target_column]
-    checks = {
+    target = submission[target_column]
+    checks: dict[str, Any] = {
         "expected_columns": expected_columns,
         "actual_columns": list(submission.columns),
+        "output_kind": output_kind,
         "n_rows_sample": int(len(sample)),
         "n_rows_submission": int(len(submission)),
         "columns_ok": list(submission.columns) == expected_columns,
         "row_count_ok": len(submission) == len(sample),
         "row_id_alignment_ok": submission[row_id_column].tolist() == sample[row_id_column].tolist(),
-        "all_finite": bool(np.isfinite(pd.to_numeric(submission[target_column], errors="coerce")).all()),
-        "missing_predictions": int(pd.to_numeric(submission[target_column], errors="coerce").isna().sum()),
+        "missing_predictions": int(target.isna().sum()),
     }
+
+    if output_kind == "label":
+        checks["all_finite"] = bool(target.notna().all())
+        if target_column in sample.columns and pd.api.types.is_integer_dtype(sample[target_column].dtype):
+            checks["dtype_ok"] = bool(pd.api.types.is_integer_dtype(target.dtype))
+        else:
+            checks["dtype_ok"] = True
+        predicted_labels = set(target.dropna().tolist())
+        checks["distinct_predicted_labels"] = sorted(_py(v) for v in predicted_labels)[:25]
+        if target_column in sample.columns:
+            sample_labels = set(sample[target_column].dropna().tolist())
+            checks["labels_subset_of_sample"] = bool(predicted_labels.issubset(sample_labels)) if sample_labels else None
+    else:
+        numeric = pd.to_numeric(target, errors="coerce")
+        checks["all_finite"] = bool(np.isfinite(numeric).all())
+        checks["dtype_ok"] = True
+
     if not all(
         [
             checks["columns_ok"],
             checks["row_count_ok"],
             checks["row_id_alignment_ok"],
             checks["all_finite"],
+            checks["dtype_ok"],
             checks["missing_predictions"] == 0,
         ]
     ):
         raise ValueError(f"Submission validation failed: {checks}")
     return checks
+
+
+def _py(value: Any) -> Any:
+    return value.item() if hasattr(value, "item") else value
 
 
 def _remove_stale_outputs(repo_root: Path) -> None:

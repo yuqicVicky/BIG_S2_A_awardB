@@ -3,12 +3,14 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Any
 
 import numpy as np
 import pandas as pd
 
 from .schema import SchemaSpec, read_table
+from .task import TaskSpec, resolve_task_spec
 
 
 @dataclass
@@ -20,6 +22,7 @@ class FeatureBundle:
     feature_columns: list[str]
     numeric_columns: list[str]
     categorical_columns: list[str]
+    task: TaskSpec
     profile: dict[str, Any]
 
 
@@ -76,6 +79,20 @@ def build_feature_bundle(spec: SchemaSpec) -> FeatureBundle:
     ]
     categorical_columns = [col for col in feature_columns if col not in numeric_columns]
 
+    description_text = _read_description(spec.description_path)
+    sample_target = (
+        sample_submission[spec.target_column]
+        if spec.target_column in sample_submission.columns
+        else None
+    )
+    task = resolve_task_spec(
+        description_text,
+        train_aligned[spec.target_column],
+        sample_target,
+        has_block_col=bool(spec.block_column),
+        target_column=spec.target_column,
+    )
+
     profile = {
         "train_rows": int(len(train_aligned)),
         "prediction_rows": int(len(predict_aligned)),
@@ -86,10 +103,17 @@ def build_feature_bundle(spec: SchemaSpec) -> FeatureBundle:
         "time_column": spec.time_column,
         "category_column": spec.category_column,
         "block_column": spec.block_column,
+        "task_type": task.task_type,
+        "metric": task.metric,
+        "output_kind": task.output_kind,
+        "task_evidence": task.evidence,
         "feature_columns": feature_columns,
         "numeric_columns": numeric_columns,
         "categorical_columns": categorical_columns,
         "target_summary": _series_summary(train_aligned[spec.target_column]),
+        "target_distribution": (
+            _class_distribution(train_aligned[spec.target_column]) if task.is_classification else None
+        ),
         "missing_rates": {
             col: float(train_aligned[col].isna().mean()) for col in feature_columns
         },
@@ -103,8 +127,18 @@ def build_feature_bundle(spec: SchemaSpec) -> FeatureBundle:
         feature_columns=feature_columns,
         numeric_columns=numeric_columns,
         categorical_columns=categorical_columns,
+        task=task,
         profile=profile,
     )
+
+
+def _read_description(description_path: str | None) -> str:
+    if not description_path:
+        return ""
+    try:
+        return Path(description_path).read_text(encoding="utf-8", errors="replace")
+    except Exception:
+        return ""
 
 
 def _merge_train(
@@ -225,6 +259,22 @@ def _series_summary(series: pd.Series) -> dict[str, Any]:
         "min": float(numeric.min()) if numeric.notna().any() else None,
         "median": float(numeric.median()) if numeric.notna().any() else None,
         "max": float(numeric.max()) if numeric.notna().any() else None,
+    }
+
+
+def _class_distribution(series: pd.Series) -> dict[str, Any]:
+    counts = series.dropna().value_counts()
+    total = int(counts.sum())
+    classes = []
+    for idx, cnt in counts.items():
+        label = idx.item() if hasattr(idx, "item") else idx
+        classes.append(
+            {"label": label, "count": int(cnt), "fraction": float(cnt / total) if total else 0.0}
+        )
+    return {
+        "n_classes": int(len(counts)),
+        "majority_class_rate": float(counts.iloc[0] / total) if total else 0.0,
+        "classes": classes,
     }
 
 

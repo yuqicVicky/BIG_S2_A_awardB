@@ -30,11 +30,15 @@ The current pipeline lives in `src/data_agent/`:
 
 | Module | Responsibility |
 |---|---|
+| `task.py` | Detect the task type (regression / binary / multiclass classification), metric, and output format from `DATA_DESCRIPTION.md` (primary) with a data-driven fallback. |
 | `schema.py` | Parse `data/DATA_DESCRIPTION.md` and infer file roles, target, row id, join keys, time column, and block/category column. |
 | `features.py` | Build train and prediction feature frames without using validation targets. |
-| `models.py` | Evaluate baselines and candidate models, then select the best model by holdout MAE or block-averaged MAE. |
-| `reporting.py` | Generate the dynamic Markdown/PDF report for the current run. |
-| `runner.py` | Orchestrate the full end-to-end pipeline. |
+| `models.py` | Evaluate task-conditioned baselines + candidates and select the best by the task-appropriate holdout metric (MAE/block-MAE for regression; accuracy/ROC-AUC/F1 for classification). |
+| `state.py` | `AnalysisState` threaded through the orchestrated stages and persisted to `outputs/logs/{run_id}_state.json`. |
+| `skills/` | Real, invocable skills (load_data, profile_data, infer_task, preprocessing, modeling, leakage_check, model_evaluation, analysis_planning, report_writing, report_review). |
+| `orchestrator.py` | Primary path: thread `AnalysisState` through the staged pipeline; falls back to `runner.run_analysis` on any stage error. |
+| `reporting.py` | Deterministic fallback report (the orchestrated path uses `skills/report_writing`). |
+| `runner.py` | Deterministic fallback pipeline + shared submission build/validation helpers. |
 
 ## Execution Rules
 
@@ -53,21 +57,29 @@ After `python main.py`, verify:
 
 ```bash
 python - <<'PY'
+import glob, json
 from pathlib import Path
 import pandas as pd
-import numpy as np
 
 assert Path("submission.csv").exists(), "missing submission.csv"
 assert Path("report.pdf").exists(), "missing report.pdf"
+
+# The pipeline writes a task-aware submission check; assert its booleans rather than
+# hardcoding a column name or assuming numeric predictions (labels may be strings).
+checks = sorted(glob.glob("outputs/logs/*_submission_check.json"))
+assert checks, "no submission_check log found"
+chk = json.load(open(checks[-1]))
+for key in ("columns_ok", "row_count_ok", "row_id_alignment_ok", "all_finite", "dtype_ok"):
+    assert chk.get(key) is True, (key, chk)
+assert chk.get("missing_predictions") == 0, chk
+
 sub = pd.read_csv("submission.csv")
 assert sub.shape[1] == 2, sub.columns.tolist()
-assert sub.columns[0] == "row_id", sub.columns.tolist()
-pred = pd.to_numeric(sub.iloc[:, 1], errors="coerce")
-assert pred.notna().all(), "missing predictions"
-assert np.isfinite(pred).all(), "non-finite predictions"
-print("verification passed", sub.shape, sub.columns.tolist())
+print("verification passed", sub.shape, sub.columns.tolist(), "| output:", chk.get("output_kind"))
 PY
 ```
 
-If `DATA_DESCRIPTION.md` specifies a different row-id column name, use that
-schema instead of the literal `row_id` in the verification.
+The submission's row-id and target column names, value dtype, and label set are all
+verified inside `outputs/logs/{run_id}_submission_check.json`, so the check above is
+correct for any hidden dataset (integer 0/1 labels, string class labels, or
+continuous/probability values).

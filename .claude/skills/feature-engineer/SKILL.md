@@ -20,7 +20,7 @@ Never call this skill on the full dataset — only on the training split.
 ## Python Function
 
 ```python
-from data_agent.skills.preprocessing import build_preprocessing_pipeline
+from src.data_agent.skills.preprocessing import build_preprocessing_pipeline
 
 pipeline = build_preprocessing_pipeline(df, numeric_cols, categorical_cols)
 # Returns an UNFITTED ColumnTransformer
@@ -30,13 +30,13 @@ pipeline = build_preprocessing_pipeline(df, numeric_cols, categorical_cols)
 Train/test splitting and end-to-end preprocessing are handled inside `train_and_evaluate_models`:
 
 ```python
-from data_agent.skills.modeling import train_and_evaluate_models
+from src.data_agent.skills.modeling import train_and_evaluate_models
 
 result = train_and_evaluate_models(
     df=state.raw_data,
-    target_col=state.task_spec.target_variable,
-    task_type=state.task_spec.task_type,
-    feature_cols=state.task_spec.feature_candidates,
+    target_col=state.task.target_variable,
+    task_type=state.task.task_type,
+    feature_cols=state.task.feature_candidates,
     test_size=0.2,
     random_state=42,
 )

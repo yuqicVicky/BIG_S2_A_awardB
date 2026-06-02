@@ -25,7 +25,7 @@ If any precondition fails, return a `ReportWritingError` immediately. Do not wri
 | All execution steps passed | `state.execution_logs` contains no entry with `status: "failed"` |
 | All inspection steps passed | `state.inspection_logs` contains no entry with `approved: false` |
 | Evaluation present (supervised) | For supervised tasks: `state.evaluation` is not null |
-| Modeling results present (supervised) | For supervised tasks: `state.model_results` or `state._raw_modeling_results` is not null |
+| Modeling results present (supervised) | For supervised tasks: `state.model_results` or `state.raw_modeling_results` is not null |
 
 **ReportWritingError format:**
 
@@ -237,7 +237,7 @@ For each figure referenced, add an entry to `referenced_artifacts`.
 
 #### For supervised tasks
 
-**Performance table** — populate from `state.evaluation.performance_table` or `state._raw_modeling_results.performance_table`:
+**Performance table** — populate from `state.evaluation.performance_table` or `state.raw_modeling_results.performance_table`:
 
 ```
 | Model                          | Split | <metric_1> | <metric_2> | ... |
@@ -456,11 +456,11 @@ try:
     report_format = "pdf"
 except Exception as e:
     # Fallback: Markdown only; log WARN
-    state.execution_log.append({
-        "step": "report_generate",
-        "status": "warn",
-        "finding": f"PDF conversion failed ({e}); saved Markdown only."
-    })
+    state.log_event(
+        "report_generate",
+        status="warn",
+        finding=f"PDF conversion failed ({e}); saved Markdown only.",
+    )
     report_path   = md_path
     report_format = "markdown"
 ```

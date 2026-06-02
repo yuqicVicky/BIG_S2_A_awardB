@@ -42,7 +42,7 @@ All artifacts, logs, and state snapshots for this run use this prefix.
 Before calling any agent, create the initial state:
 
 ```python
-from data_agent.state import AnalysisState, UserRequest
+from src.data_agent.state import AnalysisState, UserRequest
 
 state = AnalysisState(
     run_id=run_id,
@@ -81,7 +81,7 @@ Execute stages **in this exact order**. No stage may be skipped. No stage may be
 Call Python directly to verify the file is accessible and load basic metadata:
 
 ```python
-from data_agent.skills.load_data import load_dataset
+from src.data_agent.skills.load_data import load_dataset
 
 result = load_dataset(file_path)
 state.load_metadata = {
