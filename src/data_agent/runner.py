@@ -11,6 +11,7 @@ from typing import Any
 import numpy as np
 import pandas as pd
 
+from .audit import audit_summary_text, extract_dynamic_terms, run_audit, write_audit_log
 from .features import build_feature_bundle
 from .models import train_and_predict
 from .reporting import write_report
@@ -34,6 +35,13 @@ def run_analysis(repo_root: Path) -> dict[str, Any]:
     write_schema_json(schema, logs_dir / f"{run_id}_schema.json")
     print(f"Target column: {schema.target_column}")
     print(f"Join keys: {schema.join_keys}")
+
+    # ── PRE-RUN anti-hardcoding audit ────────────────────────────────────────
+    # Runs immediately after schema discovery, before any feature engineering.
+    dynamic_terms = extract_dynamic_terms(repo_root / "data")
+    pre_audit = run_audit(repo_root, run_id, phase="pre", dynamic_terms=dynamic_terms)
+    write_audit_log(pre_audit, logs_dir)
+    _print_audit_summary("PRE-RUN", pre_audit)
 
     bundle = build_feature_bundle(schema)
     _write_json(bundle.profile, logs_dir / f"{run_id}_profile.json")
@@ -73,6 +81,21 @@ def run_analysis(repo_root: Path) -> dict[str, Any]:
     _write_json(submission_check, logs_dir / f"{run_id}_submission_check.json")
     print(f"Submission written: {submission_path}")
 
+    # ── POST-RUN anti-hardcoding audit ───────────────────────────────────────
+    # Runs before final output; also scans any generated report markdown.
+    report_md_candidate = repo_root / "outputs" / "reports" / f"{run_id}_report.md"
+    extra_files = [report_md_candidate] if report_md_candidate.exists() else []
+    post_audit = run_audit(
+        repo_root, run_id, phase="post",
+        dynamic_terms=dynamic_terms,
+        extra_files=extra_files,
+    )
+    write_audit_log(post_audit, logs_dir)
+    _print_audit_summary("POST-RUN", post_audit)
+
+    pre_audit_summary = audit_summary_text(pre_audit)
+    post_audit_summary = audit_summary_text(post_audit)
+
     md_path, pdf_path = write_report(
         repo_root=repo_root,
         run_id=run_id,
@@ -80,6 +103,8 @@ def run_analysis(repo_root: Path) -> dict[str, Any]:
         profile=bundle.profile,
         model_result=model_result_dict,
         submission_check=submission_check,
+        pre_audit_summary=pre_audit_summary,
+        post_audit_summary=post_audit_summary,
     )
     print(f"Report markdown: {md_path}")
     print(f"Report PDF: {pdf_path}")
@@ -92,6 +117,16 @@ def run_analysis(repo_root: Path) -> dict[str, Any]:
         "schema": schema.to_dict(),
         "model": model_result_dict,
         "submission_check": submission_check,
+        "pre_audit": {
+            "verdict": pre_audit.verdict,
+            "n_risky": pre_audit.n_risky,
+            "n_unacceptable": pre_audit.n_unacceptable,
+        },
+        "post_audit": {
+            "verdict": post_audit.verdict,
+            "n_risky": post_audit.n_risky,
+            "n_unacceptable": post_audit.n_unacceptable,
+        },
     }
     _write_json(manifest, logs_dir / f"{run_id}_manifest.json")
     print("=== Analysis complete ===")
@@ -229,4 +264,15 @@ def _run_id(repo_root: Path) -> str:
     stamp = datetime.utcnow().strftime("%Y%m%d_%H%M%S")
     digest = hashlib.sha256(str(repo_root).encode("utf-8")).hexdigest()[:8]
     return f"{stamp}_{digest}"
+
+
+def _print_audit_summary(phase: str, result) -> None:
+    verdict = result.verdict.upper()
+    print(
+        f"[audit:{phase}] verdict={verdict} "
+        f"risky={result.n_risky} unacceptable={result.n_unacceptable}"
+    )
+    for f in result.findings:
+        if f.classification == "unacceptable":
+            print(f"  [UNACCEPTABLE] {f.file_path}:{f.line_number} term='{f.term}' — {f.reason}")
 

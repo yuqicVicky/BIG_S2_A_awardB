@@ -1,4 +1,14 @@
-"""Data loading and feature frame construction."""
+"""Data loading and feature frame construction.
+
+Datetime detection and feature extraction are intentionally generic:
+any column that can be parsed as a datetime — including the row_id
+column and join keys — is treated as a potential source of time
+features (hour, dayofweek, day, month, year, is_weekend, quarter,
+weekofyear, cyclical encodings, ordinal).  The raw column is NOT
+added to the model feature set; only the derived ``col__<field>``
+columns are.  This avoids target leakage from ID columns while
+preserving temporal information for any unknown future dataset.
+"""
 
 from __future__ import annotations
 
@@ -40,6 +50,17 @@ LEAKAGE_NAME_TOKENS = [
     "predicted",
 ]
 
+# Minimum fraction of values that must parse as datetime for a column to be
+# treated as a datetime source.  Applied to a sample of up to 200 rows.
+_DATETIME_PARSE_THRESHOLD = 0.6
+
+# Maximum number of unique values in a time-derived feature to be included in
+# the target-signal audit (guards against high-cardinality columns such as
+# the full ordinal index).
+_AUDIT_MAX_GROUPS = 50
+
+
+# ── public entry point ────────────────────────────────────────────────────────
 
 def build_feature_bundle(spec: SchemaSpec) -> FeatureBundle:
     target_df = read_table(spec.train_target_file)
@@ -54,7 +75,12 @@ def build_feature_bundle(spec: SchemaSpec) -> FeatureBundle:
     train_df = _merge_train(target_df, train_cov, spec)
     predict_df = _merge_prediction(sample_submission, val_cov, spec)
 
-    train_df, predict_df = _add_time_features(train_df, predict_df, spec.time_column)
+    # ── datetime feature extraction ───────────────────────────────────────────
+    # Detect datetime-like columns in the combined frame (including row_id and
+    # join keys that would otherwise be excluded from model features).
+    all_dt_cols = _detect_datetime_columns(train_df)
+    time_sources = _resolve_time_sources(all_dt_cols, spec)
+    train_df, predict_df, time_audit = _extract_time_features(train_df, predict_df, time_sources)
 
     if spec.target_column not in train_df.columns:
         raise ValueError(f"Target column '{spec.target_column}' not found after training merge.")
@@ -93,6 +119,12 @@ def build_feature_bundle(spec: SchemaSpec) -> FeatureBundle:
         target_column=spec.target_column,
     )
 
+    # ── target-signal audit for time features ─────────────────────────────────
+    generated_time_features = [f for fs in time_audit["generated_features"].values() for f in fs]
+    time_signal = _audit_time_target_signal(
+        train_aligned, train_aligned[spec.target_column], generated_time_features
+    )
+
     profile = {
         "train_rows": int(len(train_aligned)),
         "prediction_rows": int(len(predict_aligned)),
@@ -117,6 +149,15 @@ def build_feature_bundle(spec: SchemaSpec) -> FeatureBundle:
         "missing_rates": {
             col: float(train_aligned[col].isna().mean()) for col in feature_columns
         },
+        # ── datetime / time-feature audit ─────────────────────────────────────
+        "feature_audit": {
+            "detected_row_id_column": spec.row_id_column,
+            "detected_datetime_columns": all_dt_cols,
+            "datetime_feature_sources": time_sources,
+            "generated_time_features": time_audit["generated_features"],
+            "final_feature_columns": feature_columns,
+            "time_target_signal": time_signal,
+        },
     }
 
     return FeatureBundle(
@@ -132,14 +173,315 @@ def build_feature_bundle(spec: SchemaSpec) -> FeatureBundle:
     )
 
 
-def _read_description(description_path: str | None) -> str:
-    if not description_path:
-        return ""
-    try:
-        return Path(description_path).read_text(encoding="utf-8", errors="replace")
-    except Exception:
-        return ""
+# ── datetime detection ────────────────────────────────────────────────────────
 
+def _detect_datetime_columns(df: pd.DataFrame, min_parse_rate: float = _DATETIME_PARSE_THRESHOLD) -> list[str]:
+    """Return every column in *df* that can be reliably parsed as a datetime.
+
+    Includes columns that are already datetime64, string columns whose values
+    parse as datetime, and object columns with mixed content above the
+    threshold.  Pure numeric columns are skipped (epoch integers are not
+    treated as datetimes without explicit annotation).
+    """
+    result: list[str] = []
+    for col in df.columns:
+        series = df[col]
+        if pd.api.types.is_datetime64_any_dtype(series):
+            result.append(col)
+            continue
+        if pd.api.types.is_numeric_dtype(series):
+            continue
+        # Sample up to 200 non-null values for speed.
+        sample = series.dropna().head(200)
+        if len(sample) == 0:
+            continue
+        try:
+            parsed = pd.to_datetime(sample, errors="coerce")
+            rate = float(parsed.notna().mean())
+            if rate >= min_parse_rate:
+                result.append(col)
+        except Exception:
+            pass
+    return result
+
+
+def _resolve_time_sources(detected_dt_cols: list[str], spec: SchemaSpec) -> list[str]:
+    """Determine which detected datetime columns should generate time features.
+
+    Priority order:
+    1. The explicitly identified time column from schema discovery.
+    2. The row_id column (if it is datetime-like — e.g. a ``datetime`` column
+       used as the submission row identifier).
+    3. Any join key that is datetime-like.
+    4. Any remaining detected datetime column that is not the target.
+
+    The raw source column is kept as a *feature source only*; it is never
+    added to the model feature set directly (that is enforced by
+    ``_choose_feature_columns`` which excludes row_id and target).
+    """
+    seen: set[str] = set()
+    sources: list[str] = []
+
+    def _add(col: str) -> None:
+        if col and col not in seen:
+            seen.add(col)
+            sources.append(col)
+
+    if spec.time_column and spec.time_column in detected_dt_cols:
+        _add(spec.time_column)
+
+    # row_id that is also datetime-like → extract time features from it
+    if spec.row_id_column and spec.row_id_column in detected_dt_cols:
+        _add(spec.row_id_column)
+
+    for key in spec.join_keys:
+        if key in detected_dt_cols:
+            _add(key)
+
+    # Any remaining datetime column (not the target)
+    for col in detected_dt_cols:
+        if col != spec.target_column:
+            _add(col)
+
+    return sources
+
+
+# ── time feature extraction ───────────────────────────────────────────────────
+
+def _extract_time_features(
+    train_df: pd.DataFrame,
+    predict_df: pd.DataFrame,
+    source_cols: list[str],
+) -> tuple[pd.DataFrame, pd.DataFrame, dict]:
+    """Extract time features from all identified datetime source columns.
+
+    Returns the augmented DataFrames and an audit dictionary that lists, for
+    each source column, the names of the features that were generated.
+    """
+    audit: dict[str, Any] = {"generated_features": {}}
+    train = train_df
+    pred = predict_df
+    for col in source_cols:
+        if col not in train.columns:
+            continue
+        train, pred, features_added = _add_features_for_datetime_col(train, pred, col)
+        audit["generated_features"][col] = features_added
+    return train, pred, audit
+
+
+def _has_time_component(parsed: pd.Series) -> bool:
+    """Return True if *parsed* contains sub-day time information (any non-midnight)."""
+    non_null = parsed.dropna()
+    if len(non_null) == 0:
+        return False
+    # If ANY value has a non-zero hour, minute, or second → sub-day resolution.
+    return bool(
+        ((non_null.dt.hour != 0) | (non_null.dt.minute != 0) | (non_null.dt.second != 0)).any()
+    )
+
+
+def _add_features_for_datetime_col(
+    train_df: pd.DataFrame,
+    predict_df: pd.DataFrame,
+    col: str,
+) -> tuple[pd.DataFrame, pd.DataFrame, list[str]]:
+    """Extract a comprehensive set of time features from *col* in both frames.
+
+    Generated features (always):
+        col__year, col__month, col__month_sin, col__month_cos,
+        col__day, col__dayofweek, col__dayofweek_sin, col__dayofweek_cos,
+        col__is_weekend, col__quarter, col__weekofyear, col__ordinal
+
+    Generated features (only when sub-day timestamps are detected):
+        col__hour, col__hour_sin, col__hour_cos
+
+    The raw *col* value is NOT added to the feature set here — that decision
+    belongs to ``_choose_feature_columns``, which excludes row_id and target
+    columns but includes the derived ``col__*`` engineered features.
+    """
+    features_added: list[str] = []
+
+    train_parsed = pd.to_datetime(train_df[col], errors="coerce")
+    parse_rate = float(train_parsed.notna().mean()) if len(train_parsed) else 0.0
+    if parse_rate < _DATETIME_PARSE_THRESHOLD:
+        return train_df, predict_df, features_added
+
+    pred_has_col = col in predict_df.columns
+    pred_parsed = pd.to_datetime(predict_df[col], errors="coerce") if pred_has_col else pd.Series(dtype="datetime64[ns]")
+
+    train = train_df.copy()
+    pred = predict_df.copy()
+
+    has_sub_day = _has_time_component(train_parsed)
+
+    def _set(frame: pd.DataFrame, parsed: pd.Series, name: str, values: Any) -> None:
+        if name not in frame.columns:
+            frame[name] = values
+
+    # ── year ──────────────────────────────────────────────────────────────────
+    feat = f"{col}__year"
+    _set(train, train_parsed, feat, train_parsed.dt.year)
+    if pred_has_col:
+        _set(pred, pred_parsed, feat, pred_parsed.dt.year)
+    features_added.append(feat)
+
+    # ── month (raw + cyclical) ────────────────────────────────────────────────
+    feat = f"{col}__month"
+    _set(train, train_parsed, feat, train_parsed.dt.month)
+    if pred_has_col:
+        _set(pred, pred_parsed, feat, pred_parsed.dt.month)
+    features_added.append(feat)
+
+    for suffix, values_fn in [
+        ("__month_sin", lambda p: np.sin(2 * np.pi * p.dt.month / 12)),
+        ("__month_cos", lambda p: np.cos(2 * np.pi * p.dt.month / 12)),
+    ]:
+        feat = f"{col}{suffix}"
+        _set(train, train_parsed, feat, values_fn(train_parsed))
+        if pred_has_col:
+            _set(pred, pred_parsed, feat, values_fn(pred_parsed))
+        features_added.append(feat)
+
+    # ── day of month ──────────────────────────────────────────────────────────
+    feat = f"{col}__day"
+    _set(train, train_parsed, feat, train_parsed.dt.day)
+    if pred_has_col:
+        _set(pred, pred_parsed, feat, pred_parsed.dt.day)
+    features_added.append(feat)
+
+    # ── day of week (0=Monday, raw + cyclical) ────────────────────────────────
+    feat = f"{col}__dayofweek"
+    _set(train, train_parsed, feat, train_parsed.dt.dayofweek)
+    if pred_has_col:
+        _set(pred, pred_parsed, feat, pred_parsed.dt.dayofweek)
+    features_added.append(feat)
+
+    for suffix, values_fn in [
+        ("__dayofweek_sin", lambda p: np.sin(2 * np.pi * p.dt.dayofweek / 7)),
+        ("__dayofweek_cos", lambda p: np.cos(2 * np.pi * p.dt.dayofweek / 7)),
+    ]:
+        feat = f"{col}{suffix}"
+        _set(train, train_parsed, feat, values_fn(train_parsed))
+        if pred_has_col:
+            _set(pred, pred_parsed, feat, values_fn(pred_parsed))
+        features_added.append(feat)
+
+    # ── is_weekend ────────────────────────────────────────────────────────────
+    feat = f"{col}__is_weekend"
+    _set(train, train_parsed, feat, (train_parsed.dt.dayofweek >= 5).astype(int))
+    if pred_has_col:
+        _set(pred, pred_parsed, feat, (pred_parsed.dt.dayofweek >= 5).astype(int))
+    features_added.append(feat)
+
+    # ── quarter ───────────────────────────────────────────────────────────────
+    feat = f"{col}__quarter"
+    _set(train, train_parsed, feat, train_parsed.dt.quarter)
+    if pred_has_col:
+        _set(pred, pred_parsed, feat, pred_parsed.dt.quarter)
+    features_added.append(feat)
+
+    # ── week of year ──────────────────────────────────────────────────────────
+    feat = f"{col}__weekofyear"
+    try:
+        train_woy = train_parsed.dt.isocalendar().week.astype(int)
+    except AttributeError:
+        train_woy = train_parsed.dt.week.astype(int)  # type: ignore[attr-defined]
+    _set(train, train_parsed, feat, train_woy)
+    if pred_has_col:
+        try:
+            pred_woy = pred_parsed.dt.isocalendar().week.astype(int)
+        except AttributeError:
+            pred_woy = pred_parsed.dt.week.astype(int)  # type: ignore[attr-defined]
+        _set(pred, pred_parsed, feat, pred_woy)
+    features_added.append(feat)
+
+    # ── hour (only when sub-day data present, raw + cyclical) ─────────────────
+    if has_sub_day:
+        feat = f"{col}__hour"
+        _set(train, train_parsed, feat, train_parsed.dt.hour)
+        if pred_has_col:
+            _set(pred, pred_parsed, feat, pred_parsed.dt.hour)
+        features_added.append(feat)
+
+        for suffix, values_fn in [
+            ("__hour_sin", lambda p: np.sin(2 * np.pi * p.dt.hour / 24)),
+            ("__hour_cos", lambda p: np.cos(2 * np.pi * p.dt.hour / 24)),
+        ]:
+            feat = f"{col}{suffix}"
+            _set(train, train_parsed, feat, values_fn(train_parsed))
+            if pred_has_col:
+                _set(pred, pred_parsed, feat, values_fn(pred_parsed))
+            features_added.append(feat)
+
+    # ── ordinal (temporal ordering proxy) ────────────────────────────────────
+    # Built from the union of train and predict values so test timestamps are
+    # always in the map.
+    feat = f"{col}__ordinal"
+    combined_vals = pd.concat(
+        [train[[col]], pred[[col]] if pred_has_col else pd.DataFrame({col: []})],
+        ignore_index=True,
+    )[col]
+    ordered = sorted(v for v in combined_vals.dropna().astype(str).unique().tolist())
+    ordinal_map = {v: i for i, v in enumerate(ordered)}
+    _set(train, train_parsed, feat, train[col].astype(str).map(ordinal_map))
+    if pred_has_col:
+        _set(pred, pred_parsed, feat, pred[col].astype(str).map(ordinal_map))
+    features_added.append(feat)
+
+    return train, pred, features_added
+
+
+# ── target-signal audit ───────────────────────────────────────────────────────
+
+def _audit_time_target_signal(
+    train_df: pd.DataFrame,
+    target: pd.Series,
+    time_features: list[str],
+) -> dict[str, Any]:
+    """For each time-derived feature, report target mean/std by group.
+
+    This reveals whether the feature has predictive value (large
+    ``target_mean_range``) without fitting any model.  Written to the profile
+    ``feature_audit.time_target_signal`` key so the report writer can quote it.
+    """
+    result: dict[str, Any] = {}
+    target_num = pd.to_numeric(target, errors="coerce")
+    if target_num.isna().all():
+        return result
+
+    for feat in time_features:
+        if feat not in train_df.columns:
+            continue
+        col_data = train_df[feat]
+        n_unique = int(col_data.nunique(dropna=True))
+        if n_unique < 2 or n_unique > _AUDIT_MAX_GROUPS:
+            continue
+        try:
+            frame = pd.DataFrame({
+                "feat": col_data.reset_index(drop=True),
+                "target": target_num.reset_index(drop=True),
+            }).dropna()
+            grouped = frame.groupby("feat")["target"].agg(["mean", "std", "count"]).reset_index()
+            result[feat] = {
+                "n_groups": n_unique,
+                "target_mean_range": float(grouped["mean"].max() - grouped["mean"].min()),
+                "target_mean_std_across_groups": float(grouped["mean"].std()),
+                "groups": [
+                    {
+                        "group": _py(row["feat"]),
+                        "mean": float(row["mean"]),
+                        "std": float(row["std"]) if not np.isnan(row["std"]) else None,
+                        "count": int(row["count"]),
+                    }
+                    for _, row in grouped.iterrows()
+                ],
+            }
+        except Exception:
+            pass
+    return result
+
+
+# ── merge helpers ─────────────────────────────────────────────────────────────
 
 def _merge_train(
     target_df: pd.DataFrame, train_cov: pd.DataFrame | None, spec: SchemaSpec
@@ -187,41 +529,7 @@ def _non_duplicate_columns(source: pd.DataFrame, existing: pd.DataFrame) -> pd.D
     return source[[col for col in source.columns if col not in existing.columns]].copy()
 
 
-def _add_time_features(
-    train_df: pd.DataFrame, predict_df: pd.DataFrame, time_col: str | None
-) -> tuple[pd.DataFrame, pd.DataFrame]:
-    if not time_col or time_col not in train_df.columns:
-        return train_df, predict_df
-    train = train_df.copy()
-    pred = predict_df.copy()
-    combined = pd.concat(
-        [train[[time_col]], pred[[time_col]] if time_col in pred.columns else pd.DataFrame({time_col: []})],
-        ignore_index=True,
-    )
-    values = combined[time_col]
-    parsed = pd.to_datetime(values, errors="coerce")
-    parse_rate = float(parsed.notna().mean()) if len(parsed) else 0.0
-
-    if parse_rate >= 0.6:
-        train_parsed = pd.to_datetime(train[time_col], errors="coerce")
-        train[f"{time_col}__year"] = train_parsed.dt.year
-        train[f"{time_col}__month"] = train_parsed.dt.month
-        train[f"{time_col}__month_sin"] = np.sin(2 * np.pi * train_parsed.dt.month / 12)
-        train[f"{time_col}__month_cos"] = np.cos(2 * np.pi * train_parsed.dt.month / 12)
-        if time_col in pred.columns:
-            pred_parsed = pd.to_datetime(pred[time_col], errors="coerce")
-            pred[f"{time_col}__year"] = pred_parsed.dt.year
-            pred[f"{time_col}__month"] = pred_parsed.dt.month
-            pred[f"{time_col}__month_sin"] = np.sin(2 * np.pi * pred_parsed.dt.month / 12)
-            pred[f"{time_col}__month_cos"] = np.cos(2 * np.pi * pred_parsed.dt.month / 12)
-
-    ordered_values = sorted(v for v in values.dropna().astype(str).unique().tolist())
-    ordinal_map = {value: idx for idx, value in enumerate(ordered_values)}
-    train[f"{time_col}__ordinal"] = train[time_col].astype(str).map(ordinal_map)
-    if time_col in pred.columns:
-        pred[f"{time_col}__ordinal"] = pred[time_col].astype(str).map(ordinal_map)
-    return train, pred
-
+# ── feature column selection ──────────────────────────────────────────────────
 
 def _choose_feature_columns(
     train_df: pd.DataFrame, predict_df: pd.DataFrame, spec: SchemaSpec
@@ -237,7 +545,11 @@ def _choose_feature_columns(
         if any(token in ncol for token in LEAKAGE_NAME_TOKENS) and col not in spec.join_keys:
             excluded.add(col)
 
+    # Columns present in both frames (excluding leakage / id columns)
     shared = [col for col in train_df.columns if col in predict_df.columns and col not in excluded]
+
+    # Engineered columns (containing ``__``) that may only exist in train_df
+    # after feature extraction — include them if they also appear in predict_df.
     engineered = [
         col
         for col in train_df.columns
@@ -246,7 +558,19 @@ def _choose_feature_columns(
     for col in engineered:
         if col in predict_df.columns:
             shared.append(col)
+
     return shared
+
+
+# ── misc helpers ──────────────────────────────────────────────────────────────
+
+def _read_description(description_path: str | None) -> str:
+    if not description_path:
+        return ""
+    try:
+        return Path(description_path).read_text(encoding="utf-8", errors="replace")
+    except Exception:
+        return ""
 
 
 def _series_summary(series: pd.Series) -> dict[str, Any]:
@@ -281,3 +605,6 @@ def _class_distribution(series: pd.Series) -> dict[str, Any]:
 def _norm(value: str) -> str:
     return str(value).strip().lower().replace(" ", "_").replace("-", "_")
 
+
+def _py(value: Any) -> Any:
+    return value.item() if hasattr(value, "item") else value

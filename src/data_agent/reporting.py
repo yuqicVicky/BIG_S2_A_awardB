@@ -48,6 +48,8 @@ def write_report(
     profile: dict[str, Any],
     model_result: dict[str, Any],
     submission_check: dict[str, Any],
+    pre_audit_summary: str | None = None,
+    post_audit_summary: str | None = None,
 ) -> tuple[Path, Path]:
     reports_dir = repo_root / "outputs" / "reports"
     reports_dir.mkdir(parents=True, exist_ok=True)
@@ -55,9 +57,17 @@ def write_report(
     pdf_path = reports_dir / f"{run_id}_report.pdf"
     root_pdf_path = repo_root / "report.pdf"
 
-    markdown = _build_markdown(schema, profile, model_result, submission_check, repo_root)
+    markdown = _build_markdown(
+        schema, profile, model_result, submission_check, repo_root,
+        pre_audit_summary=pre_audit_summary,
+        post_audit_summary=post_audit_summary,
+    )
     md_path.write_text(markdown, encoding="utf-8")
-    _build_pdf(schema, profile, model_result, submission_check, pdf_path, repo_root)
+    _build_pdf(
+        schema, profile, model_result, submission_check, pdf_path, repo_root,
+        pre_audit_summary=pre_audit_summary,
+        post_audit_summary=post_audit_summary,
+    )
     root_pdf_path.write_bytes(pdf_path.read_bytes())
     return md_path, root_pdf_path
 
@@ -70,6 +80,8 @@ def _build_markdown(
     model_result: dict[str, Any],
     submission_check: dict[str, Any],
     repo_root: Path,
+    pre_audit_summary: str | None = None,
+    post_audit_summary: str | None = None,
 ) -> str:
     scores = model_result.get("model_scores", [])
     metric_name = model_result.get("metric_name", "mae")
@@ -159,6 +171,10 @@ Selected: `{model_result.get('selected_model_name')}` (higher is better: {model_
 {json.dumps(submission_check, indent=2)}
 ```
 
+## Anti-Hardcoding Audit
+
+{_audit_md_section(pre_audit_summary, post_audit_summary)}
+
 ## Limitations
 
 Domain-agnostic pipeline. The task type, metric, and output format are inferred from `DATA_DESCRIPTION.md` with a data-driven fallback. No external data and no causal claims. Prediction quality depends on the signal available in the supplied covariates.
@@ -174,6 +190,8 @@ def _build_pdf(
     submission_check: dict[str, Any],
     pdf_path: Path,
     repo_root: Path,
+    pre_audit_summary: str | None = None,
+    post_audit_summary: str | None = None,
 ) -> None:
     styles = _make_styles()
     story: list = []
@@ -280,6 +298,15 @@ def _build_pdf(
     ]
     story.append(_kv_table(val_items, styles))
     story.append(Spacer(1, 5 * mm))
+
+    # Anti-hardcoding audit
+    if pre_audit_summary or post_audit_summary:
+        story += _section("Anti-Hardcoding Audit", styles)
+        if pre_audit_summary:
+            story.append(Paragraph(pre_audit_summary, styles["Body"]))
+        if post_audit_summary:
+            story.append(Paragraph(post_audit_summary, styles["Body"]))
+        story.append(Spacer(1, 5 * mm))
 
     # Limitations
     story += _section("Limitations", styles)
@@ -505,6 +532,15 @@ def _cap(s: str) -> str:
 
 
 # ── path utility ─────────────────────────────────────────────────────────────
+
+def _audit_md_section(pre: str | None, post: str | None) -> str:
+    parts = []
+    if pre:
+        parts.append(f"**Pre-run:** {pre}")
+    if post:
+        parts.append(f"**Post-run:** {post}")
+    return "\n\n".join(parts) if parts else "_Audit not run._"
+
 
 def _rel(path_str: str | None, repo_root: Path) -> str:
     if not path_str:
