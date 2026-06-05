@@ -18,6 +18,7 @@ import numpy as np
 import pandas as pd
 
 from .features import build_feature_bundle
+from .pattern_analysis import run_pattern_analysis
 from .runner import (
     _build_submission,
     _remove_stale_outputs,
@@ -95,6 +96,17 @@ def _run_award_b(repo_root, run_id, logs_dir, artifacts_dir, goal, random_state)
     print(f"Target column: {schema.target_column} | task: {bundle.task.task_type}")
     state.persist(logs_dir)
 
+    # Stage 1b — data pattern analysis (deep EDA)
+    try:
+        pattern_report = run_pattern_analysis(
+            schema, bundle, repo_root=repo_root, run_id=run_id
+        )
+        state.data_pattern_report = pattern_report
+    except Exception as _pa_exc:
+        print(f"[orchestrator] data pattern analysis failed ({_pa_exc}); continuing")
+        state.data_pattern_report = None
+    state.persist(logs_dir)
+
     # Stage 2 — profile
     profile = profile_tabular_data(train_df, schema.train_target_file)
     state.data_profile = profile.model_dump()
@@ -107,6 +119,8 @@ def _run_award_b(repo_root, run_id, logs_dir, artifacts_dir, goal, random_state)
         sample_submission=bundle.sample_submission, has_block_col=bool(schema.block_column),
     )
     state.task_spec = spec.model_dump()
+    # Augment task_spec with schema fields used by the report writer
+    state.task_spec["row_id_column"] = schema.row_id_column
     print(f"Task: {spec.task_type} | metric: {spec.metric} | output: {spec.output_kind}")
     state.persist(logs_dir)
 
@@ -123,19 +137,71 @@ def _run_award_b(repo_root, run_id, logs_dir, artifacts_dir, goal, random_state)
     state.persist(logs_dir)
 
     # Stage 8 — leakage gate (does not abort Award-B: features come from the proven pipeline)
+    # Scope the audit to bundle.feature_columns — the actual model feature set — so that
+    # train-only columns (casual/registered/etc.) excluded by _choose_feature_columns are
+    # not incorrectly flagged as leakage. Also exempt datetime-derived features from the
+    # temporal-name check (they are valid prediction-time features, not leakage).
+    _dt_features: set[str] = set()
+    _generated = (bundle.profile.get("feature_audit") or {}).get("generated_time_features") or {}
+    for feats in _generated.values():
+        _dt_features.update(feats if isinstance(feats, list) else [])
+    _leakage_spec = dict(state.task_spec or {})
+    _leakage_spec["feature_candidates"] = bundle.feature_columns
     state.leakage_audit = run_leakage_check(
-        "leakage_check", task_spec=state.task_spec, data_profile=state.data_profile, df=train_df, run_id=run_id)
+        "leakage_check", task_spec=_leakage_spec, data_profile=state.data_profile,
+        df=train_df, run_id=run_id, datetime_derived_features=_dt_features,
+    )
     if not state.leakage_audit["approved"]:
         print(f"[orchestrator] leakage WARN/FAIL: {state.leakage_audit['leakage_risk']} (continuing on proven features)")
     state.persist(logs_dir)
+
+    # Stage 9b — wire within-period info into bundle.profile so _make_holdout_split can use it
+    if state.data_pattern_report:
+        wpp = (state.data_pattern_report.get("time_coverage") or {}).get("within_period_pattern")
+        if wpp:
+            bundle.profile["within_period_info"] = wpp
+            print(f"[orchestrator] within-period pattern detected: {wpp.get('feature')} "
+                  f"train={wpp.get('train_range')} predict={wpp.get('predict_range')}")
 
     # Stage 10 — modeling (reuses models.train_and_predict)
     modeling = train_and_evaluate_models(bundle=bundle, block_column=schema.block_column, random_state=random_state)
     mr = modeling.model_result_obj
     state.model_results = modeling.model_results
+    state.model_results["final_feature_columns"] = bundle.feature_columns
     state.raw_modeling_results = {"all_scores": modeling.model_results.get("all_scores", [])}
     state.split_metadata = mr.holdout_strategy
+    state.residual_analysis = mr.residual_analysis or {}
     print(f"Selected model: {mr.selected_model_name} ({mr.metric_name})")
+
+    # Write validation_strategy.json
+    _write_json(mr.holdout_strategy, logs_dir / f"{run_id}_validation_strategy.json")
+
+    # Write model_stability_by_split.json and overfitting_audit.json
+    stability = mr.holdout_strategy.get("stability", {})
+    _write_json({
+        "run_id": run_id,
+        "selected_model": mr.selected_model_name,
+        "primary_split_type": mr.holdout_strategy.get("type"),
+        "stability": stability,
+        "n_splits_evaluated": len(stability.get("split_scores", [])) if stability else 0,
+    }, logs_dir / f"{run_id}_model_stability_by_split.json")
+
+    # Write overfitting_audit.json: primary holdout score vs additional splits
+    _write_json({
+        "run_id": run_id,
+        "selected_model": mr.selected_model_name,
+        "metric": mr.metric_name,
+        "primary_holdout_score": stability.get("split_scores", [None])[0] if stability else None,
+        "stability": stability,
+        "assessment": (
+            "stable" if stability and stability.get("relative_stability") is not None
+            and stability["relative_stability"] < 0.15 else
+            "moderate_variance" if stability and stability.get("relative_stability") is not None
+            and stability["relative_stability"] < 0.30 else
+            "high_variance"
+        ),
+    }, logs_dir / f"{run_id}_overfitting_audit.json")
+
     state.persist(logs_dir)
 
     # Stage 11 — evaluation (+ plots)
@@ -153,7 +219,9 @@ def _run_award_b(repo_root, run_id, logs_dir, artifacts_dir, goal, random_state)
     state.persist(logs_dir)
 
     # Stage 12 — interpretation (associative importance + plot)
-    importances = _associative_importance(train_df, spec.feature_candidates, schema.target_column)
+    # Use bundle.feature_columns — the actual model feature set — not spec.feature_candidates,
+    # which includes all train columns and may include train-only target-component columns.
+    importances = _associative_importance(train_df, bundle.feature_columns, schema.target_column)
     fip = plot_feature_importance(importances, run_id, artifacts_dir) if importances else None
     if fip:
         state.register_artifact("feature_importance_plot", fip)
@@ -162,6 +230,21 @@ def _run_award_b(repo_root, run_id, logs_dir, artifacts_dir, goal, random_state)
         "top_features": sorted(importances, key=lambda k: importances[k], reverse=True)[:10],
         "caveats": ["Importance is associative (|correlation| for numeric features), not causal."],
     }
+
+    # Write feature_importance.json and profile.json (feature_audit)
+    _write_json({
+        "run_id": run_id,
+        "final_model_features": bundle.feature_columns,
+        "feature_importance": importances,
+        "excluded_features": bundle.profile.get("excluded_columns", {}),
+        "invariant_check": {
+            "importance_subset_of_model": all(f in bundle.feature_columns for f in importances),
+        },
+    }, logs_dir / f"{run_id}_feature_importance.json")
+
+    # Write _profile.json (feature_audit) — required by verification script
+    _write_json(bundle.profile, logs_dir / f"{run_id}_profile.json")
+
     state.persist(logs_dir)
 
     # Build + validate submission (proven path)
@@ -171,6 +254,40 @@ def _run_award_b(repo_root, run_id, logs_dir, artifacts_dir, goal, random_state)
     submission_check = _validate_submission(bundle.sample_submission, submission, schema.row_id_column, schema.target_column, mr.output_kind)
     _write_json(submission_check, logs_dir / f"{run_id}_submission_check.json")
     print(f"Submission written: {submission_path}")
+
+    # Write prediction_distribution.json
+    try:
+        y_train_num = pd.to_numeric(bundle.target, errors="coerce").dropna()
+        val_preds = mr.holdout_y_pred
+        final_preds = mr.predictions
+        def _quantiles(arr) -> dict:
+            a = np.asarray(arr, dtype=float)
+            a = a[np.isfinite(a)]
+            if len(a) == 0:
+                return {}
+            return {f"p{int(q*100)}": float(np.percentile(a, q*100)) for q in [0.05, 0.25, 0.50, 0.75, 0.95]}
+        _pred_dist: dict = {
+            "run_id": run_id,
+            "train_target_quantiles": _quantiles(y_train_num),
+            "validation_predictions_quantiles": _quantiles(val_preds) if val_preds is not None else {},
+            "final_predictions_quantiles": _quantiles(final_preds) if final_preds is not None else {},
+        }
+        # KS-like range comparison (generic, no scipy required)
+        try:
+            _tr_q = _quantiles(y_train_num)
+            _fp_q = _quantiles(final_preds)
+            if _tr_q and _fp_q:
+                _range_diff = abs(_fp_q.get("p50", 0) - _tr_q.get("p50", 0)) / (abs(_tr_q.get("p50", 1)) + 1e-9)
+                _pred_dist["distribution_similarity"] = {
+                    "final_vs_train_median_ratio": round(float(_fp_q.get("p50", 0) / max(abs(_tr_q.get("p50", 1)), 1e-9)), 4),
+                    "final_vs_train_p50_delta": round(float(_fp_q.get("p50", 0) - _tr_q.get("p50", 0)), 4),
+                    "final_vs_train_p95_delta": round(float(_fp_q.get("p95", 0) - _tr_q.get("p95", 0)), 4),
+                }
+        except Exception:
+            pass
+        _write_json(_pred_dist, logs_dir / f"{run_id}_prediction_distribution.json")
+    except Exception:
+        pass
 
     # Report + review
     report_out = write_analysis_report(state=state, repo_root=repo_root)

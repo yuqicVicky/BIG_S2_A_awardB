@@ -85,9 +85,21 @@ def build_feature_bundle(spec: SchemaSpec) -> FeatureBundle:
     if spec.target_column not in train_df.columns:
         raise ValueError(f"Target column '{spec.target_column}' not found after training merge.")
 
-    feature_columns = _choose_feature_columns(train_df, predict_df, spec)
+    feature_columns, excluded_columns = _choose_feature_columns(train_df, predict_df, spec)
     if not feature_columns:
         raise ValueError("No usable feature columns were inferred.")
+
+    # ── interaction feature generation ───────────────────────────────────────
+    # Adds numeric products of time-derived × low-cardinality features. Generic:
+    # detection is purely by __ naming and value counts, not column names.
+    target_for_skew = train_df.get(spec.target_column)
+    skewness = float(pd.to_numeric(target_for_skew, errors="coerce").dropna().skew()) if target_for_skew is not None else 0.0
+    train_df, predict_df, new_interaction_cols = _add_interaction_features(
+        train_df, predict_df, feature_columns, skewness
+    )
+    for col in new_interaction_cols:
+        if col not in feature_columns:
+            feature_columns.append(col)
 
     train_aligned = train_df.copy()
     predict_aligned = predict_df.copy()
@@ -149,6 +161,11 @@ def build_feature_bundle(spec: SchemaSpec) -> FeatureBundle:
         "missing_rates": {
             col: float(train_aligned[col].isna().mean()) for col in feature_columns
         },
+        # ── excluded columns breakdown ────────────────────────────────────────
+        "excluded_columns": excluded_columns,
+        "train_only_columns": sorted(
+            [c for c in train_df.columns if c not in predict_df.columns and c != spec.target_column]
+        ),
         # ── datetime / time-feature audit ─────────────────────────────────────
         "feature_audit": {
             "detected_row_id_column": spec.row_id_column,
@@ -481,6 +498,76 @@ def _audit_time_target_signal(
     return result
 
 
+# ── interaction feature generation ────────────────────────────────────────────
+
+def _add_interaction_features(
+    train_df: pd.DataFrame,
+    predict_df: pd.DataFrame,
+    feature_columns: list[str],
+    skewness: float,
+) -> tuple[pd.DataFrame, pd.DataFrame, list[str]]:
+    """Generate numeric product interactions: time-derived × low-cardinality features.
+
+    Only uses __ naming detection and value-count detection. No hardcoded column names.
+    Returns augmented train, augmented predict, and list of added column names.
+    Limited to at most 6 new interaction columns.
+    """
+    # Detect time-derived features in the current feature set
+    time_feats = [
+        c for c in feature_columns
+        if "__" in c and c in train_df.columns
+        and any(t in c for t in ["hour", "dayofweek", "month", "day", "weekofyear", "quarter"])
+        and pd.api.types.is_numeric_dtype(train_df[c])
+    ]
+
+    # Detect low-cardinality, non-time numeric features (2–10 unique values)
+    low_card_feats: list[str] = []
+    for c in feature_columns:
+        if c in train_df.columns and "__" not in c and pd.api.types.is_numeric_dtype(train_df[c]):
+            n_unique = int(train_df[c].nunique(dropna=True))
+            if 2 <= n_unique <= 10:
+                low_card_feats.append(c)
+
+    if not time_feats or not low_card_feats:
+        return train_df, predict_df, []
+
+    added: list[str] = []
+    train = train_df.copy()
+    pred = predict_df.copy()
+    max_interactions = 6
+
+    # Score pairs by estimated variance contribution: std(tf) * std(lc) (generic)
+    pairs: list[tuple[float, str, str]] = []
+    for tf in time_feats:
+        tf_std = float(train[tf].std()) if train[tf].std() > 0 else 0.0
+        for lc in low_card_feats:
+            lc_std = float(train[lc].std()) if train[lc].std() > 0 else 0.0
+            pairs.append((tf_std * lc_std, tf, lc))
+    pairs.sort(reverse=True)
+
+    for _, tf, lc in pairs[:max_interactions]:
+        col_name = f"{tf}_x_{lc}"
+        if col_name in train.columns:
+            continue
+        try:
+            tf_train = pd.to_numeric(train[tf], errors="coerce").fillna(0)
+            lc_train = pd.to_numeric(train[lc], errors="coerce").fillna(0)
+            train[col_name] = tf_train * lc_train
+
+            if tf in pred.columns and lc in pred.columns:
+                tf_pred = pd.to_numeric(pred[tf], errors="coerce").fillna(0)
+                lc_pred = pd.to_numeric(pred[lc], errors="coerce").fillna(0)
+                pred[col_name] = tf_pred * lc_pred
+            else:
+                pred[col_name] = np.nan
+
+            added.append(col_name)
+        except Exception:
+            pass
+
+    return train, pred, added
+
+
 # ── merge helpers ─────────────────────────────────────────────────────────────
 
 def _merge_train(
@@ -533,16 +620,35 @@ def _non_duplicate_columns(source: pd.DataFrame, existing: pd.DataFrame) -> pd.D
 
 def _choose_feature_columns(
     train_df: pd.DataFrame, predict_df: pd.DataFrame, spec: SchemaSpec
-) -> list[str]:
-    excluded = {spec.target_column, spec.row_id_column}
+) -> tuple[list[str], dict[str, str]]:
+    excluded_map: dict[str, str] = {}
+
+    def _exclude(col: str, reason: str) -> None:
+        excluded_map[col] = reason
+
+    _exclude(spec.target_column, "target")
+    if spec.row_id_column:
+        _exclude(spec.row_id_column, "row_id")
+
+    excluded = set(excluded_map)
     for col in train_df.columns:
         ncol = _norm(col)
         if col in excluded:
             continue
         if ncol == _norm(spec.target_column):
+            _exclude(col, "target_derived_name")
             excluded.add(col)
             continue
         if any(token in ncol for token in LEAKAGE_NAME_TOKENS) and col not in spec.join_keys:
+            _exclude(col, "leakage_name_token")
+            excluded.add(col)
+
+    # Train-only columns (absent from predict_df) are excluded from features
+    for col in train_df.columns:
+        if col in excluded:
+            continue
+        if col not in predict_df.columns:
+            _exclude(col, "train_only_absent_from_prediction")
             excluded.add(col)
 
     # Columns present in both frames (excluding leakage / id columns)
@@ -559,7 +665,7 @@ def _choose_feature_columns(
         if col in predict_df.columns:
             shared.append(col)
 
-    return shared
+    return shared, {k: v for k, v in excluded_map.items() if k not in (spec.target_column, spec.row_id_column)}
 
 
 # ── misc helpers ──────────────────────────────────────────────────────────────

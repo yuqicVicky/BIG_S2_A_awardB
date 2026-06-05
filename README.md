@@ -22,26 +22,48 @@ The run writes two required files to the repository root:
 
 ## How The Pipeline Works
 
-1. Parse `data/DATA_DESCRIPTION.md` and inspect files under `data/`.
-2. Infer the train target table, covariates tables, sample submission, target
-   column, row id column, join keys, time column, and category/block column.
-3. Build train and prediction feature frames without using validation targets.
-4. Train baselines and a small candidate model pool.
-5. Select the best model by internal holdout MAE or block-averaged MAE.
-6. Refit the selected model on all training data and generate predictions.
-7. Validate the submission schema and generate a dynamic PDF report.
+The pipeline runs a 14-phase hub-and-spoke agent workflow controlled by the
+`analysis-orchestrator`. Each phase is handled by a specialist agent:
+
+1. **task-inference-agent** — parses `DATA_DESCRIPTION.md`; writes `spec_parse.json`.
+2. **validation-and-schema-guardian** — chooses validation strategy; writes `validation_strategy.json`.
+3. **hardcoding-and-feature-auditor** — pre-run audit; writes `hardcoding_audit_pre.json`.
+4. **data-profiler** — profiles all data files; writes `data_profile.json`.
+5. **analysis-planner** — creates and self-critiques the modeling plan; writes `analysis_plan.json`.
+6. **analysis-programmer** — runs `python main.py`; writes `submission.csv`.
+7. **model-search-agent** — trains baselines and candidates; selects best; writes `model_search.json` and `final_model.json`.
+8. **validation-and-schema-guardian** — validates `submission.csv`; writes `submission_validation.json`.
+9. **hardcoding-and-feature-auditor** — feature engineering audit; writes `feature_audit_review.json`.
+10. **supervisor-gatekeeper** — inspects all logs; decides if repair is needed; writes `supervisor_gatekeeper.json`.
+11. *(Conditional repair rerun — at most once)*
+12. **hardcoding-and-feature-auditor** — post-run audit; writes `hardcoding_audit_post.json`.
+13. **report-writer-reviewer** — generates and self-reviews `report.pdf`; writes `report_review.json`.
+14. **supervisor-gatekeeper** — final gate confirmation.
+
+All agents communicate through the orchestrator (hub-and-spoke). No agent calls
+another agent directly.
 
 ## Repository Structure
 
 ```text
 .
-├── main.py                    # single deterministic entry point
-├── src/data_agent/            # generic Award B pipeline implementation
-├── scripts/award_a_reference/ # original Award A scripts kept as reference only
-├── data/                      # empty at submission; organizers populate
-├── outputs/                   # runtime artifacts/logs/reports
-├── CLAUDE.md                  # Claude Code operating instructions
-├── .claude/                   # Claude Code agent config
+├── main.py                        # single deterministic entry point
+├── src/data_agent/                # generic Award B pipeline implementation
+├── scripts/award_a_reference/     # original Award A scripts kept as reference only
+├── data/                          # empty at submission; organizers populate
+├── outputs/                       # runtime artifacts/logs/reports
+├── CLAUDE.md                      # Claude Code operating instructions
+├── .claude/agents/                # 10 core specialist agents
+│   ├── orchestrator.md            # hub controller — 14-phase workflow
+│   ├── task_inference.md          # schema parsing from DATA_DESCRIPTION.md
+│   ├── data_profiler.md           # data quality profiling
+│   ├── planner.md                 # plan generation + self-critique
+│   ├── programmer.md              # pipeline execution
+│   ├── model_search_agent.md      # baseline + candidate model search
+│   ├── validation_schema_guardian.md  # validation strategy + submission check
+│   ├── hardcoding_feature_auditor.md  # anti-hardcoding + feature audit
+│   ├── report_writer_reviewer.md  # report generation + self-review
+│   └── supervisor_gatekeeper.md   # final release gate
 └── requirements.txt
 ```
 

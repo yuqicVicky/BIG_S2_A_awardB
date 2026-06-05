@@ -1,8 +1,8 @@
 # Skill Routing Rules
 
-**version:** 1.0  
-**applies_to:** `general-data-analysis` workflow  
-**enforced_by:** PlannerAgent, PlanCriticAgent, Orchestrator, all subagents
+**version:** 2.0
+**applies_to:** `general-data-analysis` workflow (v2 — 14-phase architecture)
+**enforced_by:** `analysis-planner` (self-critique), `analysis-orchestrator`, all subagents
 
 ---
 
@@ -127,9 +127,9 @@ Rules:
 
 ---
 
-## 4. PlannerAgent Rules
+## 4. analysis-planner Rules
 
-When generating `state.plan.draft`, PlannerAgent must:
+When generating the plan draft, `analysis-planner` must:
 
 1. **Populate `required_skills` for every step** before the plan is considered complete.
 2. Cross-reference each step's `required_skills` against Tables 1 and 2 above.
@@ -148,9 +148,9 @@ plan_skill_summary:
 
 ---
 
-## 5. PlanCriticAgent Rules
+## 5. analysis-planner Self-Critique Rules
 
-PlanCriticAgent must verify the following before issuing a PASS verdict:
+The self-critique section of `analysis-planner` must verify the following before issuing a PASS verdict:
 
 | Check | Severity if Failed |
 |-------|--------------------|
@@ -171,7 +171,7 @@ PlanCriticAgent must record each check result in `state.plan.critique` with:
 
 ---
 
-## 6. Orchestrator Dispatch Rules
+## 6. analysis-orchestrator Dispatch Rules
 
 When the Orchestrator dispatches a task to a subagent, it must pass `required_skills` explicitly as part of the task payload. The dispatch payload schema is:
 

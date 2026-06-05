@@ -17,7 +17,7 @@ _CAUSAL_PHRASES = ["leads to", "results in", "caused by", "the effect of", "due 
 _OVERCLAIM_PHRASES = ["production-ready", "production ready", "any patient", "any customer",
                       "general population", "will generalize", "guaranteed"]
 _PLACEHOLDERS = ["[tbd]", "to be added", "placeholder", "todo", "see figure below (to be added)"]
-_SECTION_MARKERS = [f"## {i}." for i in range(1, 12)]
+_SECTION_MARKERS = [f"## {i}." for i in range(1, 16)]
 _SUPERVISED = {"binary_classification", "multiclass_classification", "regression"}
 
 
@@ -67,8 +67,8 @@ def review_report(*, state: Any) -> dict:
             break
 
     # 6 — limitations substantive
-    lim = report.split("## 9. Limitations", 1)
-    if len(lim) < 2 or len(lim[1].split("## 10", 1)[0].split()) < 20:
+    lim = report.split("## 13. Limitations", 1)
+    if len(lim) < 2 or len(lim[1].split("## 14", 1)[0].split()) < 20:
         fail("limitations", "Limitations section is missing or too brief.")
 
     # 7 — baseline comparison present (supervised)

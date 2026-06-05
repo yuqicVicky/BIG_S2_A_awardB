@@ -101,6 +101,14 @@ def discover_schema(data_dir: Path) -> SchemaSpec:
         and col not in {row_id_col, target_col}
     ]
     time_col = _infer_special_column(join_keys, "time", description)
+    # Fallback: if no join-key was flagged as the time axis, check whether the
+    # row_id column itself is temporal (e.g. a "datetime" or "timestamp" ID).
+    # This enables time-based holdout splitting for datasets where the row
+    # identifier is the only time column.
+    if time_col is None and row_id_col:
+        _time_patterns = ["period", "date", "month", "week", "time", "year", "quarter", "stamp"]
+        if any(p in _norm(row_id_col) for p in _time_patterns):
+            time_col = row_id_col
     category_col = _infer_special_column(join_keys, "category", description, extra_candidates=non_key_shared)
     block_col = _infer_block_column(join_keys, category_col, description, extra_candidates=non_key_shared)
 

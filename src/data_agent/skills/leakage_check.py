@@ -50,8 +50,10 @@ def run_leakage_check(
     splits: Any = None,
     evaluation: dict | None = None,
     run_id: str = "",
+    datetime_derived_features: set[str] | None = None,
 ) -> dict:
     checks = _CHECKS_BY_POINT.get(invocation_point, [1, 2, 3, 7, 8])
+    _dt_safe: set[str] = set(datetime_derived_features or set())
     target = _get(task_spec, "target_variable")
     features = list(_get(task_spec, "feature_candidates", []) or [])
     id_cols = list(_get(data_profile, "potential_id_columns", []) or [])
@@ -91,8 +93,12 @@ def run_leakage_check(
                     fail(1, feat, f"Correlation with target = {corr:.3f} (> 0.95).", "corr>0.95")
 
     # Check 2 — ID-like in features
+    # Datetime-derived features (e.g. ordinal) may have one value per row; they are
+    # valid predictive features, not ID columns, so we exempt them here.
     if 2 in checks:
         for feat in features:
+            if feat in _dt_safe:
+                continue  # valid datetime-derived feature
             if feat in id_cols:
                 fail(2, feat, "Column is in data_profile.potential_id_columns.", "id")
             else:
@@ -103,8 +109,12 @@ def run_leakage_check(
                     fail(2, feat, f"n_unique == n_rows ({n_rows}); effective ID column.", "n_unique==n_rows")
 
     # Check 3 — future / post-outcome
+    # Datetime-derived features (engineered from a datetime column available at
+    # prediction time) are exempt: they are valid predictive features, not leakage.
     if 3 in checks:
         for feat in features:
+            if feat in _dt_safe:
+                continue  # valid datetime-derived feature; skip temporal-name check
             low = feat.lower()
             if any(p in low for p in _STRONG_POST):
                 fail(3, feat, "Name matches a strong post-outcome pattern.", "post/after/final")

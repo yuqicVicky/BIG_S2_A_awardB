@@ -78,6 +78,10 @@ class AnalysisState(BaseModel):
     evaluation: dict | None = None
     eda_results: dict | None = None
     interpretation: dict | None = None
+    residual_analysis: dict | None = None
+
+    # data pattern understanding
+    data_pattern_report: dict | None = None
 
     # report + review
     report_draft: str | None = None

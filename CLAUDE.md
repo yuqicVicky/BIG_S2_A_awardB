@@ -48,27 +48,31 @@ string labels, or continuous/probability values).
 ## Workflow Contract
 
 `main.py` drives `orchestrator.run_orchestrated_analysis`, which threads an
-`AnalysisState` through the staged agent pipeline below — each `.claude/` agent maps to
-a stage and is backed by a real skill in `src/data_agent/skills/`. On any stage failure
-it falls back to the deterministic `runner.run_analysis`, which performs the same core
-steps. The pipeline performs these stages:
+`AnalysisState` through the staged agent pipeline below — each `.claude/agents/` agent
+maps to a phase and is backed by a real skill in `src/data_agent/skills/`. On any stage
+failure it falls back to the deterministic `runner.run_analysis`. The pipeline
+performs these 14 phases via a hub-and-spoke architecture controlled by
+`analysis-orchestrator`:
 
-1. Parse and log the hidden dataset schema.
-2. Infer the task type (regression / binary / multiclass classification), the
-   evaluation metric, and the required output format from `DATA_DESCRIPTION.md`
-   (primary authority) with a data-driven fallback.
-3. Load the target, covariates, validation, and sample submission tables.
-4. Build train and prediction feature matrices.
-5. Evaluate baselines and candidate models on an internal holdout, using the
-   model pool that matches the task type.
-6. Select the best model by the task-appropriate holdout metric (MAE or
-   block-averaged MAE for regression; accuracy / ROC-AUC / F1 for
-   classification).
-7. Refit the selected model on all available training rows.
-8. Write and validate `submission.csv`, formatting values to match the required
-   output (continuous values, class labels, or probabilities).
-9. Generate a dynamic analysis report as `report.pdf`, then run an independent
-   report review.
+| Phase | Agent | Log file |
+|-------|-------|----------|
+| 1 | `task-inference-agent` | `spec_parse.json` |
+| 2 | `validation-and-schema-guardian` (schema review) | `validation_strategy.json` |
+| 3 | `hardcoding-and-feature-auditor` (pre-run) | `hardcoding_audit_pre.json` |
+| 4 | `data-profiler` | `data_profile.json` |
+| 5 | `analysis-planner` | `analysis_plan.json` |
+| 6 | `analysis-programmer` (first pass) | `submission.csv` |
+| 7 | `model-search-agent` | `model_search.json`, `final_model.json` |
+| 8 | `validation-and-schema-guardian` (validation) | `submission_validation.json` |
+| 9 | `hardcoding-and-feature-auditor` (feature audit + overfitting audit) | `feature_audit_review.json`, `overfitting_leakage_audit.json` |
+| 10 | `supervisor-gatekeeper` (first review) | `supervisor_gatekeeper.json`, `prediction_sanity.json` |
+| 11 | Conditional repair rerun (programmer → model-search → guardian) | — |
+| 12 | `hardcoding-and-feature-auditor` (post-run) | `hardcoding_audit_post.json` |
+| 13 | `report-writer-reviewer` | `report.pdf`, `report_review.json` |
+| 14 | `supervisor-gatekeeper` (final gate) | `supervisor_gatekeeper.json` |
+
+Agents communicate only through the orchestrator (hub-and-spoke). No agent calls
+another agent directly. All inter-agent data passes through JSON log files.
 
 Plot artifacts are written under `outputs/artifacts/`, the full run state under
 `outputs/logs/{run_id}_state.json`, and per-run logs + a manifest under `outputs/logs/`.
@@ -243,6 +247,30 @@ Run tests with:
 python -m pytest tests/test_datetime_features.py -v
 ```
 
+## Agent Architecture
+
+The `.claude/agents/` directory contains exactly 10 core agents. Each corresponds to a
+distinct failure mode:
+
+| Agent file | Role | Failure mode it guards |
+|------------|------|------------------------|
+| `orchestrator.md` | Hub controller | Workflow ordering; 2-hour cap |
+| `task_inference.md` | Schema parsing | Wrong task type; bad target column |
+| `data_profiler.md` | Data quality | Missed data issues; schema drift |
+| `planner.md` | Plan + self-critique | Leakage in plan; missing baselines |
+| `programmer.md` | Pipeline execution | Runtime errors; hardcoded columns |
+| `model_search_agent.md` | Model search | Suboptimal model; missing baseline |
+| `validation_schema_guardian.md` | Validation + submission | Wrong split; bad submission format |
+| `hardcoding_feature_auditor.md` | Audit (3 modes) | Hardcoded columns; missing features |
+| `report_writer_reviewer.md` | Report + self-review | Stale conclusions; metric errors |
+| `supervisor_gatekeeper.md` | Final gate | Undetected critical issues |
+
+**Removed / merged agents** (no longer in `.claude/agents/`):
+- `plan_critic.md` → merged into `analysis-planner` (self-critique section)
+- `report_writer.md` → merged into `report-writer-reviewer`
+- `report_reviewer.md` → merged into `report-writer-reviewer`
+- `inspector.md` → upgraded to `supervisor-gatekeeper`
+
 ## Inspection Checklist
 
 Before considering the run complete, verify:
@@ -254,3 +282,8 @@ Before considering the run complete, verify:
 - predictions are finite and non-missing.
 - logs were written under `outputs/logs/`.
 - the report describes the actual current run rather than a fixed prior dataset.
+- `outputs/logs/supervisor_gatekeeper.json` final gate is written.
+- `outputs/logs/report_review.json` shows `approved: true`.
+- `outputs/logs/overfitting_leakage_audit.json` written by Phase 9.
+- `outputs/logs/prediction_sanity.json` written by Phase 10.
+- report Section 8 (Overfitting and Generalization Controls) is present.
