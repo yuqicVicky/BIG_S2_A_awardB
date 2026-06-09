@@ -98,7 +98,6 @@ SCAN_TARGETS = ["src/", "main.py", "scripts/"]
 # Paths that make every finding in them acceptable regardless of content
 ALWAYS_ACCEPTABLE_PATH_FRAGMENTS = [
     "tests/",
-    "scripts/award_a_reference/",
     "__pycache__/",
 ]
 

@@ -116,14 +116,20 @@ Pass to `analysis-programmer`:
 
 The programmer runs `python main.py`. **Gate:** `submission.csv` must exist in the repo root after the programmer step.
 
-### Phase 7 — Model Search
+### Phase 7 — Model Search (deterministic floor + parallel modeling group)
 
-Pass to `model-search-agent`:
-- `spec_parse.json`
-- `data_profile.json`
-- Current `submission.csv` for context
+The deterministic engine (`python main.py` → `models.train_and_predict`) is the
+**floor**: GroupKFold cross-validation over the full candidate pool with leakage-safe
+group/target-aggregate + TF-IDF features, randomized tuning, a convex OOF stack, and
+seed-averaging. It always writes a valid `submission.csv` (and a pre-search baseline
+checkpoint), so a scored deliverable exists no matter what.
 
-**Gate:** `outputs/logs/model_search.json` and `outputs/logs/final_model.json` must exist.
+When budget remains (you are far under 1M tokens / 2h), **spend it** on the parallel
+**modeling group** — a division of labor that adds cross-family diversity on top of the
+floor (see "Parallel modeling group" below). Otherwise rely on the floor alone.
+
+**Gate:** `outputs/logs/{run_id}_model_selection.json` exists with a finite CV
+`block_mae` and `submission.csv` is present.
 
 ### Phase 8 — Validation & Submission Check
 
@@ -218,6 +224,58 @@ Agents do not call each other. Every inter-agent communication passes through th
 
 ---
 
+## Parallel modeling group (division of labor)
+
+Award B grants 2 hours and 1,000,000 tokens, and the deterministic floor typically
+finishes far under both. **Wall-clock is the binding cap; the token budget is spent almost
+entirely by this subagent layer (`python main.py` spends 0 tokens).**
+
+> **In-process by default (safety net + principled deliverable).** `python main.py` itself
+> runs the modeling group + cross-family blend in-process. Right after the floor selects
+> its model, `orchestrator._run_award_b` checkpoints the floor submission and calls
+> `modeling_group.run_modeling_group`, which trains the **diverse-first** `linear` /
+> `trees` / `gbdt` specialists (only families present in the floor pool), then a
+> **convex NNLS blend** of the floor + specialists, keeping the best by cross-validated
+> score (`keep-best`, strict improvement only), and writes
+> `outputs/logs/{run_id}_ensemble_meta.json`. Bounded by `AWARDB_TIME_BUDGET_SEC`, never
+> raises, can never regress the floor. Disable with `AWARDB_MODELING_GROUP=0`. **Do not ask
+> the user whether to run this — it already ran.**
+
+**Step 2 — required for Award B: dispatch the same group + critics as real subagents.**
+After `main.py` finishes (floor + report + in-process group already on disk, so the run is
+safe), use the ample remaining budget to make the architecture *actually execute*. Dispatch
+the specialists **in parallel, diverse-first** (one message, multiple `Agent` calls); gbdt
+overlaps the floor most, so it is the most expendable under budget:
+
+| Specialist | Division of labor | Approach knob |
+|---|---|---|
+| `linear-encoding-specialist` | regularized linear on group/target encodings | `--approach linear` |
+| `trees-specialist` | bagged trees (RF / ExtraTrees) | `--approach trees` |
+| `gbdt-specialist` | gradient-boosted trees + tuning | `--approach gbdt` |
+
+Each runs `python scripts/run_modeling_agent.py --approach <X> --run-id {run_id}` (the
+shared, tested engine with a family filter), writes a candidate submission + a
+cross-validated score to `outputs/logs/{run_id}_agent_<X>.json` +
+`{run_id}_cand_<X>.csv`, and **does not** touch `submission.csv`. Then:
+
+1. `ensemble-meta` reads every `{run_id}_agent_*.json` + the floor's
+   `{run_id}_model_selection.json` + the in-process `{run_id}_ensemble_meta.json`, picks
+   the best by the CV official metric (a candidate or the convex blend), and records the
+   choice. Never selects worse than the current submission.
+2. `supervisor-gatekeeper` overwrites the repo-root `submission.csv` with the meta choice
+   **only if** it strictly beats the current one by CV — otherwise keeps it (keep-best).
+   Writes `supervisor_gatekeeper.json` + `{run_id}_llm_gate_supervisor.json`.
+3. **Adversarial critic gates** — dispatch critics for `leakage`, `prediction_sanity`, and
+   `report`; each inspects the logs and writes `outputs/logs/{run_id}_llm_gate_{stage}.json`
+   in the shared verdict schema, which **takes precedence** over the deterministic verdict.
+
+This is strictly additive: every step is bounded by `AWARDB_TIME_BUDGET_SEC`, the floor +
+in-process group `submission.csv` is the safety net, and a worse subagent result can never
+regress the deliverable. Keep the loop token-frugal — agents reason over logs + CV scores,
+not raw data dumps.
+
+---
+
 ## Error handling
 
 ### RunError format
@@ -271,3 +329,56 @@ Agents do not call each other. Every inter-agent communication passes through th
 - **At most one repair rerun.** Never loop Phase 11 more than once.
 - **Do not deliver a report that has not been reviewed.** `report_review.json` must exist before returning to the user.
 - **Always persist state after each phase.**
+
+---
+
+## Closed-loop verdict protocol (shared by every critic)
+
+Every gate in the pipeline — whether the deterministic Python critic in
+`src/data_agent/gates.py` or an LLM critic subagent — speaks **one verdict
+schema**, written to `outputs/logs/`:
+
+```json
+{
+  "stage": "schema | task_inference | leakage | prediction_sanity | submission | report | supervisor",
+  "run_id": "<run_id>",
+  "status": "pass | warn | fail",
+  "reasons": ["human-readable problem statements"],
+  "suggested_corrections": {"force_task_type": "regression"},
+  "checked": { "...evidence the critic used..." },
+  "critic": "deterministic | llm:<agent-name>"
+}
+```
+
+### Two layers, one schema
+
+1. **Deterministic critics always run** (headless `python main.py`). The
+   orchestrator code wraps each stage with `gates.run_stage_with_gate(...)` (or
+   `_emit_gate(...)`), which writes `outputs/logs/{run_id}_gate_{stage}.json`.
+   On a `fail` with a `suggested_corrections` hint, the stage is **re-run once**
+   with the correction (bounded by a hard retry cap **and** a no-progress guard
+   that stops if the same failure recurs). The deliverable is never lost.
+
+2. **LLM critic layer (this Claude-driven path).** After running a stage via
+   Bash, invoke the matching critic subagent. It reads the stage's input JSON
+   and writes its verdict — in the schema above — to
+   `outputs/logs/{run_id}_llm_gate_{stage}.json`. The orchestrator code's
+   `load_llm_verdict(...)` picks it up and it **takes precedence** over the
+   deterministic verdict for that stage. On `fail`, re-run the affected stage
+   (same one-rerun cap as Phase 11).
+
+### Stage → critic subagent map
+
+| Stage | Critic subagent | Correction it may request |
+|-------|-----------------|---------------------------|
+| `task_inference` | `task-inference-agent` | `force_task_type` |
+| `schema` | `validation-and-schema-guardian` | (loud fail; no auto-fix) |
+| `leakage` | `hardcoding-and-feature-auditor` | `drop_columns` |
+| `prediction_sanity` | `model-search-agent` | `reexamine_model_pool`, `prefer_regularized` |
+| `submission` | `validation-and-schema-guardian` | (hard fail → deterministic fallback) |
+| `report` | `report-writer-reviewer` | required revisions |
+| `supervisor` | `supervisor-gatekeeper` | aggregate release judgement |
+
+A `fail` is logged and surfaced but **does not halt** the pipeline (consistent
+with the existing fallback philosophy): the gate degrades to "diagnostic +
+deliver" so `submission.csv` and `report.pdf` are always produced.

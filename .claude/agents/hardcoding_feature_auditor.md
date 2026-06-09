@@ -439,3 +439,17 @@ Write to `outputs/logs/overfitting_leakage_audit.json`.
 - **Write the appropriate log file(s) for the mode.**
 - **In Phase 9**: run both `feature-audit` and `overfitting-audit` together; write both `feature_audit_review.json` and `overfitting_leakage_audit.json`.
 - **Checks are generic**: they must work on any future dataset without modification.
+
+---
+
+## Closed-loop verdict (stage `leakage`)
+
+When auditing features for leakage, also emit a verdict to
+`outputs/logs/{run_id}_llm_gate_leakage.json` in the shared schema (see
+`analysis-orchestrator` → "Closed-loop verdict protocol"). Emit `fail` when a
+column in the model feature set is a target derivative, an effective ID, a
+post-outcome / future field, or suspiciously predictive. Put the offending
+column names in `suggested_corrections.drop_columns`; the orchestrator drops
+them from the feature set and re-runs model selection once. Your verdict takes
+precedence over the deterministic leakage gate. (As before, a `fail` is logged
+as a warning and does not halt the pipeline.)

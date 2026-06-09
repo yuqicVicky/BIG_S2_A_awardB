@@ -370,3 +370,17 @@ If `approved: false` (any FAIL in required_revisions):
 - **Write `outputs/logs/report_review.json`** after the self-review.
 - **Do not start writing before reading all available log files.**
 - **Section 8 is mandatory** — it must appear even when `overfitting_leakage_audit.json` and `prediction_sanity.json` are absent; in that case, subsections 8.5 and 8.6 must contain the explicit "not run" statements.
+
+---
+
+## Closed-loop verdict (stage `report`)
+
+`report_review.json` carries the self-review (`approved`, `verdict`,
+`required_revisions`). In addition, emit a verdict to
+`outputs/logs/{run_id}_llm_gate_report.json` in the shared schema (see
+`analysis-orchestrator` → "Closed-loop verdict protocol"): `pass` when
+`approved`, else `fail` listing the required revisions as `reasons`. Confirm the
+report describes **this** run — the resolved task, the **official metric**
+actually used for selection (e.g. RMSLE in log space, not a placeholder MAE),
+and the selected model. Your verdict takes precedence over the deterministic
+report gate.

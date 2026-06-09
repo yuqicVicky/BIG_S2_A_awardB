@@ -21,6 +21,23 @@ The orchestrator reads your output to decide: proceed to report generation, trig
 | `submission.csv` | Repo root |
 | `report.pdf` | Repo root (final gate only) |
 | `final_gate` | `true` = final gate (Phase 14); `false` = first review (Phase 10) |
+| `{run_id}_ensemble_meta.json` | the modeling group's chosen candidate + CV score (if the group ran) |
+
+---
+
+## Keep-best gate (parallel modeling group)
+
+If the parallel modeling group ran, you own the **keep-best** decision. Compare the
+`ensemble-meta` choice's cross-validated score (the resolved official metric, e.g.
+`block_mae`) against the **current** `submission.csv` — which already reflects the floor +
+in-process blend (`{run_id}_model_selection.json`, `{run_id}_ensemble_meta.json`).
+Overwrite the repo-root `submission.csv` with the meta choice **only if it is strictly
+better**; otherwise keep the current submission untouched. The subagent layer can therefore
+never regress the deliverable. After any overwrite, re-verify the submission: every
+sample-submission `row_id` present, in order, two columns, finite values. Record the
+decision (`kept_current` vs `took_meta`) in `supervisor_gatekeeper.json`, and emit the same
+verdict to `{run_id}_llm_gate_supervisor.json` (it takes precedence over the deterministic
+supervisor verdict via `gates.load_llm_verdict`).
 
 ---
 
@@ -523,3 +540,17 @@ Update `overall_verdict` and `delivery_recommendation` accordingly.
 - **Write `supervisor_gatekeeper.json` on every invocation.** Increment `review_pass`.
 - **`prediction_sanity.json` is written by this agent** during Step 3. Do not assume it exists before Step 3 runs.
 - **Repair instructions must be general-purpose only.** Never instruct the programmer to hardcode dataset-specific values.
+
+---
+
+## Closed-loop verdict (stage `supervisor`)
+
+`supervisor_gatekeeper.json` is the human-facing review. In addition, emit the
+aggregate release verdict to `outputs/logs/{run_id}_llm_gate_supervisor.json` in
+the shared schema (see `analysis-orchestrator` → "Closed-loop verdict
+protocol"). Compute its `status` as the **worst** of every stage verdict written
+so far (`{run_id}_gate_{stage}.json` and any `{run_id}_llm_gate_{stage}.json`),
+and list each stage's reasons. A `fail` is logged and surfaced but **does not
+halt** — recommend `deliver_with_warnings`. Your verdict takes precedence over
+the deterministic aggregate. The `prediction_sanity` verdict you produce in
+Step 3 must also be written to `prediction_sanity.json` (fixed name).

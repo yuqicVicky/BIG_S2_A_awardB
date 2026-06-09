@@ -38,7 +38,6 @@ F1_MACRO = "f1_macro"
 LOG_LOSS = "log_loss"
 MAE = "mae"
 RMSE = "rmse"
-R2 = "r2"
 BLOCK_MAE = "block_mae"
 
 _GREATER_IS_BETTER = {
@@ -46,7 +45,6 @@ _GREATER_IS_BETTER = {
     ROC_AUC: True,
     F1: True,
     F1_MACRO: True,
-    R2: True,
     MAE: False,
     RMSE: False,
     LOG_LOSS: False,
@@ -54,7 +52,9 @@ _GREATER_IS_BETTER = {
 }
 
 _CLASS_METRICS = {ACCURACY, ROC_AUC, F1, F1_MACRO, LOG_LOSS}
-_REG_METRICS = {MAE, RMSE, R2, BLOCK_MAE}
+# Award B is always scored by block-averaged MAE; MAE/RMSE remain as fallbacks for
+# a regression description that names a plain (non-log) error metric.
+_REG_METRICS = {MAE, RMSE, BLOCK_MAE}
 
 # Generic classification keyword used only as an intermediate signal before the
 # binary/multiclass distinction is resolved from the data.
@@ -64,6 +64,12 @@ _CLASSIFICATION = "classification"
 # when the description is silent. Guards against integer-valued *regression*
 # targets such as counts, which usually take many more levels than this.
 _MAX_CLASS_LEVELS = 20
+
+# Upper bound on distinct levels for a *numeric* target to still be accepted as
+# multiclass even when the description explicitly says "multiclass". Beyond this,
+# a numeric target is almost always a count/continuous regression target, so the
+# multiclass reading is rejected and data inference falls back to regression.
+_MULTICLASS_NUMERIC_CAP = 50
 
 
 @dataclass
@@ -94,6 +100,7 @@ def resolve_task_spec(
     sample_target_series: pd.Series | None = None,
     has_block_col: bool = False,
     target_column: str | None = None,
+    force_task_type: str | None = None,
 ) -> TaskSpec:
     """Resolve the task type, metric, and output format.
 
@@ -112,14 +119,34 @@ def resolve_task_spec(
 
     # ── task type ────────────────────────────────────────────────────────────
     if desc_task == _CLASSIFICATION:
-        resolved_task = BINARY if data["nunique"] == 2 else MULTICLASS
-        task_source = "description+data"
+        # The bare "classification" keyword is the weakest description signal — it
+        # does not even distinguish binary from multiclass. If the data clearly
+        # indicate a continuous / high-cardinality target (data inference resolves
+        # to regression), trust the data over the keyword rather than fabricating
+        # a hundreds-of-classes multiclass problem.
+        if data["task"] == REGRESSION:
+            resolved_task = REGRESSION
+            task_source = "data(description_classification_infeasible)"
+        else:
+            resolved_task = BINARY if data["nunique"] == 2 else MULTICLASS
+            task_source = "description+data"
     elif desc_task in (BINARY, MULTICLASS, REGRESSION) and _task_feasible(desc_task, data):
         resolved_task = desc_task
         task_source = "description"
     else:
         resolved_task = data["task"]
         task_source = "data(description_infeasible)" if desc_task else "data"
+
+    # ── forced override (closed-loop correction from the task-consistency gate)
+    # The supervisor passes a ``force_task_type`` when the resolved task
+    # contradicts the data / description / metric; metric and output_kind below
+    # are then re-derived consistently with the forced task.
+    if force_task_type:
+        forced = _normalize_forced_task(force_task_type, data)
+        if forced:
+            if forced != resolved_task:
+                task_source = f"forced({force_task_type})"
+            resolved_task = forced
 
     # ── output kind ──────────────────────────────────────────────────────────
     if resolved_task == REGRESSION:
@@ -168,6 +195,20 @@ def resolve_task_spec(
 
 # ── description parsing ───────────────────────────────────────────────────────
 
+# Words that signal a sentence is *defining the ML task* rather than using a
+# term incidentally (e.g. a feature called a "zoning classification").
+_TASK_CUES = r"(task|problem|objective|goal|predict|predicting|prediction|supervised|technique|challenge|\bmodel|target|score|evaluat)"
+
+
+def _near_task_context(t: str, pattern: str, window: int = 60) -> bool:
+    """True if ``pattern`` occurs within ``window`` chars of a task-defining cue."""
+    for m in re.finditer(pattern, t):
+        scope = t[max(0, m.start() - window): m.end() + window]
+        if re.search(_TASK_CUES, scope):
+            return True
+    return False
+
+
 def _parse_description_task(text: str) -> str | None:
     t = text.lower()
     # Order matters: "binary classification" also contains "classif", so the
@@ -176,9 +217,25 @@ def _parse_description_task(text: str) -> str | None:
         return BINARY
     if re.search(r"multi[\s-]?class", t) or "multinomial" in t:
         return MULTICLASS
-    if re.search(r"\bclassif", t):  # classification / classify / classifier
+
+    # Verb/agent forms ("classify", "classifier") are unambiguous task signals;
+    # the bare noun "classification" is not — it shows up in feature prose such
+    # as "general zoning classification" — so only count it near task context.
+    has_classification = bool(re.search(r"\bclassif(y|ier|ying|ies|ication\b)", t)) and (
+        bool(re.search(r"\bclassif(y|ier|ying|ies)\b", t)) or _near_task_context(t, r"\bclassification\b")
+    )
+    has_regression = bool(re.search(r"\bregression\b", t)) or bool(
+        re.search(r"predict[^.]{0,40}(continuous|numeric|real[\s-]?valued)", t)
+    )
+    regression_is_task = _near_task_context(t, r"\bregression\b")
+
+    # An explicit "regression task/problem/technique" outranks a context-free
+    # classification mention that slipped through.
+    if regression_is_task and not has_classification:
+        return REGRESSION
+    if has_classification:
         return _CLASSIFICATION
-    if re.search(r"\bregression\b", t) or re.search(r"predict[^.]{0,40}(continuous|numeric|real[\s-]?valued)", t):
+    if has_regression:
         return REGRESSION
     return None
 
@@ -188,7 +245,7 @@ def _parse_description_metric(text: str) -> str | None:
     # Prefer a window around an evaluation cue ("the evaluation metric is ...").
     windows = [
         t[max(0, m.start() - 40): m.start() + 120]
-        for m in re.finditer(r"(evaluat|metric|scored|judged|score is|measured by|ranked by)", t)
+        for m in re.finditer(r"(evaluat|metric|scor|judged|measured by|ranked by|graded by)", t)
     ]
     for scope in windows + [t]:
         hit = _match_metric(scope)
@@ -210,8 +267,6 @@ def _match_metric(t: str) -> str | None:
         return RMSE
     if re.search(r"\bmae\b", t) or "mean absolute error" in t:
         return MAE
-    if re.search(r"\br2\b", t) or "r-squared" in t or "r^2" in t or "coefficient of determination" in t:
-        return R2
     return None
 
 
@@ -297,10 +352,37 @@ def _task_feasible(desc_task: str, data: dict) -> bool:
     if desc_task == BINARY:
         return data["nunique"] == 2
     if desc_task == MULTICLASS:
-        return data["nunique"] >= 2 and (not data["is_numeric"] or data["integer_like"])
+        if not (data["nunique"] >= 2 and (not data["is_numeric"] or data["integer_like"])):
+            return False
+        # A *numeric* target with very many integer levels, or a float-valued
+        # sample submission, is far more likely a count/continuous regression
+        # target than a genuine multiclass label set — reject the multiclass
+        # reading so data inference can fall back to regression.
+        if data["is_numeric"] and (data["sample_is_float"] or data["nunique"] > _MULTICLASS_NUMERIC_CAP):
+            return False
+        return True
     if desc_task == REGRESSION:
         return data["is_numeric"]
     return True
+
+
+def _normalize_forced_task(force: str | None, data: dict) -> str | None:
+    """Map a force hint from the consistency gate to a concrete task type.
+
+    Accepts REGRESSION / BINARY / MULTICLASS, or the generic "classification"
+    (resolved to binary vs multiclass from the target's cardinality)."""
+    if not force:
+        return None
+    f = str(force).strip().lower()
+    if f == REGRESSION or "regress" in f:
+        return REGRESSION
+    if f == BINARY:
+        return BINARY
+    if f == MULTICLASS:
+        return MULTICLASS
+    if f in (_CLASSIFICATION, "classification", "classify", "classifier"):
+        return BINARY if data["nunique"] == 2 else MULTICLASS
+    return None
 
 
 def _default_metric(task: str, output_kind: str, has_block_col: bool) -> str:

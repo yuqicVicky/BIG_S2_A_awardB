@@ -190,3 +190,19 @@ After writing the file, print a one-paragraph summary (≤ 100 words) covering: 
 - **Do not write any file other than `outputs/logs/spec_parse.json`.**
 - **If `DATA_DESCRIPTION.md` is absent**: write a `FAIL` warning in `errors` and return — the orchestrator will halt.
 - **Do not suppress any `FAIL` warning.** Surface all failures to the orchestrator.
+
+---
+
+## Closed-loop verdict (stage `task_inference`)
+
+In addition to `spec_parse.json`, emit a consistency verdict to
+`outputs/logs/{run_id}_llm_gate_task_inference.json` in the shared schema (see
+`analysis-orchestrator` → "Closed-loop verdict protocol"). Emit `fail` when the
+resolved `task_type` contradicts the data, the description's official metric, or
+the sample-submission value format — e.g. a regression metric
+(`rmse`/`rmsle`/`mae`/`r2`) paired with a classification `task_type`, or a
+classification metric paired with a continuous, high-cardinality target. Set
+`suggested_corrections.force_task_type` to the type the evidence implies
+(`regression`, `binary_classification`, or `multiclass_classification`). The
+orchestrator re-resolves the task once with that hint; your verdict takes
+precedence over the deterministic `gates.check_task_consistency` result.

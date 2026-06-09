@@ -12,24 +12,35 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 import math
+import os
+import time
 from typing import Any, Callable
 
 import numpy as np
 import pandas as pd
 
-from .task import ACCURACY, BINARY, F1, F1_MACRO, LOG_LOSS, MULTICLASS, REGRESSION, ROC_AUC
+from .task import (
+    ACCURACY,
+    BINARY,
+    BLOCK_MAE,
+    F1,
+    F1_MACRO,
+    LOG_LOSS,
+    MAE,
+    MULTICLASS,
+    REGRESSION,
+    RMSE,
+    ROC_AUC,
+)
 
 try:  # sklearn is preferred, but baseline models can run without it.
     from sklearn.compose import ColumnTransformer
     from sklearn.dummy import DummyClassifier, DummyRegressor
     from sklearn.ensemble import (
-        ExtraTreesClassifier,
         ExtraTreesRegressor,
-        GradientBoostingClassifier,
         GradientBoostingRegressor,
         HistGradientBoostingClassifier,
         HistGradientBoostingRegressor,
-        RandomForestClassifier,
         RandomForestRegressor,
     )
     from sklearn.impute import SimpleImputer
@@ -39,14 +50,15 @@ try:  # sklearn is preferred, but baseline models can run without it.
         f1_score,
         log_loss,
         mean_absolute_error,
+        mean_squared_error,
+        r2_score,
         roc_auc_score,
     )
-    from sklearn.model_selection import train_test_split
-    from sklearn.naive_bayes import GaussianNB
-    from sklearn.neighbors import KNeighborsClassifier
+    from sklearn.decomposition import TruncatedSVD
+    from sklearn.feature_extraction.text import TfidfVectorizer
+    from sklearn.model_selection import GroupKFold, KFold, train_test_split
     from sklearn.pipeline import Pipeline
-    from sklearn.preprocessing import OneHotEncoder, StandardScaler
-    from sklearn.svm import SVC
+    from sklearn.preprocessing import FunctionTransformer, OneHotEncoder, StandardScaler
 
     SKLEARN_AVAILABLE = True
 except Exception:  # pragma: no cover - minimal evaluation runtimes only
@@ -55,6 +67,17 @@ except Exception:  # pragma: no cover - minimal evaluation runtimes only
 
     def mean_absolute_error(y_true, y_pred):
         return float(np.mean(np.abs(np.asarray(y_true, dtype=float) - np.asarray(y_pred, dtype=float))))
+
+    def mean_squared_error(y_true, y_pred):
+        d = np.asarray(y_true, dtype=float) - np.asarray(y_pred, dtype=float)
+        return float(np.mean(d * d))
+
+    def r2_score(y_true, y_pred):
+        yt = np.asarray(y_true, dtype=float)
+        yp = np.asarray(y_pred, dtype=float)
+        ss_res = float(np.sum((yt - yp) ** 2))
+        ss_tot = float(np.sum((yt - yt.mean()) ** 2))
+        return 1.0 - ss_res / ss_tot if ss_tot > 0 else 0.0
 
     def accuracy_score(y_true, y_pred):
         return float(np.mean(np.asarray(y_true) == np.asarray(y_pred)))
@@ -121,6 +144,97 @@ class GroupMeanRegressor:
         if not isinstance(value, tuple):
             return (value,)
         return value
+
+
+# Per-group target statistics emitted as features (version2's hist_* signal).
+_AGG_STATS = ("mean", "median", "std", "min", "max", "q25", "q75", "count")
+
+
+def _agg_col_name(keys: list[str], stat: str) -> str:
+    return f"tgt_{stat}__" + "_".join(keys)
+
+
+def _aggregate_feature_names(group_specs) -> list[str]:
+    names: list[str] = []
+    for keys in (group_specs or []):
+        for stat in _AGG_STATS:
+            names.append(_agg_col_name(list(keys), stat))
+    return names
+
+
+class GroupTargetAggregator:
+    """Leakage-safe per-group target statistics as model features.
+
+    ``fit(X, y)`` computes, on the supplied rows only, target statistics per
+    group key; ``transform`` maps them onto rows by group key with a global
+    fallback for unseen groups. Fit *inside* the model Pipeline, so during
+    cross-validation / holdout it only ever sees the training fold — the encoded
+    statistics never leak the row's own target into evaluation. This is the
+    dominant signal on a stable panel (a group's own history) and generalises to
+    any dataset with overlapping group keys.
+    """
+
+    def __init__(self, group_specs, stats=None):
+        self.group_specs = group_specs
+        self.stats = list(stats) if stats is not None else list(_AGG_STATS)
+        self.tables_: dict[tuple, pd.DataFrame] = {}
+        self.global_: dict[str, float] = {}
+
+    def get_params(self, deep: bool = True) -> dict:
+        return {"group_specs": self.group_specs, "stats": self.stats}
+
+    def set_params(self, **params):
+        for k, v in params.items():
+            setattr(self, k, v)
+        return self
+
+    def fit(self, X: pd.DataFrame, y) -> "GroupTargetAggregator":
+        yv = pd.Series(np.asarray(y, dtype=float)).reset_index(drop=True)
+        Xr = X.reset_index(drop=True)
+        self.global_ = {
+            "mean": float(yv.mean()),
+            "median": float(yv.median()),
+            "std": float(yv.std()) if len(yv) > 1 else 0.0,
+            "min": float(yv.min()),
+            "max": float(yv.max()),
+            "q25": float(yv.quantile(0.25)),
+            "q75": float(yv.quantile(0.75)),
+            "count": 0.0,
+        }
+        frame = Xr.copy()
+        frame["__y__"] = yv.values
+        self.tables_ = {}
+        for keys in (self.group_specs or []):
+            keys = list(keys)
+            if not all(k in Xr.columns for k in keys):
+                continue
+            g = frame.groupby(keys, dropna=False)["__y__"]
+            self.tables_[tuple(keys)] = pd.DataFrame({
+                "mean": g.mean(), "median": g.median(), "std": g.std().fillna(0.0),
+                "min": g.min(), "max": g.max(),
+                "q25": g.quantile(0.25), "q75": g.quantile(0.75),
+                "count": g.count().astype(float),
+            })
+        return self
+
+    def transform(self, X: pd.DataFrame) -> pd.DataFrame:
+        out = X.copy()
+        for keys in (self.group_specs or []):
+            keys = list(keys)
+            tbl = self.tables_.get(tuple(keys))
+            have_keys = all(k in out.columns for k in keys)
+            for stat in self.stats:
+                col = _agg_col_name(keys, stat)
+                fill = 0.0 if stat == "count" else self.global_.get(stat, 0.0)
+                if tbl is None or stat not in tbl.columns or not have_keys:
+                    out[col] = fill
+                    continue
+                merged = out[keys].merge(tbl[[stat]], how="left", left_on=keys, right_index=True)
+                out[col] = merged[stat].fillna(fill).to_numpy()
+        return out
+
+    def fit_transform(self, X, y=None, **kwargs):
+        return self.fit(X, y).transform(X)
 
 
 class GroupModeClassifier:
@@ -241,15 +355,34 @@ class TopKVoteClassifier:
 
 # ── dispatcher ────────────────────────────────────────────────────────────────
 
-def train_and_predict(bundle: FeatureBundle, block_column: str | None = None, random_state: int = 42) -> ModelResult:
+def train_and_predict(
+    bundle: FeatureBundle, block_column: str | None = None, random_state: int = 42,
+    families: set[str] | None = None,
+) -> ModelResult:
     if bundle.task.task_type == REGRESSION:
-        return _train_regression(bundle, block_column, random_state)
-    return _train_classification(bundle, random_state)
+        return _train_regression(bundle, block_column, random_state, families=families)
+    return _train_classification(bundle, random_state, families=families)
+
+
+def _candidate_family(name: str) -> str:
+    """Coarse family tag for a candidate model, used by the modeling-group
+    specialists to train a focused subset. Dataset-agnostic (name-based)."""
+    n = name.lower()
+    if n.startswith("baseline") or n.startswith("dummy"):
+        return "baseline"
+    if any(t in n for t in ("lightgbm", "xgboost", "catboost", "hist_gradient", "gradient_boosting")) or n.startswith("hgb"):
+        return "gbdt"
+    if n in ("ridge", "elastic_net") or "linear" in n or "logistic" in n:
+        return "linear"
+    if "random_forest" in n or "extra_trees" in n:
+        return "trees"
+    return "other"
 
 
 # ── regression path (Award A behaviour, preserved) ─────────────────────────────
 
-def _train_regression(bundle: FeatureBundle, block_column: str | None, random_state: int) -> ModelResult:
+def _train_regression(bundle: FeatureBundle, block_column: str | None, random_state: int,
+                      families: set[str] | None = None) -> ModelResult:
     y = pd.to_numeric(bundle.target, errors="coerce")
     valid_mask = y.notna()
     if valid_mask.sum() < 5:
@@ -260,61 +393,95 @@ def _train_regression(bundle: FeatureBundle, block_column: str | None, random_st
     X = train_df[bundle.feature_columns].copy()
     X_pred = bundle.predict_df[bundle.feature_columns].copy()
 
-    within_period_info = bundle.profile.get("within_period_info")
-    split = _make_holdout_split(
-        train_df, bundle.feature_columns, y, bundle.profile.get("time_column"), random_state,
-        within_period_info=within_period_info,
-    )
-    train_idx, holdout_idx, holdout_strategy = split
-    X_train, X_holdout = X.iloc[train_idx], X.iloc[holdout_idx]
-    y_train, y_holdout = y.iloc[train_idx], y.iloc[holdout_idx]
-    holdout_frame = train_df.iloc[holdout_idx].reset_index(drop=True)
+    metric = getattr(bundle.task, "metric", None)
+    greater = bool(getattr(bundle.task, "greater_is_better", False))
+    _, metric_name = _score_function(metric, block_column, train_df)
 
-    score_fn, metric_name = _score_function(block_column, holdout_frame)
+    # ── cross-validation folds (group whole periods out when possible) ─────────
+    # Guard against a unique-per-row key (e.g. an hourly timestamp used as the row
+    # id) silently collapsing GroupKFold into ordinary KFold: resolve to a sane
+    # block, coarsening a too-granular datetime key to whole-period blocks so the
+    # CV actually mirrors held-out periods. Dataset-agnostic.
+    group_col = bundle.profile.get("time_column") or block_column
+    groups, block_reason = _resolve_cv_groups(train_df, group_col, len(X))
+    folds, cv_desc = _make_cv_folds(len(X), groups, random_state)
+    cv_desc["group_column"] = group_col
+    if block_reason:
+        cv_desc["block_reason"] = block_reason
+
+    def _score_idx(idx, y_true, y_pred) -> float:
+        hf = train_df.iloc[idx].reset_index(drop=True)
+        sfn, _ = _score_function(metric, block_column, hf)
+        return float(sfn(np.asarray(y_true, dtype=float), np.asarray(y_pred, dtype=float)))
+
     candidates = _build_candidates(bundle, train_df, random_state)
-    scores: list[dict] = []
-    fitted_candidates = []
-    holdout_capture: dict[str, np.ndarray] = {}
+    if families:
+        # A modeling-group specialist trains a focused subset; baselines are
+        # always kept so a valid fallback exists.
+        keep = set(families) | {"baseline"}
+        filtered = [(n, f) for (n, f) in candidates if _candidate_family(n) in keep]
+        if any(_candidate_family(n) in families for n, _ in filtered):
+            candidates = filtered
+    budget = _TimeBudget(_time_budget_seconds())
 
-    for name, estimator_factory in candidates:
+    scores: list[dict] = []
+    oof_preds: dict[str, np.ndarray] = {}
+    factories: dict[str, Callable] = {}
+    cand_score: dict[str, float] = {}
+
+    # ── out-of-fold cross-validation for every candidate ──────────────────────
+    for name, factory in candidates:
+        if budget.exhausted():
+            scores.append({"name": name, "status": "skipped", "error": "time_budget_exhausted"})
+            continue
         try:
-            estimator = estimator_factory()
-            estimator.fit(X_train, y_train)
-            pred = _sanitize_predictions(estimator.predict(X_holdout), y)
-            holdout_capture[name] = pred
-            mae = float(mean_absolute_error(y_holdout, pred))
-            selection_metric = float(score_fn(y_holdout, pred))
-            scores.append(
-                {
-                    "name": name,
-                    "status": "ok",
-                    "score": selection_metric,
-                    "detail": {"mae": mae, metric_name: selection_metric},
-                }
-            )
-            fitted_candidates.append((selection_metric, name, estimator_factory))
+            oof = np.full(len(X), np.nan, dtype=float)
+            fold_scores = []
+            for tr_idx, va_idx in folds:
+                est = factory()
+                est.fit(X.iloc[tr_idx], y.iloc[tr_idx])
+                p = _sanitize_predictions(est.predict(X.iloc[va_idx]), y)
+                oof[va_idx] = p
+                fold_scores.append(_score_idx(va_idx, y.iloc[va_idx], p))
+            mask = ~np.isnan(oof)
+            overall = _score_idx(np.flatnonzero(mask), y[mask], oof[mask])
+            mae = float(mean_absolute_error(y[mask], oof[mask]))
+            scores.append({
+                "name": name, "status": "ok", "score": overall,
+                "detail": {"mae": mae, metric_name: overall,
+                           "cv_mean": float(np.mean(fold_scores)),
+                           "cv_std": float(np.std(fold_scores)),
+                           "cv_scores": [round(float(s), 4) for s in fold_scores]},
+            })
+            oof_preds[name] = oof
+            factories[name] = factory
+            cand_score[name] = overall
         except Exception as exc:
             scores.append({"name": name, "status": "failed", "error": str(exc)})
 
-    if not fitted_candidates:
+    if not factories:
         raise RuntimeError("All candidate models failed; cannot produce predictions.")
 
-    # ── try top-2 ensemble ────────────────────────────────────────────────────
-    ensemble_entry = _try_regression_ensemble(fitted_candidates, holdout_capture, score_fn, y_holdout)
-    if ensemble_entry is not None:
-        e_score, e_name, e_pred, e_factory = ensemble_entry
-        holdout_capture[e_name] = e_pred
-        mae_e = float(mean_absolute_error(y_holdout, e_pred))
-        scores.append({
-            "name": e_name, "status": "ok", "score": e_score,
-            "detail": {"mae": mae_e, metric_name: e_score},
-        })
-        fitted_candidates.append((e_score, e_name, e_factory))
+    # ── aggressive, budget-bounded hyperparameter tuning of the top models ─────
+    _tune_top_models(
+        factories, cand_score, oof_preds, scores, X, y, folds,
+        _score_idx, metric_name, greater, budget, random_state,
+    )
 
-    _, selected_name, selected_factory = min(fitted_candidates, key=lambda item: item[0])
-    final_model = selected_factory()
-    final_model.fit(X, y)
-    predictions = _sanitize_predictions(final_model.predict(X_pred), y)
+    # ── stacking: convex blend of the best base models' OOF predictions ────────
+    stack = _build_stack(oof_preds, cand_score, y, greater, _score_idx, metric_name)
+    if stack is not None:
+        scores.append(stack["score_entry"])
+        cand_score[stack["name"]] = stack["score"]
+
+    selected_name = (max if greater else min)(cand_score, key=lambda n: cand_score[n])
+
+    # ── final fit + predict (seed-averaged), stacking-aware ────────────────────
+    if stack is not None and selected_name == stack["name"]:
+        predictions = _predict_stack(stack, factories, X, y, X_pred, random_state)
+    else:
+        predictions = _final_predict(factories[selected_name], X, y, X_pred, random_state)
+    predictions = _sanitize_predictions(predictions, y)
 
     clip_min = 0.0 if float(y.min()) >= 0 else None
     clip_max = _reasonable_upper_clip(y)
@@ -325,46 +492,42 @@ def _train_regression(bundle: FeatureBundle, block_column: str | None, random_st
             clip_max if clip_max is not None else np.inf,
         )
 
-    # ── multi-split stability ─────────────────────────────────────────────────
-    # Evaluate the selected model on 2 additional time-ordered splits to estimate
-    # variance. This is generic: splits are computed from the time_column or ordinal index.
-    stability_scores = [float(score_fn(y_holdout, holdout_capture[selected_name]))] if selected_name in holdout_capture else []
-    try:
-        _stability_splits = _compute_additional_splits(train_df, bundle.profile.get("time_column"), random_state)
-        _stability_final = selected_factory()
-        for _alt_train_idx, _alt_holdout_idx in _stability_splits:
-            _x_tr = X.iloc[_alt_train_idx]
-            _y_tr = y.iloc[_alt_train_idx]
-            _x_hd = X.iloc[_alt_holdout_idx]
-            _y_hd = y.iloc[_alt_holdout_idx]
-            _hd_frame = train_df.iloc[_alt_holdout_idx].reset_index(drop=True)
-            _alt_score_fn, _ = _score_function(block_column, _hd_frame)
-            _m = selected_factory()
-            _m.fit(_x_tr, _y_tr)
-            _p = _sanitize_predictions(_m.predict(_x_hd), y)
-            stability_scores.append(float(_alt_score_fn(_y_hd, _p)))
-    except Exception:
-        pass
-    if len(stability_scores) >= 2:
-        _stab_arr = np.array(stability_scores, dtype=float)
+    holdout_strategy = dict(cv_desc)
+    selected_detail = _selected_detail(scores, selected_name)
+    # Per-fold CV stability for the selected model. A stack's own detail carries
+    # no per-fold scores, so fall back to its top base (representative variance).
+    _stab_detail = selected_detail
+    if "cv_std" not in _stab_detail and stack is not None and selected_name == stack["name"] and stack["bases"]:
+        _stab_detail = _selected_detail(scores, stack["bases"][0])
+    if "cv_std" in _stab_detail:
+        _cm = float(_stab_detail.get("cv_mean", _stab_detail.get(metric_name, 0.0)))
+        _cs = float(_stab_detail.get("cv_std", 0.0))
         holdout_strategy["stability"] = {
-            "split_scores": [round(s, 4) for s in stability_scores],
-            "cv_mae_mean": round(float(_stab_arr.mean()), 4),
-            "cv_mae_std": round(float(_stab_arr.std()), 4),
-            "relative_stability": round(float(_stab_arr.std() / _stab_arr.mean()), 4) if _stab_arr.mean() > 0 else None,
+            "split_scores": _stab_detail.get("cv_scores", []),
+            "cv_mae_mean": round(_cm, 4),
+            "cv_mae_std": round(_cs, 4),
+            "relative_stability": round(_cs / _cm, 4) if _cm > 0 else None,
         }
 
-    selected_detail = _selected_detail(scores, selected_name)
-    y_true_holdout = np.asarray(y_holdout, dtype=float)
-    y_pred_holdout = holdout_capture.get(selected_name)
+    # selected model's OOF arrays (full coverage) for plotting / residuals
+    sel_oof = oof_preds.get(selected_name)
+    if sel_oof is None and stack is not None and selected_name == stack["name"]:
+        sel_oof = stack.get("oof")
+    if sel_oof is not None:
+        m = ~np.isnan(sel_oof)
+        y_true_holdout = np.asarray(y[m], dtype=float)
+        y_pred_holdout = sel_oof[m]
+    else:
+        y_true_holdout, y_pred_holdout = np.asarray(y, dtype=float), None
     residual_analysis = _compute_residual_analysis(y_true_holdout, y_pred_holdout) if y_pred_holdout is not None else {}
+
     return ModelResult(
         predictions=predictions,
         selected_model_name=selected_name,
         model_scores=scores,
         holdout_strategy=holdout_strategy,
         metric_name=metric_name,
-        greater_is_better=False,
+        greater_is_better=greater,
         task_type=REGRESSION,
         output_kind="value",
         extra_metrics=selected_detail,
@@ -372,14 +535,311 @@ def _train_regression(bundle: FeatureBundle, block_column: str | None, random_st
         target_clip_max=clip_max,
         holdout_y_true=y_true_holdout,
         holdout_y_pred=y_pred_holdout,
-        holdout_by_model=holdout_capture,
+        holdout_by_model=oof_preds,
         residual_analysis=residual_analysis,
     )
 
 
+# ── cross-validation, stacking, seed-averaging helpers ─────────────────────────
+
+def _time_budget_seconds() -> float:
+    """Global wall-clock budget for model search (env-overridable). Default 90
+    min — comfortably inside the Award-B 2-hour cap with margin for I/O/report."""
+    try:
+        return float(os.environ.get("AWARDB_TIME_BUDGET_SEC", "5400"))
+    except Exception:
+        return 5400.0
+
+
+class _TimeBudget:
+    def __init__(self, seconds: float):
+        self.deadline = time.monotonic() + max(30.0, float(seconds))
+
+    def exhausted(self) -> bool:
+        return time.monotonic() >= self.deadline
+
+
+def _coarsen_datetime_blocks(series: pd.Series, n: int, k: int = 5):
+    """Derive a coarser temporal block from a too-granular datetime-like column so a
+    blocked CV holds *whole periods* out instead of one row per group. Tries
+    year -> year-month -> ISO-week -> calendar-day and keeps a granularity with a
+    healthy block count. Returns ``(keys, label)`` or ``(None, None)``. Dataset-
+    agnostic; never coerces a numeric id column into epoch timestamps."""
+    if pd.api.types.is_numeric_dtype(series):
+        return None, None
+    dt = pd.to_datetime(series, errors="coerce")
+    if float(dt.notna().mean()) < 0.8:
+        return None, None
+    min_groups = max(2 * k, 6)
+    max_groups = max(min_groups, n // 4)
+    grans = [("year", "%Y"), ("year_month", "%Y-%m"), ("year_week", "%G-%V"), ("date", "%Y-%m-%d")]
+    counted = []
+    for label, fmt in grans:
+        keys = dt.dt.strftime(fmt).fillna("NaT").astype(str)
+        g = int(keys.nunique())
+        counted.append((label, keys, g))
+        if min_groups <= g <= max_groups:
+            return keys, f"{label} ({g} blocks)"
+    eligible = [(lbl, keys, g) for (lbl, keys, g) in counted if g >= min_groups]
+    if eligible:  # none in the ideal band: finest with enough blocks for k folds
+        lbl, keys, g = eligible[-1]
+        return keys, f"{lbl} ({g} blocks)"
+    usable = [(lbl, keys, g) for (lbl, keys, g) in counted if g >= 2]
+    if usable:  # last resort: coarsest key with at least two blocks
+        lbl, keys, g = usable[0]
+        return keys, f"{lbl} ({g} blocks)"
+    return None, None
+
+
+def _resolve_cv_groups(train_df: pd.DataFrame, group_col: str | None, n: int, k: int = 5):
+    """Resolve the GroupKFold grouping series, guarding against a unique-per-row key
+    (an hourly timestamp, a row id) that would silently collapse GroupKFold into
+    ordinary KFold. A too-granular datetime key is coarsened to whole-period blocks.
+    Returns ``(groups, reason)``; ``groups is None`` means shuffled KFold."""
+    if not group_col or group_col not in train_df.columns:
+        return None, None
+    s = train_df[group_col].reset_index(drop=True)
+    nun = int(s.nunique(dropna=False))
+    if nun < 3:
+        return None, f"'{group_col}' has {nun} distinct value(s); shuffled KFold"
+    if nun <= n // 2:
+        return s.astype(str), None  # healthy block — hold whole groups out as-is
+    coarse, label = _coarsen_datetime_blocks(s, n, k)
+    if coarse is not None:
+        return coarse, f"coarsened '{group_col}' -> {label} (raw {nun}/{n} ~unique-per-row)"
+    return None, f"'{group_col}' too granular ({nun}/{n}); shuffled KFold"
+
+
+def _make_cv_folds(n: int, groups: pd.Series | None, random_state: int, max_splits: int = 5):
+    """Return ``(folds, description)``. Group whole periods out (GroupKFold) when
+    a grouping key is available so validation mirrors the disjoint hidden periods;
+    otherwise shuffled KFold. Degrades to manual folds without sklearn."""
+    if SKLEARN_AVAILABLE and groups is not None:
+        ng = int(groups.nunique())
+        # Only group when the key yields whole held-out blocks. A near-unique-per-row
+        # key (ng ~ n) would collapse GroupKFold into ordinary KFold — fall back
+        # honestly instead (callers coarsen such keys upstream via _resolve_cv_groups).
+        if 3 <= ng <= max(3, n // 2):
+            k = int(min(max_splits, ng))
+            folds = list(GroupKFold(n_splits=k).split(np.arange(n), groups=groups.to_numpy()))
+            return folds, {"type": "grouped_kfold", "n_splits": k, "n_groups": ng}
+    if SKLEARN_AVAILABLE:
+        k = int(min(max_splits, max(2, n // 2)))
+        folds = list(KFold(n_splits=k, shuffle=True, random_state=random_state).split(np.arange(n)))
+        return folds, {"type": "kfold", "n_splits": k}
+    k = int(min(max_splits, max(2, n // 2)))
+    chunks = np.array_split(np.arange(n), k)
+    folds = [
+        (np.concatenate([chunks[j] for j in range(k) if j != i]), chunks[i])
+        for i in range(k)
+    ]
+    return folds, {"type": "manual_kfold", "n_splits": k}
+
+
+def _seedable_param(est) -> str | None:
+    try:
+        params = est.get_params()
+    except Exception:
+        return None
+    if "model__random_state" in params:
+        return "model__random_state"
+    if "random_state" in params:
+        return "random_state"
+    return None
+
+
+def _seed_count() -> int:
+    try:
+        return max(1, int(os.environ.get("AWARDB_SEEDS", "3")))
+    except Exception:
+        return 3
+
+
+def _final_predict(factory: Callable, X, y, X_pred, random_state: int, n_seeds: int | None = None) -> np.ndarray:
+    """Fit on full training data and predict, averaging over several seeds for
+    estimators that expose a ``random_state`` (variance reduction). Deterministic
+    estimators are fit once."""
+    if n_seeds is None:
+        n_seeds = _seed_count()
+    param = _seedable_param(factory())
+    if not param or n_seeds <= 1:
+        est = factory()
+        est.fit(X, y)
+        return np.asarray(est.predict(X_pred), dtype=float)
+    preds = []
+    for s in range(n_seeds):
+        est = factory()
+        try:
+            est.set_params(**{param: random_state + 100 * (s + 1)})
+        except Exception:
+            pass
+        est.fit(X, y)
+        preds.append(np.asarray(est.predict(X_pred), dtype=float))
+    return np.mean(preds, axis=0)
+
+
+def _build_stack(oof_preds, cand_score, y, greater, score_idx, metric_name, top_k: int = 3):
+    """Convex (non-negative, sum-to-one) blend of the top base models' OOF
+    predictions. Robust by construction — no extrapolation — and only kept when
+    it beats the best single base on the same OOF rows."""
+    ranked = sorted(cand_score, key=lambda n: cand_score[n], reverse=greater)
+    bases = ranked[:top_k]
+    if len(bases) < 2:
+        return None
+    mask = np.ones(len(y), dtype=bool)
+    for n in bases:
+        mask &= ~np.isnan(oof_preds[n])
+    if int(mask.sum()) < 10:
+        return None
+    M = np.column_stack([oof_preds[n][mask] for n in bases])
+    yv = np.asarray(y[mask], dtype=float)
+    weights = None
+    try:
+        from scipy.optimize import nnls
+        w, _ = nnls(M, yv)
+        if w.sum() > 0:
+            weights = w / w.sum()
+    except Exception:
+        weights = None
+    if weights is None:
+        weights = np.ones(len(bases)) / len(bases)
+    stacked = M @ weights
+    best_single = cand_score[bases[0]]
+    stacked_score = score_idx(np.flatnonzero(mask), yv, stacked)
+    improved = stacked_score > best_single if greater else stacked_score < best_single
+    if not improved:
+        return None
+    full_oof = np.full(len(y), np.nan, dtype=float)
+    full_oof[mask] = stacked
+    name = "stack(" + "+".join(bases) + ")"
+    return {
+        "name": name,
+        "bases": bases,
+        "weights": [float(w) for w in weights],
+        "score": stacked_score,
+        "oof": full_oof,
+        "score_entry": {
+            "name": name, "status": "ok", "score": stacked_score,
+            "detail": {metric_name: stacked_score,
+                       "weights": {b: round(float(w), 3) for b, w in zip(bases, weights)}},
+        },
+    }
+
+
+def _predict_stack(stack, factories, X, y, X_pred, random_state) -> np.ndarray:
+    total = None
+    for name, w in zip(stack["bases"], stack["weights"]):
+        p = w * _final_predict(factories[name], X, y, X_pred, random_state)
+        total = p if total is None else total + p
+    return total
+
+
+def _tune_iters() -> int:
+    # Wall-clock (not tokens) is the binding Award B cap, and tuning dominates it.
+    # A leaner default + early-stopping (see _tune_top_models) keeps the cheap wins
+    # and drops the long tail of no-improvement iterations that only chase CV noise.
+    try:
+        return max(0, int(os.environ.get("AWARDB_TUNE_ITER", "12")))
+    except Exception:
+        return 12
+
+
+def _py(v):
+    return v.item() if isinstance(v, np.generic) else v
+
+
+def _param_space(model) -> dict:
+    """Per-family randomized-search space, keyed by estimator class name.
+    Dataset-agnostic — only the model type matters, never any column."""
+    cls = type(model).__name__
+    if cls == "LGBMRegressor":
+        return {"num_leaves": [31, 63, 95, 127], "learning_rate": [0.02, 0.03, 0.05],
+                "n_estimators": [600, 1000, 1500], "subsample": [0.7, 0.85, 1.0],
+                "colsample_bytree": [0.7, 0.85, 1.0], "min_child_samples": [10, 20, 40],
+                "reg_lambda": [0.0, 0.1, 1.0]}
+    if cls == "CatBoostRegressor":
+        return {"depth": [4, 6, 8], "learning_rate": [0.02, 0.03, 0.05],
+                "l2_leaf_reg": [1.0, 3.0, 5.0, 9.0], "iterations": [800, 1200, 2000]}
+    if cls == "XGBRegressor":
+        return {"max_depth": [4, 6, 8], "learning_rate": [0.02, 0.03, 0.05],
+                "n_estimators": [600, 1000, 1500], "subsample": [0.7, 0.85, 1.0],
+                "colsample_bytree": [0.7, 0.85, 1.0], "reg_lambda": [0.5, 1.0, 2.0]}
+    if cls == "HistGradientBoostingRegressor":
+        return {"max_iter": [300, 600, 900], "learning_rate": [0.03, 0.05, 0.08],
+                "max_leaf_nodes": [31, 63, 127], "l2_regularization": [0.0, 0.1, 1.0],
+                "min_samples_leaf": [10, 20, 40]}
+    if cls in ("RandomForestRegressor", "ExtraTreesRegressor"):
+        return {"n_estimators": [300, 600], "max_depth": [None, 12, 20],
+                "min_samples_leaf": [1, 2, 4], "max_features": ["sqrt", 0.5, 1.0]}
+    return {}
+
+
+def _tune_top_models(factories, cand_score, oof_preds, scores, X, y, folds,
+                     score_idx, metric_name, greater, budget, random_state, n_families: int = 2):
+    """Randomized search over the top model families using the same CV folds and
+    block-MAE scorer. A tuned config is added as a new candidate only when it
+    beats its base on OOF. Bounded by the global wall-clock budget so it stays
+    inside the 2-hour cap; a tuning failure degrades to the default params."""
+    if not SKLEARN_AVAILABLE or _tune_iters() <= 0 or budget.exhausted():
+        return
+    rng = np.random.default_rng(random_state)
+    ranked = sorted(cand_score, key=lambda n: cand_score[n], reverse=greater)
+    tuned = 0
+    for base_name in ranked:
+        if tuned >= n_families or budget.exhausted():
+            break
+        factory = factories.get(base_name)
+        if factory is None:
+            continue
+        try:
+            steps = getattr(factory(), "named_steps", {})
+        except Exception:
+            continue
+        if "model" not in steps:
+            continue  # only tune plain Pipeline(preprocess, model) candidates
+        space = _param_space(steps["model"])
+        if not space:
+            continue
+        tuned += 1
+        best_cfg, best_oof, best_score = None, None, cand_score[base_name]
+        # Early-stop a plateaued search: stop this family after `patience`
+        # consecutive non-improving draws. Brute-force depth only buys CV noise, so
+        # this reclaims wall-clock for the (token-cheap) real subagent layer.
+        patience = max(4, _tune_iters() // 3)
+        no_improve = 0
+        for _ in range(_tune_iters()):
+            if budget.exhausted() or no_improve >= patience:
+                break
+            cfg = {f"model__{k}": _py(rng.choice(np.array(v, dtype=object))) for k, v in space.items()}
+            try:
+                oof = np.full(len(X), np.nan, dtype=float)
+                for tr_idx, va_idx in folds:
+                    est = factory().set_params(**cfg)
+                    est.fit(X.iloc[tr_idx], y.iloc[tr_idx])
+                    oof[va_idx] = _sanitize_predictions(est.predict(X.iloc[va_idx]), y)
+                m = ~np.isnan(oof)
+                sc = score_idx(np.flatnonzero(m), y[m], oof[m])
+            except Exception:
+                continue
+            if (sc > best_score) if greater else (sc < best_score):
+                best_cfg, best_oof, best_score = cfg, oof, sc
+                no_improve = 0
+            else:
+                no_improve += 1
+        if best_cfg is not None:
+            tname = f"tuned({base_name})"
+            factories[tname] = (lambda f=factory, c=dict(best_cfg): f().set_params(**c))
+            oof_preds[tname] = best_oof
+            cand_score[tname] = best_score
+            scores.append({"name": tname, "status": "ok", "score": best_score,
+                           "detail": {metric_name: best_score, "tuned_from": base_name,
+                                      "params": {k.replace("model__", ""): v for k, v in best_cfg.items()}}})
+
+
 # ── classification path ─────────────────────────────────────────────────────────
 
-def _train_classification(bundle: FeatureBundle, random_state: int) -> ModelResult:
+def _train_classification(bundle: FeatureBundle, random_state: int,
+                          families: set[str] | None = None) -> ModelResult:
     task = bundle.task
     raw_y = bundle.target
     valid_mask = raw_y.notna()
@@ -417,6 +877,15 @@ def _train_classification(bundle: FeatureBundle, random_state: int) -> ModelResu
     metric = task.metric
     greater = task.greater_is_better
     candidates = _build_classification_candidates(bundle, train_df, random_state, task)
+    if families:
+        # A modeling-group specialist trains a focused subset; baselines are always
+        # kept so a valid fallback exists. Mirrors the regression filter so the
+        # keep-best group is task-agnostic. If the requested family is absent from
+        # the (lean) classification pool, fall back to the full set.
+        keep = set(families) | {"baseline"}
+        filtered = [(n, f) for (n, f) in candidates if _candidate_family(n) in keep]
+        if any(_candidate_family(n) in families for n, _ in filtered):
+            candidates = filtered
     scores: list[dict] = []
     fitted_candidates = []
     holdout_capture: dict[str, tuple] = {}
@@ -441,18 +910,6 @@ def _train_classification(bundle: FeatureBundle, random_state: int) -> ModelResu
 
     if not fitted_candidates:
         raise RuntimeError("All candidate models failed; cannot produce predictions.")
-
-    # ── try top-2 probability ensemble ───────────────────────────────────────
-    ensemble_entry_cls = _try_classification_ensemble(
-        fitted_candidates, holdout_capture, y_holdout,
-        n_classes, positive_index, metric, greater,
-    )
-    if ensemble_entry_cls is not None:
-        e_score, e_name, e_pred, e_proba, e_factory = ensemble_entry_cls
-        holdout_capture[e_name] = (e_pred, e_proba)
-        e_detail = _classification_metrics(y_holdout.to_numpy(), e_pred, e_proba, n_classes, positive_index)
-        scores.append({"name": e_name, "status": "ok", "score": float(e_score), "detail": e_detail})
-        fitted_candidates.append((float(e_score), e_name, e_factory))
 
     selected_score, selected_name, selected_factory = (
         max(fitted_candidates, key=lambda item: item[0])
@@ -561,69 +1018,66 @@ def _make_holdout_split(
     time_column: str | None,
     random_state: int,
     stratify_labels: np.ndarray | None = None,
-    within_period_info: dict | None = None,
 ) -> tuple[np.ndarray, np.ndarray, dict]:
-    # Within-period holdout: use it when within_period_info is supplied (preferred split strategy).
-    # Holds out the top 20% of training sub-period values (e.g. days 16–19 when train has days 1–19),
-    # fitting on the remaining values. This simulates the train/predict partition exactly.
-    if within_period_info and time_column and time_column in train_df.columns:
-        feat_attr = within_period_info.get("feature")  # e.g. "day"
-        train_range = within_period_info.get("train_range")  # e.g. [1, 19]
-        predict_range = within_period_info.get("predict_range")  # e.g. [20, 31]
-        if feat_attr and train_range:
-            try:
-                parsed = pd.to_datetime(train_df[time_column], errors="coerce")
-                sub_values = getattr(parsed.dt, feat_attr)
-                all_train_vals = sorted(sub_values.dropna().unique().tolist())
-                if len(all_train_vals) >= 4:
-                    n_holdout_vals = max(1, math.ceil(len(all_train_vals) * 0.2))
-                    holdout_sub_vals = set(all_train_vals[-n_holdout_vals:])
-                    fit_sub_vals = set(all_train_vals[:-n_holdout_vals])
-                    holdout_mask = sub_values.isin(holdout_sub_vals).to_numpy()
-                    if 0 < holdout_mask.sum() < len(train_df):
-                        holdout_idx = np.flatnonzero(holdout_mask)
-                        train_idx = np.flatnonzero(~holdout_mask)
-                        return train_idx, holdout_idx, {
-                            "type": "within_period_holdout",
-                            "time_column": time_column,
-                            "period_feature": feat_attr,
-                            "fit_day_distribution": {
-                                "min": int(min(fit_sub_vals)),
-                                "max": int(max(fit_sub_vals)),
-                                "unique_values": sorted(int(v) for v in fit_sub_vals),
-                            },
-                            "validation_day_distribution": {
-                                "min": int(min(holdout_sub_vals)),
-                                "max": int(max(holdout_sub_vals)),
-                                "unique_values": sorted(int(v) for v in holdout_sub_vals),
-                            },
-                            "prediction_day_distribution": {
-                                "min": int(predict_range[0]),
-                                "max": int(predict_range[1]),
-                            } if predict_range else {},
-                            "n_train": int(len(train_idx)),
-                            "n_holdout": int(len(holdout_idx)),
-                        }
-            except Exception:
-                pass  # fall through to time_holdout or random
-
     if time_column and time_column in train_df.columns:
-        values = train_df[time_column].astype(str)
-        unique_values = sorted(values.dropna().unique().tolist())
-        if len(unique_values) >= 5:
-            n_holdout_periods = max(1, math.ceil(len(unique_values) * 0.2))
-            holdout_values = set(unique_values[-n_holdout_periods:])
-            holdout_mask = values.isin(holdout_values).to_numpy()
-            if 0 < holdout_mask.sum() < len(train_df):
-                holdout_idx = np.flatnonzero(holdout_mask)
-                train_idx = np.flatnonzero(~holdout_mask)
-                return train_idx, holdout_idx, {
-                    "type": "time_holdout",
-                    "time_column": time_column,
-                    "holdout_values": sorted(holdout_values),
-                    "n_train": int(len(train_idx)),
-                    "n_holdout": int(len(holdout_idx)),
-                }
+        raw = train_df[time_column]
+        values = raw.astype(str)
+        # Order unique periods by their *parsed* datetime (or numeric) value so
+        # the held-out 20% are genuinely the latest periods (a leakage-safe time
+        # holdout). When the key is neither datetime- nor numeric-parseable
+        # (e.g. an opaque/hashed period id), do NOT trust lexicographic order —
+        # fall through to a grouped-block holdout below.
+        parsed = pd.to_datetime(raw, errors="coerce")
+        dt_rate = float(parsed.notna().mean())
+        order_key = None
+        ordering = None
+        if dt_rate >= 0.8:
+            order_key, ordering = parsed, "datetime"
+        else:
+            numeric = pd.to_numeric(raw, errors="coerce")
+            if float(numeric.notna().mean()) >= 0.8:
+                order_key, ordering = numeric, "numeric"
+        if order_key is not None:
+            _tmp = pd.DataFrame({"orig": values, "key": order_key})
+            unique_values = (
+                _tmp.dropna(subset=["key"]).drop_duplicates("orig").sort_values("key")["orig"].tolist()
+            )
+            if len(unique_values) >= 5:
+                n_holdout_periods = max(1, math.ceil(len(unique_values) * 0.2))
+                holdout_values = set(unique_values[-n_holdout_periods:])
+                holdout_mask = values.isin(holdout_values).to_numpy()
+                if 0 < holdout_mask.sum() < len(train_df):
+                    holdout_idx = np.flatnonzero(holdout_mask)
+                    train_idx = np.flatnonzero(~holdout_mask)
+                    return train_idx, holdout_idx, {
+                        "type": "time_holdout",
+                        "time_column": time_column,
+                        "ordering": ordering,
+                        "holdout_values": [str(v) for v in unique_values[-n_holdout_periods:]],
+                        "n_train": int(len(train_idx)),
+                        "n_holdout": int(len(holdout_idx)),
+                    }
+        else:
+            # Opaque / unorderable block key: hold out whole periods at random so
+            # none appears in both partitions — mirrors the disjoint validation
+            # periods of a panel and needs no ordering.
+            uniq = values.drop_duplicates().tolist()
+            if len(uniq) >= 5:
+                rng = np.random.default_rng(random_state)
+                n_holdout_periods = max(1, int(round(len(uniq) * 0.2)))
+                perm = rng.permutation(np.array(uniq, dtype=object))
+                holdout_values = set(perm[:n_holdout_periods].tolist())
+                holdout_mask = values.isin(holdout_values).to_numpy()
+                if 0 < holdout_mask.sum() < len(train_df):
+                    holdout_idx = np.flatnonzero(holdout_mask)
+                    train_idx = np.flatnonzero(~holdout_mask)
+                    return train_idx, holdout_idx, {
+                        "type": "grouped_block_holdout",
+                        "time_column": time_column,
+                        "n_holdout_periods": int(n_holdout_periods),
+                        "n_train": int(len(train_idx)),
+                        "n_holdout": int(len(holdout_idx)),
+                    }
 
     indices = np.arange(len(train_df))
     stratified = False
@@ -652,11 +1106,29 @@ def _make_holdout_split(
     }
 
 
-def _score_function(block_column: str | None, holdout_frame: pd.DataFrame) -> tuple[Callable, str]:
+def _rmse(y_true, y_pred) -> float:
+    return float(np.sqrt(mean_squared_error(y_true, y_pred)))
+
+
+def _score_function(
+    metric: str | None, block_column: str | None, holdout_frame: pd.DataFrame
+) -> tuple[Callable, str]:
+    """Return the ``(scorer, name)`` pair for the resolved regression metric.
+
+    Award B is graded by block-averaged MAE, so a discovered block column selects
+    ``block_mae`` (the resolved default when no other metric is stated). An
+    explicit ``rmse`` / ``mae`` in the description still wins. Dataset-agnostic.
+    """
+    if metric == RMSE:
+        return _rmse, "rmse"
+    if metric == MAE:
+        return (lambda y_true, y_pred: float(mean_absolute_error(y_true, y_pred))), "mae"
+    # block_mae (resolved default when a block/category column exists and no
+    # explicit metric was given) or any unrecognised metric.
     if block_column and block_column in holdout_frame.columns:
         blocks = holdout_frame[block_column].reset_index(drop=True)
-        return lambda y_true, y_pred: block_averaged_mae(y_true, y_pred, blocks), "block_mae"
-    return lambda y_true, y_pred: mean_absolute_error(y_true, y_pred), "mae"
+        return (lambda y_true, y_pred: block_averaged_mae(y_true, y_pred, blocks)), "block_mae"
+    return (lambda y_true, y_pred: float(mean_absolute_error(y_true, y_pred))), "mae"
 
 
 def _selected_detail(scores: list[dict], selected_name: str) -> dict:
@@ -680,8 +1152,16 @@ def _build_candidates(bundle: FeatureBundle, train_df: pd.DataFrame, random_stat
 
     candidates.append(("dummy_mean", lambda: DummyRegressor(strategy="mean")))
 
-    preprocessor = _make_preprocessor(bundle.numeric_columns, bundle.categorical_columns, scale_numeric=False)
-    scaled_preprocessor = _make_preprocessor(bundle.numeric_columns, bundle.categorical_columns, scale_numeric=True)
+    _gs = bundle.group_aggregate_keys
+    _tx = bundle.text_columns
+    preprocessor = _make_preprocessor(
+        bundle.numeric_columns, bundle.categorical_columns, scale_numeric=False,
+        text_columns=_tx, group_specs=_gs,
+    )
+    scaled_preprocessor = _make_preprocessor(
+        bundle.numeric_columns, bundle.categorical_columns, scale_numeric=True,
+        text_columns=_tx, group_specs=_gs,
+    )
 
     candidates.append(
         (
@@ -735,6 +1215,40 @@ def _build_candidates(bundle: FeatureBundle, train_df: pd.DataFrame, random_stat
         )
     )
 
+    # ── target-transform variants (skew-driven) ───────────────────────────────
+    # A right-skewed non-negative target (common for rate / count panels) gains
+    # from a variance-stabilising transform. The choice is made purely from the
+    # target's skew — dataset-agnostic. HistGradientBoosting is used so a
+    # transformed candidate exists even when LightGBM is unavailable.
+    _target_vals = pd.to_numeric(bundle.target, errors="coerce").dropna()
+    _nonneg = bool(len(_target_vals) and float(_target_vals.min()) >= 0)
+    add_sqrt = add_log = False
+    if _nonneg and len(_target_vals) > 10:
+        _skew = float(_target_vals.skew())
+        add_sqrt = _skew > 0.5
+        add_log = _skew > 1.5
+
+    if add_log:
+        candidates.append(
+            (
+                "hgb_log",
+                lambda: LogTargetRegressor(Pipeline([
+                    ("preprocess", preprocessor),
+                    ("model", HistGradientBoostingRegressor(random_state=rs, max_iter=400, learning_rate=0.05)),
+                ])),
+            )
+        )
+    if add_sqrt:
+        candidates.append(
+            (
+                "hgb_sqrt",
+                lambda: SqrtTargetRegressor(Pipeline([
+                    ("preprocess", preprocessor),
+                    ("model", HistGradientBoostingRegressor(random_state=rs, max_iter=400, learning_rate=0.05)),
+                ])),
+            )
+        )
+
     # ── LightGBM variants ─────────────────────────────────────────────────────
     try:
         import lightgbm as lgb  # type: ignore
@@ -786,73 +1300,51 @@ def _build_candidates(bundle: FeatureBundle, train_df: pd.DataFrame, random_stat
                 ]),
             )
         )
-        # target-transform variants for right-skewed non-negative targets
-        target_vals = pd.to_numeric(bundle.target, errors="coerce").dropna()
-        if float(target_vals.min()) >= 0 and len(target_vals) > 10:
-            skew = float(target_vals.skew())
-            if skew > 0.5:
-                # sqrt transform: effective for moderate skew (0.5 < skew ≤ 1.5)
-                candidates.append(
-                    (
-                        "hgb_sqrt",
-                        lambda: SqrtTargetRegressor(Pipeline([
-                            ("preprocess", preprocessor),
-                            ("model", HistGradientBoostingRegressor(random_state=rs, max_iter=400, learning_rate=0.05)),
-                        ])),
-                    )
+        # LightGBM target-transform variants (same metric/skew flags as above)
+        if add_sqrt:
+            candidates.append(
+                (
+                    "lightgbm_sqrt",
+                    lambda: SqrtTargetRegressor(Pipeline([
+                        ("preprocess", preprocessor),
+                        ("model", lgb.LGBMRegressor(
+                            n_estimators=800,
+                            learning_rate=0.04,
+                            num_leaves=63,
+                            subsample=0.85,
+                            colsample_bytree=0.85,
+                            min_child_samples=20,
+                            reg_alpha=0.1,
+                            reg_lambda=0.1,
+                            random_state=rs,
+                            n_jobs=-1,
+                            verbose=-1,
+                        )),
+                    ])),
                 )
-                candidates.append(
-                    (
-                        "lightgbm_sqrt",
-                        lambda: SqrtTargetRegressor(Pipeline([
-                            ("preprocess", preprocessor),
-                            ("model", lgb.LGBMRegressor(
-                                n_estimators=800,
-                                learning_rate=0.04,
-                                num_leaves=63,
-                                subsample=0.85,
-                                colsample_bytree=0.85,
-                                min_child_samples=20,
-                                reg_alpha=0.1,
-                                reg_lambda=0.1,
-                                random_state=rs,
-                                n_jobs=-1,
-                                verbose=-1,
-                            )),
-                        ])),
-                    )
+            )
+        if add_log:
+            candidates.append(
+                (
+                    "lightgbm_log",
+                    lambda: LogTargetRegressor(Pipeline([
+                        ("preprocess", preprocessor),
+                        ("model", lgb.LGBMRegressor(
+                            n_estimators=800,
+                            learning_rate=0.04,
+                            num_leaves=63,
+                            subsample=0.85,
+                            colsample_bytree=0.85,
+                            min_child_samples=20,
+                            reg_alpha=0.1,
+                            reg_lambda=0.1,
+                            random_state=rs,
+                            n_jobs=-1,
+                            verbose=-1,
+                        )),
+                    ])),
                 )
-            if skew > 1.5:
-                candidates.append(
-                    (
-                        "lightgbm_log",
-                        lambda: LogTargetRegressor(Pipeline([
-                            ("preprocess", preprocessor),
-                            ("model", lgb.LGBMRegressor(
-                                n_estimators=800,
-                                learning_rate=0.04,
-                                num_leaves=63,
-                                subsample=0.85,
-                                colsample_bytree=0.85,
-                                min_child_samples=20,
-                                reg_alpha=0.1,
-                                reg_lambda=0.1,
-                                random_state=rs,
-                                n_jobs=-1,
-                                verbose=-1,
-                            )),
-                        ])),
-                    )
-                )
-                candidates.append(
-                    (
-                        "hgb_log",
-                        lambda: LogTargetRegressor(Pipeline([
-                            ("preprocess", preprocessor),
-                            ("model", HistGradientBoostingRegressor(random_state=rs, max_iter=400, learning_rate=0.05)),
-                        ])),
-                    )
-                )
+            )
     except Exception:
         pass
 
@@ -883,6 +1375,36 @@ def _build_candidates(bundle: FeatureBundle, train_df: pd.DataFrame, random_stat
         except Exception:
             pass
 
+    # ── CatBoost (optional) ───────────────────────────────────────────────────
+    try:
+        from catboost import CatBoostRegressor  # type: ignore
+
+        candidates.append((
+            "catboost",
+            lambda: Pipeline([
+                ("preprocess", preprocessor),
+                ("model", CatBoostRegressor(
+                    iterations=1200, learning_rate=0.03, depth=6, l2_leaf_reg=3.0,
+                    loss_function="MAE", random_seed=rs, thread_count=-1,
+                    allow_writing_files=False, verbose=False,
+                )),
+            ]),
+        ))
+        if add_log:
+            candidates.append((
+                "catboost_log",
+                lambda: LogTargetRegressor(Pipeline([
+                    ("preprocess", preprocessor),
+                    ("model", CatBoostRegressor(
+                        iterations=1200, learning_rate=0.03, depth=6, l2_leaf_reg=3.0,
+                        loss_function="RMSE", random_seed=rs, thread_count=-1,
+                        allow_writing_files=False, verbose=False,
+                    )),
+                ])),
+            ))
+    except Exception:
+        pass
+
     return candidates
 
 
@@ -901,8 +1423,14 @@ def _build_classification_candidates(bundle: FeatureBundle, train_df: pd.DataFra
     candidates.append(("dummy_most_frequent", lambda: DummyClassifier(strategy="most_frequent")))
     candidates.append(("dummy_stratified", lambda: DummyClassifier(strategy="stratified", random_state=rs)))
 
-    preprocessor = _make_preprocessor(bundle.numeric_columns, bundle.categorical_columns, scale_numeric=False)
-    scaled_preprocessor = _make_preprocessor(bundle.numeric_columns, bundle.categorical_columns, scale_numeric=True)
+    preprocessor = _make_preprocessor(
+        bundle.numeric_columns, bundle.categorical_columns, scale_numeric=False,
+        text_columns=bundle.text_columns,
+    )
+    scaled_preprocessor = _make_preprocessor(
+        bundle.numeric_columns, bundle.categorical_columns, scale_numeric=True,
+        text_columns=bundle.text_columns,
+    )
 
     candidates.append(
         (
@@ -915,24 +1443,6 @@ def _build_classification_candidates(bundle: FeatureBundle, train_df: pd.DataFra
     )
     candidates.append(
         (
-            "random_forest",
-            lambda: Pipeline([
-                ("preprocess", preprocessor),
-                ("model", RandomForestClassifier(n_estimators=400, random_state=rs, n_jobs=-1, min_samples_leaf=2)),
-            ]),
-        )
-    )
-    candidates.append(
-        (
-            "extra_trees",
-            lambda: Pipeline([
-                ("preprocess", preprocessor),
-                ("model", ExtraTreesClassifier(n_estimators=400, random_state=rs, n_jobs=-1, min_samples_leaf=2, max_features="sqrt")),
-            ]),
-        )
-    )
-    candidates.append(
-        (
             "hist_gradient_boosting",
             lambda: Pipeline([
                 ("preprocess", preprocessor),
@@ -940,120 +1450,9 @@ def _build_classification_candidates(bundle: FeatureBundle, train_df: pd.DataFra
             ]),
         )
     )
-    candidates.append(
-        (
-            "gradient_boosting",
-            lambda: Pipeline([
-                ("preprocess", preprocessor),
-                ("model", GradientBoostingClassifier(n_estimators=300, learning_rate=0.05, max_depth=4, random_state=rs, subsample=0.85)),
-            ]),
-        )
-    )
-    candidates.append(
-        (
-            "gaussian_nb",
-            lambda: Pipeline([("preprocess", scaled_preprocessor), ("model", GaussianNB())]),
-        )
-    )
-    if task.task_type == BINARY:
-        candidates.append(
-            (
-                "knn",
-                lambda: Pipeline([("preprocess", scaled_preprocessor), ("model", KNeighborsClassifier(n_neighbors=15))]),
-            )
-        )
-
-    # SVM with RBF kernel: excellent for small/medium datasets (≤50k rows)
-    if len(train_df) <= 50_000:
-        candidates.append(
-            (
-                "svm_rbf",
-                lambda: Pipeline([
-                    ("preprocess", scaled_preprocessor),
-                    ("model", SVC(kernel="rbf", probability=True, random_state=rs, C=1.0, gamma="scale")),
-                ]),
-            )
-        )
-
-    # ── LightGBM variants ─────────────────────────────────────────────────────
-    try:
-        import lightgbm as lgb  # type: ignore
-
-        candidates.append(
-            (
-                "lightgbm",
-                lambda: Pipeline([
-                    ("preprocess", preprocessor),
-                    ("model", lgb.LGBMClassifier(
-                        n_estimators=600,
-                        learning_rate=0.04,
-                        num_leaves=63,
-                        subsample=0.85,
-                        colsample_bytree=0.85,
-                        min_child_samples=20,
-                        reg_alpha=0.1,
-                        reg_lambda=0.1,
-                        random_state=rs,
-                        n_jobs=-1,
-                        verbose=-1,
-                    )),
-                ]),
-            )
-        )
-        _n_rows_cls = len(train_df)
-        _strong_leaves_cls = min(127, max(31, _n_rows_cls // 100))
-        candidates.append(
-            (
-                "lightgbm_strong",
-                lambda _sl=_strong_leaves_cls: Pipeline([
-                    ("preprocess", preprocessor),
-                    ("model", lgb.LGBMClassifier(
-                        n_estimators=1000,
-                        learning_rate=0.02,
-                        num_leaves=_sl,
-                        subsample=0.8,
-                        colsample_bytree=0.8,
-                        min_child_samples=20,
-                        reg_alpha=0.05,
-                        reg_lambda=0.05,
-                        random_state=rs,
-                        n_jobs=-1,
-                        verbose=-1,
-                    )),
-                ]),
-            )
-        )
-    except Exception:
-        pass
-
-    # ── XGBoost (optional) ────────────────────────────────────────────────────
-    if XGBOOST_AVAILABLE:
-        try:
-            candidates.append(
-                (
-                    "xgboost",
-                    lambda: Pipeline([
-                        ("preprocess", preprocessor),
-                        ("model", xgb.XGBClassifier(
-                            n_estimators=600,
-                            learning_rate=0.04,
-                            max_depth=6,
-                            subsample=0.85,
-                            colsample_bytree=0.85,
-                            reg_alpha=0.1,
-                            reg_lambda=1.0,
-                            random_state=rs,
-                            n_jobs=-1,
-                            verbosity=0,
-                            use_label_encoder=False,
-                            eval_metric="logloss",
-                        )),
-                    ]),
-                )
-            )
-        except Exception:
-            pass
-
+    # Award B is always a regression task (block-averaged MAE), so the
+    # classification path is a lean, general-purpose fallback only: baselines +
+    # one linear model + one gradient-boosting model. No heavy/slow candidates.
     return candidates
 
 
@@ -1062,59 +1461,34 @@ def _try_regression_ensemble(
     holdout_capture: dict,
     score_fn: Callable,
     y_holdout: pd.Series,
+    greater: bool = False,
 ) -> tuple | None:
-    """Average top-2 regression models if both captured and the ensemble scores better."""
+    """Average top-2 regression models if both captured and the ensemble scores
+    better on the selection metric. Honors metric direction (``greater``)."""
     ok = [(s, n, f) for s, n, f in fitted_candidates if n in holdout_capture]
     if len(ok) < 2:
         return None
-    top2 = sorted(ok)[:2]
+    top2 = sorted(ok, key=lambda t: t[0], reverse=greater)[:2]
     best_score = top2[0][0]
-    # Skip ensemble if the second model is much worse (> 15% gap) — averaging would hurt
-    if top2[1][0] > best_score * 1.15:
-        return None
+    second_score = top2[1][0]
+    # Skip ensemble if the second model is much worse (> 15% gap) — averaging would
+    # hurt. The ratio gate is only meaningful for positive scores (mae/rmse/rmsle).
+    if best_score > 0:
+        if greater and second_score < best_score * 0.85:
+            return None
+        if not greater and second_score > best_score * 1.15:
+            return None
     pred1 = holdout_capture[top2[0][1]]
     pred2 = holdout_capture[top2[1][1]]
     ensemble_pred = (pred1 + pred2) * 0.5
     ensemble_score = float(score_fn(y_holdout, ensemble_pred))
-    if ensemble_score >= best_score:
-        return None
-    name = f"ensemble({top2[0][1]}+{top2[1][1]})"
-    f1, f2 = top2[0][2], top2[1][2]
-    factory = lambda f1=f1, f2=f2: TopKAverageRegressor([f1, f2])
-    return (ensemble_score, name, ensemble_pred, factory)
-
-
-def _try_classification_ensemble(
-    fitted_candidates: list,
-    holdout_capture: dict,
-    y_holdout: pd.Series,
-    n_classes: int,
-    positive_index: int,
-    metric: str,
-    greater: bool,
-) -> tuple | None:
-    """Soft-vote top-2 classifiers if both have probability outputs and the ensemble scores better."""
-    ok = [(s, n, f) for s, n, f in fitted_candidates if n in holdout_capture]
-    if len(ok) < 2:
-        return None
-    top2 = sorted(ok, reverse=greater)[:2]
-    best_score = top2[0][0]
-    # Both must have probability arrays
-    p1 = holdout_capture[top2[0][1]][1]
-    p2 = holdout_capture[top2[1][1]][1]
-    if p1 is None or p2 is None:
-        return None
-    avg_proba = (p1 + p2) * 0.5
-    avg_pred = np.argmax(avg_proba, axis=1)
-    detail = _classification_metrics(y_holdout.to_numpy(), avg_pred, avg_proba, n_classes, positive_index)
-    ensemble_score = detail.get(metric, detail.get(ACCURACY, 0.0))
     improved = ensemble_score > best_score if greater else ensemble_score < best_score
     if not improved:
         return None
     name = f"ensemble({top2[0][1]}+{top2[1][1]})"
     f1, f2 = top2[0][2], top2[1][2]
-    factory = lambda f1=f1, f2=f2: TopKVoteClassifier([f1, f2])
-    return (float(ensemble_score), name, avg_pred, avg_proba, factory)
+    factory = lambda f1=f1, f2=f2: TopKAverageRegressor([f1, f2])
+    return (ensemble_score, name, ensemble_pred, factory)
 
 
 def _group_candidates(bundle: FeatureBundle, train_df: pd.DataFrame) -> list[tuple[str, list[str]]]:
@@ -1134,35 +1508,92 @@ def _group_candidates(bundle: FeatureBundle, train_df: pd.DataFrame) -> list[tup
     return candidates
 
 
-def _make_preprocessor(numeric_columns: list[str], categorical_columns: list[str], scale_numeric: bool) -> ColumnTransformer:
+def _text_to_str(x):
+    """Coerce a 1-D column (possibly with NaN) into a clean array of strings."""
+    return pd.Series(np.asarray(x).ravel()).fillna("").astype(str).to_numpy()
+
+
+def _text_pipeline():
+    """TF-IDF (1-2 grams) → TruncatedSVD compression for a free-text column.
+
+    sklearn-only and CPU-friendly; produces a small dense block of semantic
+    features instead of exploding the text into useless one-hot levels.
+    """
+    return Pipeline([
+        ("tostr", FunctionTransformer(_text_to_str)),
+        ("tfidf", TfidfVectorizer(max_features=400, ngram_range=(1, 2), min_df=2, sublinear_tf=True)),
+        ("svd", TruncatedSVD(n_components=16, random_state=0)),
+    ])
+
+
+def _make_preprocessor(
+    numeric_columns: list[str],
+    categorical_columns: list[str],
+    scale_numeric: bool,
+    text_columns: list[str] | None = None,
+    group_specs=None,
+):
+    """Build the feature preprocessor.
+
+    Numeric (median-imputed, optionally scaled) + categorical (one-hot with
+    infrequent grouping) + free-text (TF-IDF→SVD). When ``group_specs`` is given,
+    a :class:`GroupTargetAggregator` is prepended so per-group target statistics
+    become numeric features — fit per CV fold, hence leakage-safe.
+    """
+    text_columns = text_columns or []
+    group_specs = group_specs or []
+    agg_names = _aggregate_feature_names(group_specs)
+    numeric_all = list(numeric_columns) + agg_names
+
     numeric_steps = [("imputer", SimpleImputer(strategy="median"))]
     if scale_numeric:
         numeric_steps.append(("scaler", StandardScaler()))
-    categorical_encoder = _one_hot_encoder()
     transformers = []
-    if numeric_columns:
-        transformers.append(("num", Pipeline(numeric_steps), numeric_columns))
+    if numeric_all:
+        transformers.append(("num", Pipeline(numeric_steps), numeric_all))
     if categorical_columns:
-        transformers.append(
-            (
-                "cat",
-                Pipeline(
-                    [
-                        ("imputer", SimpleImputer(strategy="most_frequent")),
-                        ("onehot", categorical_encoder),
-                    ]
-                ),
-                categorical_columns,
-            )
-        )
-    return ColumnTransformer(transformers=transformers, remainder="drop")
+        transformers.append((
+            "cat",
+            Pipeline([
+                ("imputer", SimpleImputer(strategy="most_frequent")),
+                ("onehot", _one_hot_encoder()),
+            ]),
+            categorical_columns,
+        ))
+    for i, col in enumerate(text_columns):
+        # name must not contain "__" (sklearn reserves it for param nesting)
+        transformers.append((f"text{i}", _text_pipeline(), col))
+
+    column_transform = ColumnTransformer(transformers=transformers, remainder="drop")
+    if group_specs:
+        return Pipeline([
+            ("group_agg", GroupTargetAggregator(group_specs)),
+            ("columns", column_transform),
+        ])
+    return column_transform
 
 
 def _one_hot_encoder() -> OneHotEncoder:
-    try:
-        return OneHotEncoder(handle_unknown="ignore", sparse_output=False, max_categories=50)
-    except TypeError:
-        return OneHotEncoder(handle_unknown="ignore", sparse=False)
+    """One-hot encoder that *groups* rare categories instead of silently
+    truncating to the top-N.
+
+    Categories appearing in fewer than 1% of rows fold into a single
+    "infrequent" level (``min_frequency``), with a generous hard cap
+    (``max_categories``) as a backstop against feature-width explosion on
+    very high-cardinality columns. Unknown categories seen at predict time also
+    fold into the infrequent bucket. Degrades gracefully across sklearn
+    versions that lack these parameters.
+    """
+    for kwargs in (
+        dict(handle_unknown="infrequent_if_exist", sparse_output=False, min_frequency=0.01, max_categories=100),
+        dict(handle_unknown="ignore", sparse_output=False, max_categories=50),
+        dict(handle_unknown="ignore", sparse=False),
+    ):
+        try:
+            return OneHotEncoder(**kwargs)
+        except TypeError:
+            continue
+    return OneHotEncoder(handle_unknown="ignore")
 
 
 def _sanitize_predictions(pred: np.ndarray, y_train: pd.Series) -> np.ndarray:

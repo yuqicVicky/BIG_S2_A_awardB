@@ -12,7 +12,7 @@ import numpy as np
 import pandas as pd
 
 from .audit import audit_summary_text, extract_dynamic_terms, run_audit, write_audit_log
-from .features import build_feature_bundle
+from .features import build_feature_bundle, _read_description
 from .models import train_and_predict
 from .reporting import write_report
 from .schema import discover_schema, write_schema_json
@@ -71,6 +71,13 @@ def run_analysis(repo_root: Path) -> dict[str, Any]:
         print(f"Holdout {model_result.metric_name}: {selected_score:.4f}")
 
     submission_path = repo_root / "submission.csv"
+    _desc_text = _read_description(schema.description_path)
+    model_result.predictions, _mono = apply_monotonic_constraints(
+        model_result.predictions, bundle.sample_submission, schema, _desc_text
+    )
+    if _mono.get("applied"):
+        _write_json(_mono, logs_dir / f"{run_id}_monotonic_constraints.json")
+        print(f"[monotonic] {_mono['parent']} >= children; rows adjusted: {_mono['rows_adjusted']}")
     submission = _build_submission(
         bundle, schema.row_id_column, schema.target_column, model_result.predictions, model_result.output_kind
     )
@@ -138,6 +145,64 @@ def _selected_score(model_result) -> float | None:
         if score.get("name") == model_result.selected_model_name and score.get("status") == "ok":
             return score.get("score")
     return None
+
+
+def apply_monotonic_constraints(predictions, sample_submission, schema, description_text):
+    """Enforce a parent>=child ordering among category values when the dataset
+    description declares the categories nested / non-exclusive / totals.
+
+    Dataset-agnostic — no category names are hardcoded. The 'parent' (superset /
+    total) is inferred as the category value with the largest typical prediction;
+    within each (other-key) group it is raised to at least its children. Returns
+    ``(possibly-adjusted predictions, info)``. No-op unless a hierarchy cue is
+    present in the description and a category column with >=2 values exists.
+    """
+    info: dict = {"applied": False, "reason": ""}
+    preds = np.asarray(predictions, dtype=float).copy()
+    cat = getattr(schema, "category_column", None)
+    if not cat or cat not in sample_submission.columns:
+        info["reason"] = "no category column"
+        return preds, info
+    cats = sample_submission[cat]
+    uniq = list(pd.unique(cats.dropna()))
+    if len(uniq) < 2:
+        info["reason"] = "fewer than two categories"
+        return preds, info
+    t = (description_text or "").lower()
+    cues = ["nested", "non-exclusive", "nonexclusive", "subset", "superset", "includes",
+            "contained", "aggregate", "never sum", "hierarch", "total", "overall"]
+    if not any(c in t for c in cues):
+        info["reason"] = "no hierarchy cue in description"
+        return preds, info
+    other_keys = [k for k in (getattr(schema, "join_keys", []) or [])
+                  if k in sample_submission.columns and k != cat]
+    if not other_keys:
+        info["reason"] = "no grouping keys"
+        return preds, info
+    cats_arr = cats.to_numpy()
+    means = {c: float(np.nanmean(preds[cats_arr == c])) for c in uniq}
+    parent = max(means, key=means.get)
+    children = [c for c in uniq if c != parent]
+    work = sample_submission[other_keys].copy()
+    work["__cat"] = cats_arr
+    work["__i"] = np.arange(len(work))
+    n_adj = 0
+    for _, sub in work.groupby(other_keys, dropna=False, sort=False):
+        pm = (sub["__cat"] == parent).to_numpy()
+        if not pm.any():
+            continue
+        child_idx = sub.loc[sub["__cat"].isin(children), "__i"].to_numpy()
+        if len(child_idx) == 0:
+            continue
+        child_max = float(np.max(preds[child_idx]))
+        p_i = int(sub.loc[pm, "__i"].iloc[0])
+        if preds[p_i] < child_max:
+            preds[p_i] = child_max
+            n_adj += 1
+    info = {"applied": True, "parent": str(parent), "children": [str(c) for c in children],
+            "group_keys": other_keys, "rows_adjusted": int(n_adj),
+            "parent_inferred_by": "largest_mean_prediction"}
+    return preds, info
 
 
 def _build_submission(

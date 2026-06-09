@@ -122,6 +122,21 @@ def run_pattern_analysis(
 
 # ── time coverage ─────────────────────────────────────────────────────────────
 
+def _parse_dt(series: pd.Series) -> pd.Series:
+    """Datetime-parse using the *distinct* values only, then map back.
+
+    Opaque / low-cardinality keys (e.g. a hashed period id) otherwise force
+    ``pd.to_datetime`` into a per-row ``dateutil`` fallback over every row — very
+    slow on large panels. Parsing the handful of distinct values is equivalent
+    and fast, and costs nothing extra when the values really are all distinct.
+    """
+    s = series.astype(str)
+    uniq = pd.unique(s)
+    parsed = pd.to_datetime(pd.Series(uniq), errors="coerce")
+    mapping = dict(zip(uniq, parsed))
+    return pd.to_datetime(s.map(mapping), errors="coerce")
+
+
 def _analyze_time_coverage(
     train_df: pd.DataFrame,
     predict_df: pd.DataFrame,
@@ -135,7 +150,7 @@ def _analyze_time_coverage(
     for frame_name, df in [("train", train_df), ("predict", predict_df)]:
         if col not in df.columns:
             continue
-        parsed = pd.to_datetime(df[col], errors="coerce")
+        parsed = _parse_dt(df[col])
         if parsed.notna().mean() < 0.6:
             continue
         result["has_time"] = True
@@ -159,8 +174,8 @@ def _analyze_time_coverage(
 
     # Within-period pattern: check if train and predict partition on a sub-unit
     if col in train_df.columns and col in predict_df.columns:
-        train_parsed = pd.to_datetime(train_df[col], errors="coerce")
-        pred_parsed = pd.to_datetime(predict_df[col], errors="coerce")
+        train_parsed = _parse_dt(train_df[col])
+        pred_parsed = _parse_dt(predict_df[col])
         if train_parsed.notna().mean() >= 0.6 and pred_parsed.notna().mean() >= 0.6:
             for attr in ["day", "hour", "dayofweek", "month", "weekofyear"]:
                 try:
@@ -367,7 +382,7 @@ def _high_cardinality_check(
         n_unique = int(df[col].nunique(dropna=True))
         frac = n_unique / max(n_rows, 1)
         if frac > 0.50:
-            parsed = pd.to_datetime(df[col], errors="coerce")
+            parsed = _parse_dt(df[col])
             is_dt = parsed.notna().mean() >= 0.6
             if not is_dt:
                 risky.append({

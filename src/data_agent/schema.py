@@ -111,6 +111,13 @@ def discover_schema(data_dir: Path) -> SchemaSpec:
             time_col = row_id_col
     category_col = _infer_special_column(join_keys, "category", description, extra_candidates=non_key_shared)
     block_col = _infer_block_column(join_keys, category_col, description, extra_candidates=non_key_shared)
+    # Block-averaged MAE on a temporal panel blocks by the forecast PERIOD: the
+    # validation rows are whole held-out periods, so per-period MAE averaging
+    # mirrors the evaluation (and the blocked CV holds whole periods out). Prefer
+    # the time column as the block when one exists; otherwise keep the
+    # category/group block. Dataset-agnostic — no column names are hardcoded.
+    if time_col:
+        block_col = time_col
 
     notes = []
     for label, profile in [

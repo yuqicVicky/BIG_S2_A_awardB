@@ -11,13 +11,28 @@ state after each stage. The Award-B submission is produced only via the proven
 from __future__ import annotations
 
 from datetime import datetime, timezone
+import json
 from pathlib import Path
+import time
 from typing import Any
 
 import numpy as np
 import pandas as pd
 
 from .features import build_feature_bundle
+from .gates import (
+    FAIL,
+    PASS,
+    WARN,
+    Verdict,
+    _worst,
+    check_prediction_sanity,
+    check_schema,
+    check_task_consistency,
+    load_llm_verdict,
+    run_stage_with_gate,
+    write_verdict,
+)
 from .pattern_analysis import run_pattern_analysis
 from .runner import (
     _build_submission,
@@ -25,6 +40,7 @@ from .runner import (
     _run_id,
     _validate_submission,
     _write_json,
+    apply_monotonic_constraints,
     run_analysis,
 )
 from .schema import discover_schema, read_table, write_schema_json
@@ -37,7 +53,29 @@ from .skills.profile_data import profile_tabular_data
 from .skills.report_review import review_report
 from .skills.report_writing import write_analysis_report
 from .state import AnalysisState, UserRequest
-from .task import BINARY, MULTICLASS
+from .task import BINARY, MULTICLASS, REGRESSION
+
+
+def _baseline_checkpoint(bundle, schema):
+    """Fast group-mean baseline predictions for the pre-search checkpoint
+    submission. Uses overlapping group keys (jurisdiction/category-like) + the
+    category dimension; dataset-agnostic. Returns ``None`` if not feasible."""
+    from .models import GroupMeanRegressor
+
+    y = pd.to_numeric(bundle.target, errors="coerce")
+    mask = y.notna()
+    if int(mask.sum()) < 1:
+        return None
+    keys = [
+        k for k in (schema.join_keys or [])
+        if k in bundle.train_df.columns and k in bundle.predict_df.columns and k != schema.time_column
+    ]
+    if schema.category_column and schema.category_column in bundle.predict_df.columns:
+        keys = keys + [schema.category_column]
+    keys = keys[:3]
+    gm = GroupMeanRegressor(keys)
+    gm.fit(bundle.train_df.loc[mask].reset_index(drop=True), y[mask].reset_index(drop=True))
+    return np.asarray(gm.predict(bundle.predict_df), dtype=float)
 
 
 def run_orchestrated_analysis(
@@ -69,8 +107,37 @@ def run_orchestrated_analysis(
 
 # ── Award-B mode (schema-driven; produces submission.csv + report.pdf) ────────
 
+def _clip_fraction(mr) -> float | None:
+    """Fraction of final predictions sitting exactly on a clip bound (a heavy
+    fraction signals the model is fighting the allowed range)."""
+    try:
+        p = np.asarray(mr.predictions, dtype=float)
+        if not len(p):
+            return None
+        hits = np.zeros(len(p), dtype=bool)
+        if mr.target_clip_min is not None:
+            hits |= np.isclose(p, float(mr.target_clip_min))
+        if mr.target_clip_max is not None:
+            hits |= np.isclose(p, float(mr.target_clip_max))
+        return float(hits.mean())
+    except Exception:
+        return None
+
+
+def _emit_gate(logs_dir, run_id, stage, det_verdict):
+    """Persist the effective verdict for a stage, preferring an LLM critic's
+    verdict (``{run_id}_llm_gate_{stage}.json``) over the deterministic one when
+    the Claude-driven path produced one. The headless path simply uses the
+    deterministic verdict. Returns the effective verdict."""
+    llm = load_llm_verdict(logs_dir, run_id, stage)
+    effective = llm if llm is not None else det_verdict
+    write_verdict(effective, logs_dir, run_id)
+    return effective
+
+
 def _run_award_b(repo_root, run_id, logs_dir, artifacts_dir, goal, random_state) -> dict:
     print(f"=== Award B orchestrated analysis: {run_id} ===")
+    t_start = time.monotonic()  # wall-clock anchor for the Step-2 budget guard
     _remove_stale_outputs(repo_root)
     data_dir = repo_root / "data"
     description = (data_dir / "DATA_DESCRIPTION.md").read_text(encoding="utf-8", errors="replace")
@@ -94,6 +161,14 @@ def _run_award_b(repo_root, run_id, logs_dir, artifacts_dir, goal, random_state)
     }
     state.set_raw_data(train_df)
     print(f"Target column: {schema.target_column} | task: {bundle.task.task_type}")
+
+    # Gate — schema sanity (loud failure on a missing sample submission / bad ids)
+    _schema_v = check_schema(
+        sample_submission=bundle.sample_submission, row_id_column=schema.row_id_column,
+        target_column=schema.target_column, train_columns=list(train_df.columns), run_id=run_id)
+    _schema_v = _emit_gate(logs_dir, run_id, "schema", _schema_v)
+    if _schema_v.failed:
+        print(f"[gate:schema] FAIL: {_schema_v.reasons}")
     state.persist(logs_dir)
 
     # Stage 1b — data pattern analysis (deep EDA)
@@ -122,6 +197,41 @@ def _run_award_b(repo_root, run_id, logs_dir, artifacts_dir, goal, random_state)
     # Augment task_spec with schema fields used by the report writer
     state.task_spec["row_id_column"] = schema.row_id_column
     print(f"Task: {spec.task_type} | metric: {spec.metric} | output: {spec.output_kind}")
+
+    # Gate — task consistency (closed loop, bounded to one re-resolution). Cross-
+    # checks the resolved task against the data, the description metric, and the
+    # sample-submission format; on a hard contradiction it re-resolves the task
+    # (and rebuilds the feature bundle modeling consumes) with a forced type.
+    def _sample_target():
+        ss = bundle.sample_submission
+        return ss[schema.target_column] if schema.target_column in getattr(ss, "columns", []) else None
+
+    def _consistency_verdict():
+        return check_task_consistency(
+            task_type=spec.task_type, metric=spec.metric, output_kind=spec.output_kind,
+            target_series=train_df[schema.target_column], sample_target_series=_sample_target(),
+            description_text=description, run_id=run_id)
+
+    _tc = _consistency_verdict()
+    if _tc.failed and _tc.suggested_corrections.get("force_task_type"):
+        forced = _tc.suggested_corrections["force_task_type"]
+        print(f"[gate:task_inference] FAIL → re-resolving with force_task_type={forced}: {_tc.reasons}")
+        try:
+            bundle = build_feature_bundle(schema, force_task_type=forced)
+            train_df = bundle.train_df
+            spec = infer_task_spec(
+                goal, train_df, profile, description_text=description,
+                schema_target=schema.target_column, sample_submission=bundle.sample_submission,
+                has_block_col=bool(schema.block_column), force_task_type=forced)
+            state.task_spec = spec.model_dump()
+            state.task_spec["row_id_column"] = schema.row_id_column
+            print(f"[gate:task_inference] re-resolved → task: {spec.task_type} | metric: {spec.metric}")
+            _tc = _consistency_verdict()
+            _tc.checked["corrective_reruns"] = 1
+        except Exception as _tc_exc:
+            print(f"[gate:task_inference] correction failed ({type(_tc_exc).__name__}: {_tc_exc}); keeping original spec")
+            _tc.reasons.append(f"correction failed: {_tc_exc}")
+    _tc = _emit_gate(logs_dir, run_id, "task_inference", _tc)
     state.persist(logs_dir)
 
     # Stage 4/5 — plan + critique
@@ -151,8 +261,36 @@ def _run_award_b(repo_root, run_id, logs_dir, artifacts_dir, goal, random_state)
         "leakage_check", task_spec=_leakage_spec, data_profile=state.data_profile,
         df=train_df, run_id=run_id, datetime_derived_features=_dt_features,
     )
-    if not state.leakage_audit["approved"]:
-        print(f"[orchestrator] leakage WARN/FAIL: {state.leakage_audit['leakage_risk']} (continuing on proven features)")
+    # Gate — leakage (closed loop): a blocking failure naming a model feature drops
+    # that feature before modeling. Non-blocking suspects are remembered so the
+    # prediction-sanity gate can drop them on a degenerate-prediction rerun.
+    _leak = state.leakage_audit
+    _leak_suspect_cols = [
+        s.get("column") for s in (_leak.get("suspected_columns") or [])
+        if s.get("column") in bundle.feature_columns
+    ]
+    _leak_drop = [
+        f.get("column") for f in (_leak.get("required_fixes") or [])
+        if f.get("blocking") and f.get("column") in bundle.feature_columns
+    ]
+    _leak_reasons = [f"{f.get('check_name')}: {f.get('detail')}" for f in (_leak.get("failed_checks") or [])]
+    _leak_status = FAIL if not _leak.get("approved") else (WARN if _leak.get("warned_checks") else PASS)
+    if _leak_drop and len(bundle.feature_columns) - len(_leak_drop) >= 1:
+        bundle.feature_columns = [c for c in bundle.feature_columns if c not in _leak_drop]
+        bundle.numeric_columns = [c for c in bundle.numeric_columns if c in bundle.feature_columns]
+        bundle.categorical_columns = [c for c in bundle.categorical_columns if c in bundle.feature_columns]
+        bundle.text_columns = [c for c in bundle.text_columns if c in bundle.feature_columns]
+        _leak_reasons.append(f"auto-dropped leakage-suspected columns before modeling: {_leak_drop}")
+        _leak_status = WARN  # corrected
+        print(f"[gate:leakage] auto-dropped {_leak_drop}")
+    _leak_v = _emit_gate(logs_dir, run_id, "leakage", Verdict(
+        stage="leakage", status=_leak_status, reasons=_leak_reasons,
+        suggested_corrections={"drop_columns": _leak_drop} if _leak_drop else {},
+        checked={"leakage_risk": _leak.get("leakage_risk"), "dropped": _leak_drop,
+                 "suspects": _leak_suspect_cols}, run_id=run_id))
+    _leak_status = _leak_v.status
+    if _leak_status == FAIL:
+        print(f"[gate:leakage] FAIL: {_leak.get('leakage_risk')} (continuing on remaining features)")
     state.persist(logs_dir)
 
     # Stage 9b — wire within-period info into bundle.profile so _make_holdout_split can use it
@@ -163,8 +301,61 @@ def _run_award_b(repo_root, run_id, logs_dir, artifacts_dir, goal, random_state)
             print(f"[orchestrator] within-period pattern detected: {wpp.get('feature')} "
                   f"train={wpp.get('train_range')} predict={wpp.get('predict_range')}")
 
-    # Stage 10 — modeling (reuses models.train_and_predict)
-    modeling = train_and_evaluate_models(bundle=bundle, block_column=schema.block_column, random_state=random_state)
+    # Stage 10 — modeling under the prediction-sanity gate (closed loop, bounded
+    # to one rerun). The critic flags degenerate / non-finite / no-lift / overfit
+    # predictions; on a fail it drops remaining leakage-suspected features and
+    # re-runs model selection once. An LLM critic verdict, if present, wins.
+
+    # ── checkpoint: write a fast baseline submission up-front so a valid, scored
+    # submission.csv always exists even if the heavy/aggressive search is later
+    # cut off by the 2-hour cap ("partial output is scored"). Overwritten below
+    # by the full model's prediction. Regression panels only.
+    if bundle.task.task_type == REGRESSION:
+        try:
+            _ck = _baseline_checkpoint(bundle, schema)
+            if _ck is not None:
+                _ck, _ = apply_monotonic_constraints(_ck, bundle.sample_submission, schema, description)
+                _ck_sub = _build_submission(bundle, schema.row_id_column, schema.target_column, _ck, "value")
+                _ck_sub.to_csv(repo_root / "submission.csv", index=False)
+                print("[checkpoint] baseline submission written (pre-search safety net)")
+        except Exception as _ck_exc:
+            print(f"[checkpoint] baseline checkpoint skipped: {_ck_exc}")
+
+    _feat_state = {"columns": list(bundle.feature_columns)}
+
+    def _produce_modeling():
+        cols = _feat_state["columns"]
+        bundle.feature_columns = cols
+        bundle.numeric_columns = [c for c in bundle.numeric_columns if c in cols]
+        bundle.categorical_columns = [c for c in bundle.categorical_columns if c in cols]
+        bundle.text_columns = [c for c in bundle.text_columns if c in cols]
+        return train_and_evaluate_models(
+            bundle=bundle, block_column=schema.block_column, random_state=random_state)
+
+    def _sanity_critic(modeling_):
+        m = modeling_.model_result_obj
+        base = (modeling_.model_results.get("baseline") or {}).get("selection_score")
+        cand = (modeling_.model_results.get("candidate") or {}).get("selection_score")
+        return check_prediction_sanity(
+            predictions=m.predictions, train_target=bundle.target, task_type=m.task_type,
+            holdout_y_true=m.holdout_y_true, holdout_y_pred=m.holdout_y_pred,
+            metric_name=m.metric_name, baseline_score=base, candidate_score=cand,
+            greater_is_better=m.greater_is_better, clip_fraction=_clip_fraction(m), run_id=run_id)
+
+    def _sanity_correction(_corr):
+        drop = [c for c in _leak_suspect_cols if c in _feat_state["columns"]]
+        if not drop or len(_feat_state["columns"]) - len(drop) < 1:
+            return False
+        _feat_state["columns"] = [c for c in _feat_state["columns"] if c not in drop]
+        print(f"[gate:prediction_sanity] retrying without suspected features: {drop}")
+        return True
+
+    modeling, _sanity_v = run_stage_with_gate(
+        "prediction_sanity", _produce_modeling, _sanity_critic, _sanity_correction,
+        max_retries=1, logs_dir=logs_dir, run_id=run_id,
+        llm_verdict_loader=lambda s: load_llm_verdict(logs_dir, run_id, s))
+    if not _sanity_v.ok:
+        print(f"[gate:prediction_sanity] {_sanity_v.status.upper()}: {_sanity_v.reasons}")
     mr = modeling.model_result_obj
     state.model_results = modeling.model_results
     state.model_results["final_feature_columns"] = bundle.feature_columns
@@ -172,6 +363,42 @@ def _run_award_b(repo_root, run_id, logs_dir, artifacts_dir, goal, random_state)
     state.split_metadata = mr.holdout_strategy
     state.residual_analysis = mr.residual_analysis or {}
     print(f"Selected model: {mr.selected_model_name} ({mr.metric_name})")
+
+    # ── Step 2 — parallel modeling group (auto-run when budget remains) ─────────
+    # Checkpoint the floor submission first so a valid, scored deliverable exists
+    # on disk before the additional search (keep-best safety net), then dispatch
+    # the family specialists. This runs automatically — no prompt — and is bounded
+    # by AWARDB_TIME_BUDGET_SEC; a worse or interrupted group run keeps the floor.
+    try:
+        _floor_sub = _build_submission(
+            bundle, schema.row_id_column, schema.target_column, mr.predictions, mr.output_kind)
+        _floor_sub.to_csv(repo_root / "submission.csv", index=False)
+        print("[modeling-group] floor submission checkpointed (keep-best safety net)")
+    except Exception as _fl_exc:
+        print(f"[modeling-group] floor checkpoint skipped: {_fl_exc}")
+    try:
+        from .modeling_group import run_modeling_group
+        modeling, _meta = run_modeling_group(
+            bundle=bundle, schema=schema, description=description,
+            floor_modeling=modeling, repo_root=repo_root, run_id=run_id,
+            logs_dir=logs_dir, t_start=t_start, random_state=random_state)
+        state.model_results["modeling_group"] = _meta
+        if _meta.get("choice") != "floor":
+            mr = modeling.model_result_obj
+            state.model_results = modeling.model_results
+            state.model_results["final_feature_columns"] = bundle.feature_columns
+            state.model_results["modeling_group"] = _meta
+            state.raw_modeling_results = {"all_scores": modeling.model_results.get("all_scores", [])}
+            state.split_metadata = mr.holdout_strategy
+            state.residual_analysis = mr.residual_analysis or {}
+            print(f"[modeling-group] keep-best → {_meta['choice']} beats floor "
+                  f"({mr.metric_name}={_meta.get('chosen_cv_score')}); model={mr.selected_model_name}")
+        else:
+            print(f"[modeling-group] floor kept as best "
+                  f"({mr.metric_name}={_meta.get('chosen_cv_score')}); "
+                  f"candidates={_meta.get('candidates')}")
+    except Exception as _mg_exc:
+        print(f"[modeling-group] skipped ({type(_mg_exc).__name__}: {_mg_exc}); keeping floor")
 
     # Write validation_strategy.json
     _write_json(mr.holdout_strategy, logs_dir / f"{run_id}_validation_strategy.json")
@@ -187,7 +414,7 @@ def _run_award_b(repo_root, run_id, logs_dir, artifacts_dir, goal, random_state)
     }, logs_dir / f"{run_id}_model_stability_by_split.json")
 
     # Write overfitting_audit.json: primary holdout score vs additional splits
-    _write_json({
+    _overfit_audit = {
         "run_id": run_id,
         "selected_model": mr.selected_model_name,
         "metric": mr.metric_name,
@@ -200,7 +427,16 @@ def _run_award_b(repo_root, run_id, logs_dir, artifacts_dir, goal, random_state)
             and stability["relative_stability"] < 0.30 else
             "high_variance"
         ),
-    }, logs_dir / f"{run_id}_overfitting_audit.json")
+    }
+    _write_json(_overfit_audit, logs_dir / f"{run_id}_overfitting_audit.json")
+    # Phase-9 combined overfitting + leakage audit (named by the inspection
+    # checklist). Generic: merges the stability assessment with the leakage gate.
+    _write_json({
+        **_overfit_audit,
+        "leakage_risk": (state.leakage_audit or {}).get("leakage_risk"),
+        "leakage_approved": (state.leakage_audit or {}).get("approved"),
+        "leakage_suspected_columns": (state.leakage_audit or {}).get("suspected_columns", []),
+    }, logs_dir / f"{run_id}_overfitting_leakage_audit.json")
 
     state.persist(logs_dir)
 
@@ -247,11 +483,30 @@ def _run_award_b(repo_root, run_id, logs_dir, artifacts_dir, goal, random_state)
 
     state.persist(logs_dir)
 
+    # Monotonic/hierarchy post-processing (no-op unless the description declares
+    # nested/total categories) — generic, no column names hardcoded.
+    mr.predictions, _mono = apply_monotonic_constraints(
+        mr.predictions, bundle.sample_submission, schema, description)
+    if _mono.get("applied"):
+        _write_json(_mono, logs_dir / f"{run_id}_monotonic_constraints.json")
+        print(f"[monotonic] {_mono['parent']} >= children; rows adjusted: {_mono['rows_adjusted']}")
+
     # Build + validate submission (proven path)
     submission = _build_submission(bundle, schema.row_id_column, schema.target_column, mr.predictions, mr.output_kind)
     submission_path = repo_root / "submission.csv"
     submission.to_csv(submission_path, index=False)
-    submission_check = _validate_submission(bundle.sample_submission, submission, schema.row_id_column, schema.target_column, mr.output_kind)
+    # Gate — submission format. _validate_submission raises on a hard failure
+    # (which the outer handler turns into the proven deterministic fallback); we
+    # log a verdict either way so the gate trail is complete.
+    try:
+        submission_check = _validate_submission(bundle.sample_submission, submission, schema.row_id_column, schema.target_column, mr.output_kind)
+        write_verdict(Verdict(stage="submission", status=PASS,
+                              checked={k: submission_check.get(k) for k in
+                                       ("columns_ok", "row_count_ok", "row_id_alignment_ok", "all_finite", "dtype_ok")},
+                              run_id=run_id), logs_dir, run_id)
+    except Exception as _sub_exc:
+        write_verdict(Verdict(stage="submission", status=FAIL, reasons=[str(_sub_exc)], run_id=run_id), logs_dir, run_id)
+        raise
     _write_json(submission_check, logs_dir / f"{run_id}_submission_check.json")
     print(f"Submission written: {submission_path}")
 
@@ -289,10 +544,18 @@ def _run_award_b(repo_root, run_id, logs_dir, artifacts_dir, goal, random_state)
     except Exception:
         pass
 
-    # Report + review
+    # Report + review (gate at WARN; persist report_review.json with `approved`)
     report_out = write_analysis_report(state=state, repo_root=repo_root)
     state.report_review = review_report(state=state)
-    print(f"Report: {state.report_path} ({report_out['report_format']}) | review: {state.report_review['verdict']}")
+    _rr = state.report_review or {}
+    print(f"Report: {state.report_path} ({report_out['report_format']}) | review: {_rr.get('verdict')}")
+    _rr_status = PASS if _rr.get("approved") else (FAIL if str(_rr.get("verdict", "")).upper() == "FAIL" else WARN)
+    _rr_reasons = list(_rr.get("required_revisions") or [])
+    _emit_gate(logs_dir, run_id, "report", Verdict(
+        stage="report", status=_rr_status, reasons=_rr_reasons,
+        checked={"verdict": _rr.get("verdict"), "approved": bool(_rr.get("approved"))},
+        critic="deterministic", run_id=run_id))
+    _write_json(_rr, logs_dir / "report_review.json")
     state.persist(logs_dir)
 
     # Summary + manifest
@@ -310,6 +573,32 @@ def _run_award_b(repo_root, run_id, logs_dir, artifacts_dir, goal, random_state)
         "artifacts": state.artifacts, "state_path": str(logs_dir / f"{run_id}_state.json"),
     }
     _write_json(manifest, logs_dir / f"{run_id}_manifest.json")
+
+    # Final supervisor gate — aggregate every stage verdict into one release
+    # judgement (supervisor_gatekeeper.json). Per the contract a FAIL is logged
+    # and surfaced but does not halt: the deliverable is always produced.
+    _stage_verdicts = []
+    for _st in ("schema", "task_inference", "leakage", "prediction_sanity", "submission", "report"):
+        _p = logs_dir / f"{run_id}_gate_{_st}.json"
+        if _p.exists():
+            try:
+                _stage_verdicts.append(json.loads(_p.read_text(encoding="utf-8")))
+            except Exception:
+                pass
+    _sup_status = PASS
+    _sup_reasons: list[str] = []
+    for _vd in _stage_verdicts:
+        _sup_status = _worst(_sup_status, _vd.get("status", PASS))
+        for _r in _vd.get("reasons", []) or []:
+            _sup_reasons.append(f"{_vd.get('stage')}: {_r}")
+    _sup_v = _emit_gate(logs_dir, run_id, "supervisor", Verdict(
+        stage="supervisor", status=_sup_status, reasons=_sup_reasons,
+        checked={"gates": [v.get("stage") for v in _stage_verdicts],
+                 "submission_valid": bool(summary.get("submission_valid")),
+                 "report_review": summary.get("report_review"),
+                 "submission_path": str(submission_path), "report_path": state.report_path},
+        critic="deterministic", run_id=run_id))
+    print(f"[gate:supervisor] {_sup_v.status.upper()} | gates={[v.get('stage') for v in _stage_verdicts]}")
     state.persist(logs_dir)
     print("=== Analysis complete ===")
     return manifest

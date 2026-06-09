@@ -39,6 +39,7 @@ def train_and_evaluate_models(
     block_column: str | None = None,
     test_size: float = 0.2,
     random_state: int = 42,
+    families: set[str] | None = None,
 ) -> ModelingResult:
     eval_truth = None
     if bundle is None:
@@ -48,7 +49,7 @@ def train_and_evaluate_models(
             df, target_col, feature_cols, task_spec, random_state, test_size=test_size
         )
 
-    model_result = train_and_predict(bundle, block_column, random_state)
+    model_result = train_and_predict(bundle, block_column, random_state, families=families)
     packaged = _repackage(model_result)
     return ModelingResult(
         model_results=packaged,

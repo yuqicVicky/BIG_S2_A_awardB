@@ -511,3 +511,21 @@ Write `outputs/logs/final_model.json`:
 - **If LightGBM or XGBoost are unavailable**: continue with scikit-learn fallbacks without halting.
 - **If all candidates fail**: use the best baseline as final model; record `used_baseline: true`.
 - **Write both log files** regardless of ensemble outcome.
+
+---
+
+## Closed-loop verdict (stage `prediction_sanity`)
+
+Honor the dataset's **official metric** (from `spec_parse.json`) for model
+selection — for an Award-B panel this is **block-averaged MAE** via blocked
+GroupKFold cross-validation; a `log1p`-target variant is added when the target is
+right-skewed. After selecting, emit a sanity
+verdict to `outputs/logs/{run_id}_llm_gate_prediction_sanity.json` in the shared
+schema (see `analysis-orchestrator` → "Closed-loop verdict protocol"). Emit
+`fail` on degenerate (near-constant) predictions, non-finite values, heavy
+clipping, a large train↔prediction distribution shift, a suspiciously perfect
+holdout (leakage/overfit), or a candidate that fails to beat its baseline. Use
+`suggested_corrections` such as `reexamine_model_pool` or `prefer_regularized`;
+the orchestrator drops remaining leakage-suspected features and re-runs model
+selection once. Your verdict takes precedence over the deterministic
+`gates.check_prediction_sanity` result.

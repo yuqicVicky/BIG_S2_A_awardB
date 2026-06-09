@@ -12,7 +12,7 @@ preserving temporal information for any unknown future dataset.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
@@ -34,6 +34,11 @@ class FeatureBundle:
     categorical_columns: list[str]
     task: TaskSpec
     profile: dict[str, Any]
+    # Free-text columns routed to TF-IDF/SVD (kept out of the one-hot bucket).
+    text_columns: list[str] = field(default_factory=list)
+    # Leakage-safe group/target-aggregate keys: each entry is a list of column
+    # names to group the training target by (overlapping categoricals only).
+    group_aggregate_keys: list = field(default_factory=list)
 
 
 LEAKAGE_NAME_TOKENS = [
@@ -62,7 +67,7 @@ _AUDIT_MAX_GROUPS = 50
 
 # ── public entry point ────────────────────────────────────────────────────────
 
-def build_feature_bundle(spec: SchemaSpec) -> FeatureBundle:
+def build_feature_bundle(spec: SchemaSpec, force_task_type: str | None = None) -> FeatureBundle:
     target_df = read_table(spec.train_target_file)
     sample_submission = read_table(spec.sample_submission_file)
     train_cov = read_table(spec.train_covariates_file) if spec.train_covariates_file else None
@@ -95,7 +100,7 @@ def build_feature_bundle(spec: SchemaSpec) -> FeatureBundle:
     target_for_skew = train_df.get(spec.target_column)
     skewness = float(pd.to_numeric(target_for_skew, errors="coerce").dropna().skew()) if target_for_skew is not None else 0.0
     train_df, predict_df, new_interaction_cols = _add_interaction_features(
-        train_df, predict_df, feature_columns, skewness
+        train_df, predict_df, feature_columns, skewness, target=target_for_skew
     )
     for col in new_interaction_cols:
         if col not in feature_columns:
@@ -117,6 +122,27 @@ def build_feature_bundle(spec: SchemaSpec) -> FeatureBundle:
     ]
     categorical_columns = [col for col in feature_columns if col not in numeric_columns]
 
+    # ── exclude a disjoint opaque block/time key from raw model features ───────
+    # A join/time key whose validation values barely overlap the training values
+    # (e.g. an opaque per-period hashed id) is noise as a one-hot feature — its
+    # levels are all-zero at predict time — yet it stays useful for grouping and
+    # the blocked holdout. Drop it from the model feature set only (the frames
+    # keep the column for CV/holdout).
+    block_key = spec.time_column or spec.block_column
+    if block_key and block_key in feature_columns:
+        if _value_overlap(train_aligned[block_key], predict_aligned[block_key]) < 0.5:
+            feature_columns = [c for c in feature_columns if c != block_key]
+            numeric_columns = [c for c in numeric_columns if c != block_key]
+            categorical_columns = [c for c in categorical_columns if c != block_key]
+            excluded_columns[block_key] = "disjoint_block_key"
+
+    # ── route free-text columns to TF-IDF/SVD (out of the one-hot bucket) ──────
+    text_columns = _detect_text_columns(train_aligned, categorical_columns)
+    categorical_columns = [c for c in categorical_columns if c not in text_columns]
+
+    # ── leakage-safe group/target-aggregate keys (overlapping categoricals) ────
+    group_aggregate_keys = _discover_group_keys(train_aligned, predict_aligned, spec, block_key)
+
     description_text = _read_description(spec.description_path)
     sample_target = (
         sample_submission[spec.target_column]
@@ -129,6 +155,7 @@ def build_feature_bundle(spec: SchemaSpec) -> FeatureBundle:
         sample_target,
         has_block_col=bool(spec.block_column),
         target_column=spec.target_column,
+        force_task_type=force_task_type,
     )
 
     # ── target-signal audit for time features ─────────────────────────────────
@@ -154,6 +181,8 @@ def build_feature_bundle(spec: SchemaSpec) -> FeatureBundle:
         "feature_columns": feature_columns,
         "numeric_columns": numeric_columns,
         "categorical_columns": categorical_columns,
+        "text_columns": text_columns,
+        "group_aggregate_keys": group_aggregate_keys,
         "target_summary": _series_summary(train_aligned[spec.target_column]),
         "target_distribution": (
             _class_distribution(train_aligned[spec.target_column]) if task.is_classification else None
@@ -187,6 +216,8 @@ def build_feature_bundle(spec: SchemaSpec) -> FeatureBundle:
         categorical_columns=categorical_columns,
         task=task,
         profile=profile,
+        text_columns=text_columns,
+        group_aggregate_keys=group_aggregate_keys,
     )
 
 
@@ -208,10 +239,14 @@ def _detect_datetime_columns(df: pd.DataFrame, min_parse_rate: float = _DATETIME
             continue
         if pd.api.types.is_numeric_dtype(series):
             continue
-        # Sample up to 200 non-null values for speed.
-        sample = series.dropna().head(200)
-        if len(sample) == 0:
+        # Sample non-null values for speed, drawn from *across* the column (a
+        # deterministic random sample) rather than just the head — so detection
+        # is robust to row ordering / blocked layouts where datetime-like values
+        # appear only later in the file.
+        non_null = series.dropna()
+        if len(non_null) == 0:
             continue
+        sample = non_null.sample(n=500, random_state=0) if len(non_null) > 500 else non_null
         try:
             parsed = pd.to_datetime(sample, errors="coerce")
             rate = float(parsed.notna().mean())
@@ -505,10 +540,15 @@ def _add_interaction_features(
     predict_df: pd.DataFrame,
     feature_columns: list[str],
     skewness: float,
+    target: pd.Series | None = None,
 ) -> tuple[pd.DataFrame, pd.DataFrame, list[str]]:
     """Generate numeric product interactions: time-derived × low-cardinality features.
 
     Only uses __ naming detection and value-count detection. No hardcoded column names.
+    Candidate products are ranked by the strength of their association with the
+    target (|correlation| on the training data) when a target is available, so
+    the kept interactions are the predictive ones rather than merely high-variance;
+    falls back to a variance proxy when no usable target signal exists.
     Returns augmented train, augmented predict, and list of added column names.
     Limited to at most 6 new interaction columns.
     """
@@ -536,14 +576,32 @@ def _add_interaction_features(
     pred = predict_df.copy()
     max_interactions = 6
 
-    # Score pairs by estimated variance contribution: std(tf) * std(lc) (generic)
+    # Score pairs by association with the target (|corr| of the product with the
+    # numeric-encoded target on training data); fall back to the variance proxy
+    # std(tf)*std(lc) when there is no usable target signal. Generic — no names.
+    tnum: pd.Series | None = None
+    if target is not None:
+        _t = pd.to_numeric(target, errors="coerce")
+        if not _t.notna().any():  # non-numeric target → integer-encode for ranking
+            _t = pd.Series(pd.factorize(target)[0], index=target.index).replace(-1, np.nan)
+        if _t.notna().sum() >= 5 and float(_t.std(skipna=True) or 0.0) > 0:
+            tnum = _t.reset_index(drop=True)
+
     pairs: list[tuple[float, str, str]] = []
     for tf in time_feats:
         tf_std = float(train[tf].std()) if train[tf].std() > 0 else 0.0
+        tf_vals = pd.to_numeric(train[tf], errors="coerce").reset_index(drop=True)
         for lc in low_card_feats:
             lc_std = float(train[lc].std()) if train[lc].std() > 0 else 0.0
-            pairs.append((tf_std * lc_std, tf, lc))
-    pairs.sort(reverse=True)
+            score = tf_std * lc_std  # variance fallback
+            if tnum is not None:
+                prod = (tf_vals * pd.to_numeric(train[lc], errors="coerce").reset_index(drop=True))
+                pair = pd.concat([prod, tnum], axis=1).dropna()
+                if len(pair) >= 5 and float(pair.iloc[:, 0].std() or 0.0) > 0:
+                    corr = float(abs(pair.corr().iloc[0, 1]))
+                    score = corr if np.isfinite(corr) else 0.0
+            pairs.append((score, tf, lc))
+    pairs.sort(key=lambda t: t[0], reverse=True)
 
     for _, tf, lc in pairs[:max_interactions]:
         col_name = f"{tf}_x_{lc}"
@@ -666,6 +724,85 @@ def _choose_feature_columns(
             shared.append(col)
 
     return shared, {k: v for k, v in excluded_map.items() if k not in (spec.target_column, spec.row_id_column)}
+
+
+# ── group-key & text-column discovery ──────────────────────────────────────────
+
+def _value_overlap(train_series: pd.Series, predict_series: pd.Series) -> float:
+    """Fraction of the prediction frame's distinct values also seen in training."""
+    tv = set(train_series.dropna().astype(str).unique())
+    pv = set(predict_series.dropna().astype(str).unique())
+    if not pv:
+        return 0.0
+    return len(pv & tv) / len(pv)
+
+
+def _detect_text_columns(
+    df: pd.DataFrame,
+    candidate_cols: list[str],
+    min_mean_tokens: float = 3.0,
+    min_distinct: int = 10,
+) -> list[str]:
+    """Identify free-text columns among the categorical candidates.
+
+    Free text = an object/string column whose *populated* values are multi-word
+    (so one-hot encoding is useless) with enough distinct values to carry signal.
+    Detection is by value statistics only, never by column name, so it
+    generalises. It deliberately does not use a unique-*ratio* threshold: a join
+    can duplicate the same text across rows (e.g. one release per period spread
+    over several categories), which is still genuine free text.
+    """
+    text_cols: list[str] = []
+    for col in candidate_cols:
+        s = df[col]
+        if not (pd.api.types.is_object_dtype(s) or pd.api.types.is_string_dtype(s)):
+            continue
+        # Measure only the populated values — a column can be mostly empty (no
+        # event that period) yet hold long free text where present.
+        non_empty = s.dropna().astype(str)
+        non_empty = non_empty[non_empty.str.strip() != ""]
+        if len(non_empty) < min_distinct:
+            continue
+        mean_tokens = float(non_empty.str.split().map(len).mean())
+        if mean_tokens >= min_mean_tokens and non_empty.nunique() >= min_distinct:
+            text_cols.append(col)
+    return text_cols
+
+
+def _discover_group_keys(
+    train_df: pd.DataFrame,
+    predict_df: pd.DataFrame,
+    spec: SchemaSpec,
+    block_key: str | None,
+    max_cardinality: int = 2000,
+    min_overlap: float = 0.5,
+) -> list[list[str]]:
+    """Discover categorical key columns suitable for leakage-safe target
+    aggregation: present in both frames, overlapping values, not the disjoint
+    block key, not row_id/target. Returns each single key plus one pair of the
+    two most distinctive keys. Dataset-agnostic (uses join keys + category).
+    """
+    key_cols: list[str] = []
+    seen: set[str] = set()
+    for col in list(spec.join_keys or []) + ([spec.category_column] if spec.category_column else []):
+        if not col or col in seen:
+            continue
+        seen.add(col)
+        if col not in train_df.columns or col not in predict_df.columns:
+            continue
+        if col in {block_key, spec.target_column, spec.row_id_column}:
+            continue
+        nun = int(train_df[col].nunique(dropna=True))
+        if nun < 2 or nun > max_cardinality:
+            continue
+        if _value_overlap(train_df[col], predict_df[col]) < min_overlap:
+            continue
+        key_cols.append(col)
+    groups: list[list[str]] = [[c] for c in key_cols]
+    if len(key_cols) >= 2:
+        pair = sorted(key_cols, key=lambda c: train_df[c].nunique(), reverse=True)[:2]
+        groups.append(pair)
+    return groups
 
 
 # ── misc helpers ──────────────────────────────────────────────────────────────

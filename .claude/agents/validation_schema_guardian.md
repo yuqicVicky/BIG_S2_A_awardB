@@ -374,3 +374,23 @@ EOF
 - **If `submission.csv` does not exist**: record `overall_verdict: FAIL`.
 - **Schema-review mode**: do not touch `submission.csv` — it may not exist yet.
 - **Sub-period detection is generic**: it operates on whatever temporal feature is detected; it must not reference any dataset-specific column names.
+
+---
+
+## Closed-loop verdicts (stages `schema` and `submission`)
+
+Alongside `validation_strategy.json` / `submission_validation.json`, emit a
+verdict in the shared schema (see `analysis-orchestrator` → "Closed-loop verdict
+protocol"):
+
+- **Schema-review mode → stage `schema`**, written to
+  `outputs/logs/{run_id}_llm_gate_schema.json`. Emit `fail` when no usable sample
+  submission is resolved, or the row-id / target column is missing where it must
+  appear. This is a loud failure with no auto-fix.
+- **Validation mode → stage `submission`**, written to
+  `outputs/logs/{run_id}_llm_gate_submission.json`. Emit `fail` when the columns,
+  row count, row-id alignment, finiteness, or dtype checks fail. A hard failure
+  routes to the deterministic submission fallback.
+
+Your verdict takes precedence over the matching deterministic critic
+(`gates.check_schema` / the submission validator) for that stage.

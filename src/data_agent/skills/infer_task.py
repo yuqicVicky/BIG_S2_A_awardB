@@ -60,6 +60,7 @@ def infer_task_spec(
     schema_target: str | None = None,
     sample_submission: pd.DataFrame | None = None,
     has_block_col: bool = False,
+    force_task_type: str | None = None,
 ) -> TaskSpec:
     profile_dict = profile.model_dump() if isinstance(profile, BaseModel) else dict(profile or {})
     columns = profile_dict.get("columns") or [str(c) for c in df.columns]
@@ -107,6 +108,7 @@ def infer_task_spec(
             sample_target,
             has_block_col=has_block_col,
             target_column=target_variable,
+            force_task_type=force_task_type,
         )
         task_type = engine.task_type
         metric, greater_is_better, output_kind = engine.metric, engine.greater_is_better, engine.output_kind
