@@ -1,4 +1,4 @@
-# CLAUDE.md — STAI-X Award B Automation Agent
+# CLAUDE.md — STAI-X Award B Analysis Agent
 
 ## Primary Instruction
 
@@ -8,84 +8,240 @@ When the user prompt is:
 Do the data analysis
 ```
 
-**Run the deterministic pipeline, then dispatch the real agent layer.** The Python
-pipeline always produces a complete, principled `submission.csv` + `report.pdf` by itself;
-the Claude subagents then independently verify and refine it under a keep-best gate that
-**can never regress the deliverable**. Wall-clock (≈2h) is the binding cap and is spent on
-the Python compute; the 1M-token budget is spent almost entirely by the subagent layer
-(`python main.py` itself spends **0 tokens**).
+**You (Claude) are the orchestrator.** Execute the 8-step agent workflow below by dispatching each specialist agent via the Task tool in the order defined. There is no separate orchestrator agent — all workflow coordination is defined here.
 
-### Step 1 — run the deterministic pipeline (always)
+Every step is idempotent. A failed or skipped step writes a partial log and allows the workflow to continue.
+
+Generate a `run_id` at the start and persist it across all steps:
+
+```
+run_id = "{YYYYMMDD_HHMMSS}"
+```
+
+---
+
+## Hard Constraints (enforced throughout)
+
+| Constraint | Limit | Action if exceeded |
+|---|---|---|
+| Total token budget | **1,000,000 tokens** | Skip optional rounds; go directly to Step 6 |
+| Wall-clock time | **2 hours** | Skip optional rounds; go directly to Step 6 |
+| Plan review rounds | max 3 | Accept plan after round 3 regardless |
+| Analysis improvement rounds | max 3 | Ship best result after round 3 |
+
+**Token efficiency rules (apply to every agent dispatch):**
+- Write prompts in ≤150 words. No preamble, no restating what the agent already knows.
+- Tell every agent: "Be concise. Write compact JSON only. No narrative prose in outputs."
+- Skip EDA plot generation to save I/O time.
+- If cumulative tokens already exceed 800,000 or elapsed time exceeds 90 minutes after any step, skip directly to Step 6 (report + submission).
+
+---
+
+## 8-Step Workflow
+
+### Step 1 — Data Format Conversion
+
+**Agent:** `data-format-converter`
+
+Dispatch this agent first. It scans `data/` for non-CSV files (Excel, Parquet, JSON, TSV, etc.) and converts them to CSV so all downstream agents work with a uniform format.
+
+**Output required:** `outputs/logs/data_conversion.json`
+
+**On failure:** log the error and continue — the step is best-effort; subsequent agents will discover files themselves.
+
+---
+
+### Step 2 — Data Profiling + Missingness Audit + Task Inference
+
+Dispatch these two agents **sequentially** (data-profiler first, then task-inference-agent):
+
+**Agent A: `data-profiler`**
+
+Runs descriptive statistics over every data file, invokes the `missingness-audit-planner` skill to produce a column-level imputation plan, and writes a `descriptive_summary` block for use in the report.
+
+**Outputs required:**
+- `outputs/logs/data_profile.json` (shape, dtypes, target distribution, descriptive stats, schema diff)
+- `outputs/logs/missingness_profile.json` (from the skill)
+- `outputs/logs/imputation_plan.json` (from the skill)
+
+**Agent B: `task-inference-agent`**
+
+Reads `DATA_DESCRIPTION.md` as primary authority, reads `data_profile.json`, and resolves: task type, target column, row-id column, evaluation metric, train/prediction/submission file paths.
+
+**Output required:** `outputs/logs/spec_parse.json`
+
+**On failure of either agent:** halt the workflow — downstream agents cannot proceed without these outputs.
+
+---
+
+### Step 3 — Initial Analysis Planning
+
+**Agent:** `analysis-planner`
+
+Reads `spec_parse.json` and `data_profile.json`, produces a concrete modeling plan covering all applicable model families (tree-based, linear, ensemble/blend) plus their cross-validation strategy, and runs a built-in 12-point self-critique. Outputs the first approved draft of the plan.
+
+**Output required:** `outputs/logs/analysis_plan.json`
+
+**On failure:** halt — no plan means no analysis.
+
+---
+
+### Step 4 — Plan Review Loop (efficiency-first, max 3 rounds)
+
+**Before dispatching any reviewer:** read `analysis_plan.json → critique.verdict`.
+- `PASS` or `WARN`: accept the plan immediately. Skip the entire review loop. The
+  planner already ran 12 self-critique checks; no external review is needed for
+  a clean or advisory-only plan.
+- `FAIL`: enter the review loop below.
+
+```
+FOR round = 1 TO 3:
+  1. Dispatch plan-reviewer with prompt (≤80 words):
+       "Review analysis_plan.json. Round {round}. Focus on FAIL-severity issues
+        only: leakage, wrong CV strategy, missing baseline, executable-code
+        hardcoding. Be concise — compact JSON only."
+     → writes outputs/logs/plan_review_{round}.json
+
+  2. Read plan_review_{round}.json:
+     a. IF approved == true: BREAK (plan accepted)
+     b. IF zero FAIL findings (only WARNs): log the WARNs, accept the plan, BREAK
+        (WARNs are advisory — do not trigger revision, do not block progression)
+     c. IF FAIL findings exist: dispatch analysis-planner in revision mode:
+          "Fix only the FAIL-severity items in plan_review_{round}.json.
+           Do not rework sections with only WARN findings."
+        → overwrites outputs/logs/analysis_plan.json
+
+  3. IF round == 3: accept plan regardless, log any outstanding issues.
+```
+
+**Revision scope rule:** the planner must fix FAIL items only. Style improvements,
+annotation changes, and WARN-only sections must NOT be revised (wasted tokens).
+
+**Outputs:** `outputs/logs/plan_review_{1,2,3}.json` (only rounds that actually run)
+
+---
+
+### Step 5 — Analysis Execution + Improvement Loop (max 3 rounds)
+
+Track elapsed time after each round. If elapsed time exceeds **90 minutes** after any
+round, skip remaining rounds and go directly to Step 6.
+
+```
+FOR round = 1 TO 3:
+
+  ── Phase A: Feature pipeline ──
+  Dispatch analysis-programmer (prompt ≤120 words):
+    "Implement the feature pipeline from analysis_plan.json.
+     Write feature matrices to outputs/logs/. Do not train models.
+     This is round {round}.
+     {IF round > 1: Implement ONLY the high-priority suggestions listed
+      in outputs/logs/analysis_review_{round-1}.json
+      (suggestions with expected_impact='high' only).
+      Do not re-implement items already in place.}"
+
+  ── Phase B: Model search ──
+  Dispatch model-search-agent (prompt ≤120 words):
+    "Train candidate models on the prepared feature matrices.
+     Use blocked GroupKFold CV. Write model_search.json,
+     final_model.json, and submission.csv (keep-best).
+     This is round {round}."
+
+  ── Phase C: Feature audit (round 1 only) ──
+  IF round == 1:
+    Dispatch hardcoding-and-feature-auditor (mode "feature-audit")
+    → writes outputs/logs/feature_audit_review.json
+  ELSE:
+    Skip audit (already verified in round 1; re-running wastes tokens)
+
+  ── Phase D: Review ──
+  Dispatch results-reviewer (prompt ≤80 words):
+    "Review round {round} results. Write compact JSON only.
+     Keep suggestion text ≤50 words each."
+  → writes outputs/logs/analysis_review_{round}.json
+
+  ── Phase E: Decide whether to continue ──
+  Read analysis_review_{round}.json:
+
+  IF round == 1:
+    IF approved_for_final == true: BREAK
+    IF zero suggestions with expected_impact == "high": BREAK
+       (plateau — further rounds will not improve score meaningfully)
+    ELSE: continue to round 2
+
+  IF round == 2:
+    IF approved_for_final == true: BREAK
+    improvement_pct = (prev_cv_score - current_cv_score) / prev_cv_score * 100
+    IF improvement_pct < 0.5: BREAK (diminishing returns)
+    IF zero suggestions with expected_impact == "high": BREAK
+    ELSE: continue to round 3
+
+  IF round == 3: BREAK (always — final round, ship best result)
+```
+
+**Keep-best rule:** `submission.csv` is overwritten only if the new CV score strictly
+beats the previous best. The model-search agent enforces this internally.
+
+**Outputs:**
+- `outputs/logs/model_search.json`, `outputs/logs/final_model.json`
+- `submission.csv` (repo root, keep-best)
+- `outputs/logs/feature_audit_review.json` (round 1 only)
+- `outputs/logs/analysis_review_{1,2,3}.json` (only rounds that run)
+
+---
+
+### Step 6 — Report Writing + Submission Formatting
+
+Dispatch these two agents in **parallel**:
+
+**Agent A: `report-writer-reviewer`**
+
+Reads all log files produced so far (spec_parse, data_profile, analysis_plan, model_search, final_model, feature_audit, submission_validation, hardcoding audit, prediction_sanity). Generates `report.pdf` dynamically from actual run data, then immediately self-reviews it for factual accuracy and metric correctness.
+
+**Output required:** `report.pdf` (repo root), `outputs/logs/report_review.json`
+
+**Agent B: `validation-and-schema-guardian`** (validation mode)
+
+Validates the final `submission.csv`: column count (exactly 2), row count (must match sample submission), row-id order, no missing values, predictions are finite and in a plausible range.
+
+**Output required:** `outputs/logs/submission_validation.json`
+
+---
+
+### Step 7 — Final Output Review + Format Correction
+
+**Agent:** `supervisor-gatekeeper` (final-gate mode)
+
+Reads every log file under `outputs/logs/`, inspects `submission.csv` and `report.pdf`, verifies they meet the requirements in `DATA_DESCRIPTION.md` and the sample submission. If format issues are found, the supervisor triggers targeted repairs:
+
+- **Submission format mismatch:** re-dispatch `validation-and-schema-guardian` to reformat.
+- **Report missing required section:** re-dispatch `report-writer-reviewer` for that section only.
+- **Critical prediction issue:** re-dispatch `model-search-agent` for one repair pass.
+
+The supervisor writes the final verdict and confirms the run is complete.
+
+**Output required:** `outputs/logs/supervisor_gatekeeper.json`
+
+---
+
+### Deterministic fallback
+
+If the agent workflow fails at or before Step 5 round 1 (no `submission.csv` produced), run:
 
 ```bash
 python main.py
 ```
 
-If Python reports missing packages, install dependencies and rerun:
+Install dependencies first if needed:
 
 ```bash
 pip install -r requirements.txt
-pip install -r requirements-optional.txt   # lightgbm / xgboost / catboost (optional, graceful fallback)
+pip install -r requirements-optional.txt
 python main.py
 ```
 
-`main.py` runs a heavy-compute pipeline (**blocked GroupKFold cross-validation that holds
-whole periods out** — a too-granular datetime key is coarsened to period blocks so the CV
-never collapses to random KFold, leakage-safe group/target-aggregate + TF-IDF features,
-**early-stopped** randomized tuning, an OOF stack, seed-averaging, and a cross-family
-convex **blend**) and **always writes a valid `submission.csv` (+ a pre-search baseline
-checkpoint) and `report.pdf`**. It runs the in-process modeling group + blend itself,
-keeping the best by cross-validated official metric (`block_mae` for the regression panel;
-`accuracy`/etc. for the classification fallback). **This alone is a complete, robust,
-principled submission and the safety net for everything below.** Writes
-`outputs/logs/{run_id}_ensemble_meta.json`, `{run_id}_model_selection.json`, and the
-per-stage deterministic gate verdicts. Disable the in-process group with
-`AWARDB_MODELING_GROUP=0`.
+This produces a complete `submission.csv` + `report.pdf` via the in-process pipeline. Then re-enter the workflow at Step 6 (report writing is still performed by the agent layer).
 
-### Step 2 — dispatch the real modeling group + critic gates (when budget remains)
-
-After `main.py` finishes, the floor + report already exist, so the run is safe no matter
-what happens next. Using the ample remaining budget, dispatch the agent layer **as real
-subagents via the Task tool**, in this order. Every step is **keep-best and idempotent**:
-a failed, skipped, or worse subagent **leaves the current `submission.csv` untouched**.
-
-1. **Parallel modeling group — diverse-first.** Dispatch the three specialists in parallel
-   (gbdt overlaps the floor's GBDT stack most, so it is the most expendable under budget):
-   `linear-encoding-specialist`, `trees-specialist`, `gbdt-specialist`. Each runs
-   `python scripts/run_modeling_agent.py --approach <linear|trees|gbdt> --run-id <run_id>`
-   and writes `outputs/logs/{run_id}_agent_<approach>.json` +
-   `outputs/logs/{run_id}_cand_<approach>.csv`. This is genuine independent exploration
-   that confirms or challenges the in-process result.
-2. **`ensemble-meta`.** Reads every `{run_id}_agent_*.json` plus the floor's
-   `{run_id}_model_selection.json` and the in-process `{run_id}_ensemble_meta.json`,
-   compares candidates + the blend by the cross-validated official metric, and records the
-   best choice. Never selects anything worse than the current submission.
-3. **`supervisor-gatekeeper`.** Final keep-best gate: overwrite repo-root `submission.csv`
-   **only if** the chosen candidate strictly beats the current one by CV. Writes
-   `outputs/logs/supervisor_gatekeeper.json` (+ `{run_id}_llm_gate_supervisor.json`).
-4. **Adversarial critic gates.** Dispatch critics for `leakage`, `prediction_sanity`, and
-   `report`; each inspects the logs and writes `outputs/logs/{run_id}_llm_gate_{stage}.json`
-   in the shared verdict schema. An LLM verdict **takes precedence** over the deterministic
-   one (`gates.load_llm_verdict` / `orchestrator._emit_gate`).
-
-A bare `python main.py` with no Claude layer is already complete (the Python pipeline does
-all of the above in-process); Step 2 makes the multi-agent architecture **actually
-execute** as real subagents for Award B and can only improve the deliverable. See
-`.claude/agents/orchestrator.md` → "Parallel modeling group".
-
-Do not manually craft a submission. Do not rely on any overdose-specific field
-names. The only authority for the hidden evaluation dataset is
-`data/DATA_DESCRIPTION.md` plus the files placed under `data/`.
-
-### Runtime knobs (env vars, all optional with safe defaults)
-
-| Var | Default | Effect |
-|---|---|---|
-| `AWARDB_TIME_BUDGET_SEC` | 5400 | wall-clock budget for floor + group search (kept < 2h cap) |
-| `AWARDB_TUNE_ITER` | 12 | randomized-search iterations per tuned family, **early-stopped** on plateau (0 disables tuning) |
-| `AWARDB_SEEDS` | 3 | seed-averaging count for the final fit |
-| `AWARDB_MODELING_GROUP` | 1 | auto-run Step 2 modeling group when budget remains (`0` disables) |
-| `AWARDB_GROUP_TUNE_ITER` | max(`AWARDB_TUNE_ITER`, 24) | per-specialist tuning iterations |
+---
 
 ## Required Outputs
 
@@ -100,97 +256,48 @@ The run must produce both files in the repository root:
 <row_id_column>,<target_column>
 ```
 
-Both column names come from the sample submission / `DATA_DESCRIPTION.md` (e.g.
-`PassengerId,Survived` for Titanic). The output must preserve the sample submission's
-row order, and values must match the required output format (integer class labels,
-string labels, or continuous/probability values).
+Both column names come from the sample submission / `DATA_DESCRIPTION.md`. The output must preserve the sample submission's row order, and values must match the required output format (integer class labels, string labels, or continuous values).
+
+---
 
 ## Workflow Contract
 
-`main.py` drives `orchestrator.run_orchestrated_analysis`, which threads an
-`AnalysisState` through the staged agent pipeline below — each `.claude/agents/` agent
-maps to a phase and is backed by a real skill in `src/data_agent/skills/`. On any stage
-failure it falls back to the deterministic `runner.run_analysis`. The pipeline
-performs these 14 phases via a hub-and-spoke architecture controlled by
-`analysis-orchestrator`:
+Every agent writes its outputs to `outputs/logs/`. Agents communicate **only through JSON log files** — no agent calls another agent directly. The 8-step workflow above is the sole coordination mechanism.
 
-| Phase | Agent | Log file |
-|-------|-------|----------|
-| 1 | `task-inference-agent` | `spec_parse.json` |
-| 2 | `validation-and-schema-guardian` (schema review) | `validation_strategy.json` |
-| 3 | `hardcoding-and-feature-auditor` (pre-run) | `hardcoding_audit_pre.json` |
-| 4 | `data-profiler` | `data_profile.json` |
-| 5 | `analysis-planner` | `analysis_plan.json` |
-| 6 | `analysis-programmer` (first pass) | `submission.csv` |
-| 7 | `model-search-agent` | `model_search.json`, `final_model.json` |
-| 8 | `validation-and-schema-guardian` (validation) | `submission_validation.json` |
-| 9 | `hardcoding-and-feature-auditor` (feature audit + overfitting audit) | `feature_audit_review.json`, `overfitting_leakage_audit.json` |
-| 10 | `supervisor-gatekeeper` (first review) | `supervisor_gatekeeper.json`, `prediction_sanity.json` |
-| 11 | Conditional repair rerun (programmer → model-search → guardian) | — |
-| 12 | `hardcoding-and-feature-auditor` (post-run) | `hardcoding_audit_post.json` |
-| 13 | `report-writer-reviewer` | `report.pdf`, `report_review.json` |
-| 14 | `supervisor-gatekeeper` (final gate) | `supervisor_gatekeeper.json` |
+| Step | Agent(s) | Key log file(s) |
+|------|----------|-----------------|
+| 1 | `data-format-converter` | `data_conversion.json` |
+| 2a | `data-profiler` | `data_profile.json`, `missingness_profile.json`, `imputation_plan.json` |
+| 2b | `task-inference-agent` | `spec_parse.json` |
+| 3 | `analysis-planner` | `analysis_plan.json` |
+| 4 | `plan-reviewer` ↔ `analysis-planner` | `plan_review_{1,2,3}.json` |
+| 5 | `analysis-programmer` + `model-search-agent` ↔ `results-reviewer` | `model_search.json`, `final_model.json`, `analysis_review_{1,2,3}.json` |
+| 5 (audit) | `hardcoding-and-feature-auditor` | `feature_audit_review.json` |
+| 6a | `report-writer-reviewer` | `report.pdf`, `report_review.json` |
+| 6b | `validation-and-schema-guardian` | `submission_validation.json` |
+| 7 | `supervisor-gatekeeper` | `supervisor_gatekeeper.json` |
 
-Agents communicate only through the orchestrator (hub-and-spoke). No agent calls
-another agent directly. All inter-agent data passes through JSON log files.
-
-**Deterministic floor (what Phase 6–7 actually run).** The engine
-`models.train_and_predict` performs: blocked **GroupKFold cross-validation** (whole
-periods held out, mirroring the disjoint validation periods — a **too-granular datetime
-key is coarsened to whole-period blocks** by `_resolve_cv_groups` so the CV never collapses
-to random KFold), **leakage-safe group/target-aggregate features** (per-group target
-mean/median/std/quantiles fit inside the CV, the dominant panel signal), **free-text
-TF-IDF→SVD** features, **early-stopped randomized hyperparameter tuning** of the top
-families, a **convex OOF stack**, and **seed-averaging**. It writes a pre-search **baseline
-checkpoint** submission first, then overwrites with the full result — so a valid, scored
-`submission.csv` always exists ("partial output is scored").
-
-**Parallel modeling group (Phase 7 enhancement).** Runs in-process by default and, for
-Award B, **also** as real subagents (Step 2 of the Primary Instruction). When budget
-remains the orchestrator dispatches family specialists **diverse-first**
-(`linear-encoding-specialist`, `trees-specialist`, `gbdt-specialist` — gbdt overlaps the
-floor most, so it runs last) in parallel via `scripts/run_modeling_agent.py --approach <X>`,
-then `ensemble-meta` (best **or convex NNLS blend** by CV official metric) and
-`supervisor-gatekeeper` (overwrite `submission.csv` only if it strictly beats the current
-one — keep-best). The in-process group reserves a per-family wall-clock slice so the
-diverse families are never starved. See `.claude/agents/orchestrator.md`.
-
-Plot artifacts are written under `outputs/artifacts/`, the full run state under
-`outputs/logs/{run_id}_state.json`, and per-run logs + a manifest under `outputs/logs/`.
+---
 
 ## Modeling Rules
 
-- Detect the task type before modeling. Award B is always a **block-averaged-MAE
-  panel regression**, so the regression path is primary; a lean classifier
-  fallback (HistGradientBoosting + LogisticRegression + baselines) is kept so the
-  pipeline stays general-purpose. The candidate pool is a function of the task.
+- Detect the task type before modeling. Use the output of `task-inference-agent` — never assume.
 - Baseline models must be evaluated before candidate models.
-- Candidate selection is data-driven; no single algorithm is always preferred.
-- **Selection uses blocked GroupKFold cross-validation** (whole periods held out)
-  scored by the resolved official metric. Metric resolution is `block_mae`
-  (primary, when a category/block column exists) with `mae`/`rmse` as fallbacks
-  when the description names a plain error metric. Metric direction
-  (`greater_is_better`) is honored. A `log1p`-target model variant is added when
-  the target is right-skewed (skew-driven, not metric-driven).
-- The block for block-averaged MAE is the **period/time column** when one exists
-  (per-period MAE averaged), matching the held-out-period structure. A near
-  unique-per-row period key is **coarsened to whole-period blocks**
-  (`_resolve_cv_groups`) so the blocked CV holds genuine periods out rather than
-  collapsing to random KFold.
-- Regression accuracy levers (all dataset-agnostic): leakage-safe
-  group/target-aggregate features (fit per CV fold), free-text TF-IDF→SVD,
-  **early-stopped** randomized hyperparameter tuning of the top families, a convex
-  OOF stack, seed-averaging, and a **cross-family convex (NNLS) blend** of the floor
-  + modeling-group specialists (kept only when it strictly beats the best single —
-  never regresses). See the engine `models.train_and_predict` and
-  `modeling_group.run_modeling_group`.
-- For the classification fallback, prefer a stratified/grouped holdout.
-- Submission values must match what `DATA_DESCRIPTION.md` and the sample
-  submission require; the output is always exactly two columns `row_id,<target>`.
-- Never use validation targets or future target values during feature
-  engineering (target aggregates are fit inside each CV fold to stay leakage-safe).
-- LightGBM / XGBoost / CatBoost are optional; continue with scikit-learn fallback
-  models when any is unavailable. No GPU is required.
+- Candidate selection is data-driven. No single algorithm is always preferred.
+- **Selection uses blocked GroupKFold cross-validation** (whole periods held out).
+  Metric resolution: `block_mae` (primary, when a category/block column exists) with `mae`/`rmse` as fallbacks.
+- The block for block-averaged MAE is the **period/time column** when one exists.
+  A near-unique-per-row period key is **coarsened to whole-period blocks** so the blocked CV
+  holds genuine periods out rather than collapsing to random KFold.
+- Regression accuracy levers (all dataset-agnostic): leakage-safe group/target-aggregate features
+  (fit per CV fold), free-text TF-IDF→SVD, early-stopped randomized hyperparameter tuning,
+  a convex OOF stack, seed-averaging, and a **cross-family convex (NNLS) blend**.
+- For classification, prefer a stratified/grouped holdout.
+- Submission values must match what `DATA_DESCRIPTION.md` and the sample submission require.
+- Never use validation targets or future target values during feature engineering.
+- LightGBM / XGBoost / CatBoost are optional; continue with scikit-learn fallbacks when unavailable.
+
+---
 
 ## Prohibited Assumptions
 
@@ -202,91 +309,54 @@ Do not hardcode:
 - `918` rows
 - any fixed period-id map
 - any local absolute path from a developer machine
+- any column name, file name, or domain term not derived from `DATA_DESCRIPTION.md` or the data files at runtime
+
+All column names, file paths, task types, and metric names must be resolved dynamically by the agents from the actual data and description files. Every agent that references a column name must read it from `spec_parse.json` or `data_profile.json` — never hardcode it.
+
+---
 
 ## Mandatory Anti-Hardcoding Audit
 
-This audit runs automatically on every pipeline execution and can also be run manually.  It is dataset-agnostic: it works on any future hidden dataset.
+The `hardcoding-and-feature-auditor` agent runs in three modes during the workflow:
 
-### When it runs
-
-| Phase | Trigger | What is scanned |
-|---|---|---|
-| **Pre-run** | Immediately after `discover_schema()`, before any feature engineering | All `.py` files under `src/` and `scripts/` |
-| **Post-run** | Before finalising `submission.csv` and `report.pdf` | Same as pre-run, plus the generated report `.md` |
+| When | Mode | Trigger |
+|------|------|---------|
+| Step 5, each round | `feature-audit` | After programming + model search |
+| Step 7 (if supervisor flags it) | `post` | Before finalising outputs |
 
 ### What it searches for
 
-**Static suspicious terms** (always searched, regardless of dataset):
-
+**Static suspicious terms** (always searched):
 - Award A field names: `rate_per_10000_ed_visits`, `overdose_category`, `all_drugs`, `all_opioids`, `all_stimulants`
 - Known competition-specific column names: `survived`, `passengerid`, `casual`, `registered`, `saleprice`, etc.
 - Assumed file names: `train.csv`, `test.csv`, `sampleSubmission.csv`, etc.
 - Domain vocabulary: `overdose`, `opioid`, `stimulant`, `titanic`, etc.
-- Magic numbers: `918` (previous hardcoded row count)
+- Magic numbers: `918`
 
 **Dynamic suspicious terms** (extracted from the current dataset at runtime):
-
 - Backtick-quoted identifiers in `DATA_DESCRIPTION.md`
 - Column names from the training file header
 - Column names from the sample submission header
-
-Dynamic terms that are generic Python/pandas identifiers (`mean`, `std`, `count`, `min`, `max`, `id`, `value`, etc.) are automatically excluded to reduce noise.
 
 ### Classification rules
 
 | Classification | Condition |
 |---|---|
-| **acceptable** | In `tests/`, comments (`#`), docstrings (`"""`), or markdown prose; OR term appears in a list of 3+ candidate fallbacks |
+| **acceptable** | In `tests/`, comments (`#`), docstrings, or markdown prose; OR term appears in a list of 3+ candidate fallbacks |
 | **risky** | Term in a 1–2 item list, `in`-operator check, or `!=` comparison |
 | **unacceptable** | Direct column access `df["term"]`, variable assignment `var = "term"`, equality check `== "term"`, file loading with hardcoded name |
 
-### Verdict
-
-- `pass` — zero unacceptable findings
-- `warn` — zero unacceptable but one or more risky findings
-- `fail` — one or more unacceptable findings
-
-A `fail` verdict is logged as a warning but does **not** halt the pipeline.  Fix the unacceptable findings before the next submission.
-
-### Output
-
-Each audit phase writes to:
-```
-outputs/logs/hardcoding_audit_{pre|post}_{run_id}.json
-```
-
-The final report includes a brief audit summary section.
+A `fail` verdict is logged and surfaced but does **not** halt the workflow.
 
 ### Manual execution
 
 ```bash
-# Quick pre-run audit with dynamic terms from data/
-python scripts/audit_hardcoding.py
-
-# Verbose output showing all findings
+python scripts/audit_hardcoding.py           # pre-run
 python scripts/audit_hardcoding.py --verbose
-
-# Post-run audit
 python scripts/audit_hardcoding.py --phase post
-
-# Skip dynamic term extraction
-python scripts/audit_hardcoding.py --no-dynamic
 ```
 
-Exit codes: `0` = pass, `1` = warn, `2` = fail.
-
-### Implementation files
-
-| File | Role |
-|---|---|
-| `src/data_agent/audit.py` | Audit engine: scanning, classification, term extraction, log serialisation |
-| `scripts/audit_hardcoding.py` | CLI entry point |
-| `src/data_agent/runner.py` | Pre/post audit integration in the pipeline |
-| `tests/test_audit.py` | 40 regression tests — run before modifying `audit.py` |
-
-```bash
-python -m pytest tests/test_audit.py -v
-```
+---
 
 ## Datetime Feature Engineering — Invariant Behaviour
 
@@ -294,122 +364,57 @@ This rule applies to every unknown future dataset, not only the current one.
 
 ### What the agent MUST do
 
-1. **Scan every column for datetime parseability**, including the row_id column
-   and join keys. A column that is used as a submission row identifier (e.g.
-   `datetime`, `timestamp`, `date`, `period`) still contains temporal
-   information that must be extracted as derived features.
-
-2. **Never add the raw row_id / join key to the model feature set** — only the
-   derived `col__<field>` columns may be used as model inputs.
-
-3. **Extract the full set of generic time features** from every detected
-   datetime source column:
-   - Always: `year`, `month`, `month_sin`, `month_cos`, `day`, `dayofweek`,
-     `dayofweek_sin`, `dayofweek_cos`, `is_weekend`, `quarter`,
-     `weekofyear`, `ordinal`
+1. **Scan every column for datetime parseability**, including the row_id column and join keys.
+2. **Never add the raw row_id / join key to the model feature set** — only derived `col__<field>` columns.
+3. **Extract the full set of generic time features** from every detected datetime source column:
+   - Always: `year`, `month`, `month_sin`, `month_cos`, `day`, `dayofweek`, `dayofweek_sin`, `dayofweek_cos`, `is_weekend`, `quarter`, `weekofyear`, `ordinal`
    - When sub-day timestamps are present: `hour`, `hour_sin`, `hour_cos`
-
-4. **Write a feature audit** to `outputs/logs/<run_id>_profile.json` (under
-   `feature_audit`) that records:
-   - `detected_datetime_columns`
-   - `datetime_feature_sources`
-   - `generated_time_features` (per source column)
-   - `final_feature_columns`
-   - `time_target_signal` (target mean / std per time-feature group)
-
-5. **Mention time feature detection in the report**: which columns were
-   recognised as datetime sources, which features were generated, and whether
-   the target-signal audit shows a meaningful diurnal / weekly / seasonal
-   pattern.
+4. **Write a feature audit** to `outputs/logs/<run_id>_profile.json` under `feature_audit`.
+5. **Mention time feature detection in the report**: which columns were recognised, which features were generated, whether the target-signal audit shows a meaningful temporal pattern.
 
 ### What is FORBIDDEN
 
-- Hard-coding any dataset-specific column names (`datetime`, `casual`,
-  `registered`, `season`, `count`, …) in the feature engineering logic.
-- Skipping time feature extraction because a datetime column happens to be
-  the row_id column.
+- Hard-coding any dataset-specific column names in the feature engineering logic.
+- Skipping time feature extraction because a datetime column happens to be the row_id column.
 - Adding the raw datetime string column as a model feature.
 
-### Implementation files
-
-| File | Role |
-|---|---|
-| `src/data_agent/features.py` | `_detect_datetime_columns`, `_resolve_time_sources`, `_add_features_for_datetime_col`, `_extract_time_features`, `_audit_time_target_signal` |
-| `tests/test_datetime_features.py` | 23 regression tests — run before modifying `features.py` |
-
-Run tests with:
-```bash
-python -m pytest tests/test_datetime_features.py -v
-```
+---
 
 ## Agent Architecture
 
-The `.claude/agents/` directory contains 10 core pipeline agents plus a 4-agent
-parallel **modeling group**. Each core agent corresponds to a distinct failure mode:
+All agents are in `.claude/agents/`. The 8-step workflow is orchestrated by **CLAUDE.md** (this file) — there is no separate orchestrator agent.
 
-| Agent file | Role | Failure mode it guards |
-|------------|------|------------------------|
-| `orchestrator.md` | Hub controller | Workflow ordering; 2-hour cap; dispatches the modeling group |
-| `task_inference.md` | Schema parsing | Wrong task type; bad target column |
-| `data_profiler.md` | Data quality | Missed data issues; schema drift |
-| `planner.md` | Plan + self-critique | Leakage in plan; missing baselines |
-| `programmer.md` | Pipeline execution | Runtime errors; hardcoded columns |
-| `model_search_agent.md` | Model search | Suboptimal model; missing baseline |
-| `validation_schema_guardian.md` | Validation + submission | Wrong split; bad submission format |
-| `hardcoding_feature_auditor.md` | Audit (3 modes) | Hardcoded columns; missing features |
-| `report_writer_reviewer.md` | Report + self-review | Stale conclusions; metric errors |
-| `supervisor_gatekeeper.md` | Final gate + keep-best | Undetected critical issues; group regressions |
+### Core pipeline agents
 
-**Parallel modeling group** (division of labor, dispatched by the orchestrator when
-budget remains; each calls `scripts/run_modeling_agent.py --approach <family>`):
+| Agent file | Role | Step |
+|------------|------|------|
+| `data_format_converter.md` | Convert non-CSV files to CSV | 1 |
+| `data_profiler.md` | Descriptive stats + missingness audit | 2a |
+| `task_inference.md` | Task type + target + metric resolution | 2b |
+| `planner.md` | Analysis plan + self-critique + revision | 3, 4 |
+| `plan_reviewer.md` | Independent adversarial plan review | 4 |
+| `programmer.md` | Pipeline execution + error repair | 5 |
+| `model_search_agent.md` | Model search + CV + keep-best | 5 |
+| `results_reviewer.md` | Results review + improvement suggestions | 5 |
+| `hardcoding_feature_auditor.md` | Audit: feature-audit + post modes | 5, 7 |
+| `validation_schema_guardian.md` | Submission schema validation | 6b |
+| `report_writer_reviewer.md` | Report generation + self-review | 6a |
+| `supervisor_gatekeeper.md` | Final gate + format correction | 7 |
+
+### Modeling specialist agents (dispatched inside model-search-agent or Step 5)
 
 | Agent file | Division of labor |
 |------------|-------------------|
-| `gbdt_specialist.md` | gradient-boosted trees (LightGBM/XGBoost/CatBoost/HGB) + tuning |
-| `linear_encoding_specialist.md` | regularized linear models on group/target encodings |
-| `trees_specialist.md` | bagged trees (RandomForest/ExtraTrees) |
-| `ensemble_meta.md` | best/blend candidates by CV block-MAE; hand off to supervisor (keep-best) |
+| `gbdt_specialist.md` | Gradient-boosted trees (LightGBM/XGBoost/CatBoost/HGB) |
+| `linear_encoding_specialist.md` | Regularized linear models on group/target encodings |
+| `trees_specialist.md` | Bagged trees (RandomForest/ExtraTrees) |
+| `ensemble_meta.md` | Best/blend by CV block-MAE; keep-best |
 
-**Removed / merged agents** (no longer in `.claude/agents/`):
-- `plan_critic.md` → merged into `analysis-planner` (self-critique section)
-- `report_writer.md` → merged into `report-writer-reviewer`
-- `report_reviewer.md` → merged into `report-writer-reviewer`
-- `inspector.md` → upgraded to `supervisor-gatekeeper`
+### Deprecated agents (kept for reference only, not called in the workflow)
 
-## Closed-Loop Supervision (Gates)
+- `orchestrator.md` — replaced by this file (CLAUDE.md)
 
-The adversarial supervision is implemented as a two-layer closed loop sharing
-one verdict schema, defined in `src/data_agent/gates.py`:
-
-```json
-{
-  "stage": "schema | task_inference | leakage | prediction_sanity | submission | report | supervisor",
-  "run_id": "...",
-  "status": "pass | warn | fail",
-  "reasons": ["..."],
-  "suggested_corrections": {"force_task_type": "regression"},
-  "checked": { "...evidence..." },
-  "critic": "deterministic | llm:<agent>"
-}
-```
-
-- **Deterministic critics always run** (headless `python main.py`):
-  `check_task_consistency`, `check_schema`, `check_prediction_sanity`, plus the
-  elevated leakage / submission / report gates. `run_stage_with_gate()` re-runs
-  a stage **once** with a `suggested_corrections` hint on `fail`, bounded by a
-  hard retry cap **and** a no-progress guard.
-- **LLM critic layer** (Claude-driven path): a critic subagent may write
-  `outputs/logs/{run_id}_llm_gate_{stage}.json` in the same schema; it **takes
-  precedence** over the deterministic verdict (`load_llm_verdict` / `_emit_gate`).
-- Each stage writes `outputs/logs/{run_id}_gate_{stage}.json`; the
-  `prediction_sanity` and `supervisor` stages also write the fixed-name aliases
-  `prediction_sanity.json` and `supervisor_gatekeeper.json`. A `fail` is logged
-  and surfaced but **never halts** — the deliverable is always produced.
-
-Closed-loop auto-fixes that re-run a stage: task-consistency
-(`force_task_type` → re-resolve + rebuild bundle), leakage (`drop_columns` →
-drop + re-run model selection), prediction-sanity (drop remaining suspected
-features → re-run model selection).
+---
 
 ## Inspection Checklist
 
@@ -418,22 +423,18 @@ Before considering the run complete, verify:
 - `submission.csv` exists in the repo root.
 - `report.pdf` exists in the repo root.
 - `submission.csv` has exactly two columns.
-- row ids match the sample submission in order.
-- predictions are finite and non-missing.
-- logs were written under `outputs/logs/`.
-- the report describes the actual current run rather than a fixed prior dataset.
+- Row ids match the sample submission in order.
+- Predictions are finite and non-missing.
+- Logs were written under `outputs/logs/`.
+- The report describes the actual current run (not a fixed prior dataset).
 - `outputs/logs/supervisor_gatekeeper.json` final gate is written.
 - `outputs/logs/report_review.json` shows `approved: true`.
-- `outputs/logs/overfitting_leakage_audit.json` written by Phase 9.
-- `outputs/logs/prediction_sanity.json` written by Phase 10.
-- per-stage gate verdicts `outputs/logs/{run_id}_gate_{stage}.json` written for
-  `schema`, `task_inference`, `leakage`, `prediction_sanity`, `submission`,
-  `report`, and `supervisor`.
-- for a regression panel, `model_selection.json` shows `metric_name: block_mae`
-  and a `grouped_kfold` (or `time_holdout`) `holdout_strategy.type` — selection is
-  blocked cross-validation, not a single holdout.
-- group/target-aggregate features (`tgt_*`) and any detected text columns appear
-  in the feature set; the opaque block/period key is NOT a raw model feature.
-- a baseline `submission.csv` is checkpointed before the heavy search; the final
-  file beats or equals it (keep-best) and has exactly two columns `row_id,<target>`.
-- report Section 8 (Overfitting and Generalization Controls) is present.
+- `outputs/logs/feature_audit_review.json` written during Step 5.
+- `outputs/logs/submission_validation.json` written during Step 6.
+- `outputs/logs/plan_review_*.json` written during Step 4.
+- `outputs/logs/analysis_review_*.json` written during Step 5.
+- For a regression panel, `model_search.json` shows `metric_name: block_mae` and a `grouped_kfold` (or `time_holdout`) holdout strategy.
+- Group/target-aggregate features (`tgt_*`) appear in the feature set; the opaque block/period key is NOT a raw model feature.
+- Report contains a section on Overfitting and Generalization Controls.
+- `outputs/logs/data_conversion.json` written during Step 1.
+- `outputs/logs/missingness_profile.json` and `imputation_plan.json` written during Step 2.

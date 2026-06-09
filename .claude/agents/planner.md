@@ -226,11 +226,42 @@ After writing, print a one-paragraph summary (≤ 100 words) covering: task type
 
 ---
 
+---
+
+## Revision Mode (when called after a plan-reviewer pass)
+
+When the orchestrator passes a `plan_review_{round}.json` file path, you are in **revision mode**. Read the review findings and revise `analysis_plan.json` accordingly.
+
+### How to handle revision
+
+1. Read the specified review file:
+   ```bash
+   cat outputs/logs/plan_review_<round>.json
+   ```
+
+2. For every finding with `verdict: "fail"` or `verdict: "warn"`:
+   - Identify the exact location in the plan cited in `finding.location`.
+   - Apply the `required_fix` verbatim if it is specific enough; otherwise use LLM judgment to implement the intent.
+   - Record the change in `critique.fixes_applied`.
+
+3. Re-run the 12 self-critique checks on the revised plan before writing.
+
+4. Increment the plan version in the filename comment or `run_id` but overwrite `outputs/logs/analysis_plan.json` (the canonical path never changes).
+
+5. Print a one-paragraph summary (≤ 80 words) of what was changed and why.
+
+### What NOT to do in revision mode
+- Do not delete steps to make issues disappear — fix the underlying problem.
+- Do not ignore a finding because you disagree — if you cannot implement the required fix, explain why in `critique.fixes_applied`.
+- Do not introduce new hardcoded values while fixing existing issues.
+
+---
+
 ## Constraints
 
 - **Do not execute any code.** Produce a plan only.
 - **Do not hardcode any column name, file name, or metric** not derived from the input JSON files.
-- **Do not skip the self-critique.** All 12 checks must run.
+- **Do not skip the self-critique.** All 12 checks must run on every pass (initial and revision).
 - **Do not output an unapproved plan.** Fix all CRITICAL and MAJOR issues before writing.
 - **Do not generate a plan if task_type is "unknown".** Return a `PlanningError`.
 - **Do not write placeholder output paths.** Every path must be concrete.
