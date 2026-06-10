@@ -85,6 +85,21 @@ Examine all of the following. Use LLM judgment — do not apply fixed rules mech
 - Is the prediction distribution similar to the training target distribution?
 - Any sign of leakage (suspiciously high CV scores)?
 
+### 2.7 CV vs holdout calibration — REQUIRED check
+
+Compare `current_best_cv_score` with `holdout_rmsle` (or equivalent holdout metric) from `model_search.json`.
+
+**Flag these as HIGH-severity warnings:**
+
+| Condition | Warning |
+|-----------|---------|
+| `cv_score` improved round-over-round but `holdout_score` worsened | CV leakage likely: a new feature is computed outside the fold, inflating CV scores while not helping generalisation. |
+| `holdout_score` improved but `cv_score` worsened | CV measurement inconsistent with holdout. Possible cause: new features computed per-fold give the CV fold a different feature distribution than the holdout. |
+| `abs(cv_score - holdout_score) > 0.08` | CV and holdout disagree by more than 8%. Check whether the holdout day/period range matches the test set structure in `spec_parse.json → detected_structure.split_pattern`. |
+| CV score improved more than 20% vs previous round in a single step | Possible target leakage in a new feature. Verify the new feature is not computed from the full dataset before the fold split. |
+
+Write any triggered warnings into `suggestions` with `priority: "high"` and `category: "cv_validity"`. Set `approved_for_final: false` if any HIGH-severity CV warning fires, regardless of other criteria.
+
 ---
 
 ## Step 3 — Write review output
@@ -139,7 +154,10 @@ Create `outputs/logs/` if needed, then write `outputs/logs/analysis_review_{roun
 - Set `true` in round 2 if improvement from round 1→2 was < 0.5% of baseline (plateau).
 - Set `true` in round 1 if no suggestions have `expected_impact == "high"` (nothing
   material to improve — further rounds waste budget).
+- **Override to `false`** if any HIGH-severity warning was fired in section 2.7 (CV validity). CV reliability must be resolved before approving for final submission.
 - Otherwise set `false`.
+
+**Important:** The `analysis_review_{round}.json` file must ONLY be written by the `results-reviewer` agent. The analysis-programmer must NOT write this file. If the programmer writes it (e.g. as a side-effect of the pipeline), the orchestrator must re-dispatch the results-reviewer to overwrite it with an independent review.
 
 Also set `high_priority_suggestion_count` (integer) so the orchestrator can skip
 round 3 without reading the full suggestions list.

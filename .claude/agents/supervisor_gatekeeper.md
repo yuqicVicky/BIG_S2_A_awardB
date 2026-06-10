@@ -119,6 +119,84 @@ EOF
 
 ---
 
+## Step 2b — CV strategy validation (independent of programmer's claims)
+
+Do NOT rely on `model_search.json → cv_strategy` — that field is self-reported by the programmer. Instead, independently verify whether the CV strategy matches the actual test split structure.
+
+```bash
+python - <<'EOF'
+import json, pandas as pd, numpy as np
+from pathlib import Path
+
+spec       = json.load(open("outputs/logs/spec_parse.json"))
+row_id_col = spec.get("row_id_column")
+train_file = spec.get("train_file")
+pred_file  = spec.get("prediction_file")
+ms         = json.load(open("outputs/logs/model_search.json")) if Path("outputs/logs/model_search.json").exists() else {}
+
+issues = []
+
+def load(p):
+    if not p or not Path(p).exists(): return None
+    try: return pd.read_csv(p) if str(p).endswith(".csv") else pd.read_excel(p)
+    except: return None
+
+train_df = load(train_file)
+pred_df  = load(pred_file)
+
+if train_df is not None and pred_df is not None and row_id_col:
+    try:
+        tr_dt   = pd.to_datetime(train_df[row_id_col], errors="coerce")
+        te_dt   = pd.to_datetime(pred_df[row_id_col], errors="coerce")
+        tr_days = sorted(tr_dt.dt.day.dropna().unique().astype(int).tolist())
+        te_days = sorted(te_dt.dt.day.dropna().unique().astype(int).tolist())
+        tr_ym   = set((tr_dt.dt.year * 100 + tr_dt.dt.month).dropna().astype(int))
+        te_ym   = set((te_dt.dt.year * 100 + te_dt.dt.month).dropna().astype(int))
+
+        within_month_split = bool(tr_ym & te_ym) and set(tr_days) != set(te_days)
+        claimed_strategy   = ms.get("cv_strategy", "unknown")
+
+        if within_month_split:
+            is_correct = any(k in claimed_strategy for k in ("hold_out_test_day", "within_month", "day_range"))
+            if not is_correct:
+                issues.append({
+                    "severity": "HIGH",
+                    "check": "cv_matches_split_structure",
+                    "detail": (
+                        f"Train covers days {min(tr_days)}-{max(tr_days)}, "
+                        f"test covers days {min(te_days)}-{max(te_days)} of the SAME {len(tr_ym & te_ym)} months. "
+                        f"Claimed CV strategy '{claimed_strategy}' does NOT simulate this split. "
+                        "Local CV scores are unreliable — they evaluate on the same day-range as training."
+                    )
+                })
+
+        # Check calibration gap
+        cv_rmsle  = ms.get("best_cv_rmsle") or ms.get("cv_rmsle")
+        ho_rmsle  = ms.get("holdout_rmsle")
+        if cv_rmsle and ho_rmsle:
+            gap = abs(float(cv_rmsle) - float(ho_rmsle))
+            if gap > 0.08:
+                issues.append({
+                    "severity": "MEDIUM",
+                    "check": "cv_holdout_calibration",
+                    "detail": (
+                        f"CV RMSLE ({cv_rmsle:.4f}) and holdout RMSLE ({ho_rmsle:.4f}) "
+                        f"differ by {gap:.4f}. Gap > 0.08 suggests CV measurement is unreliable "
+                        "for selecting between models."
+                    )
+                })
+
+    except Exception as e:
+        issues.append({"severity": "LOW", "check": "cv_validation_error", "detail": str(e)})
+
+print(json.dumps({"cv_validation_issues": issues}, indent=2))
+EOF
+```
+
+Record findings in `supervisor_gatekeeper.json → cv_validation`. If any HIGH-severity issues exist, set `repair_needed: true` and add to `issues` list with the instruction: "Re-run model search with CV strategy corrected to match the within-month split structure."
+
+---
+
 ## Step 3 — Prediction sanity checks
 
 Run these checks against the submission predictions, training target distribution, and model logs. Write results to `outputs/logs/prediction_sanity.json`.

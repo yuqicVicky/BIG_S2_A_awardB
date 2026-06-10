@@ -142,14 +142,47 @@ def make_split(df, X, y, strategy, hold_params, row_id_col, random_state):
     return tr, ho, "random_holdout"
 
 tr_idx, ho_idx, actual_strategy = make_split(df, X, y, strategy, hold_params, row_id_col, random_state)
+
+# ── Log1p target detection ────────────────────────────────────────────────────
+# Priority: read recommend_log_transform from data_profile.json (set by data-profiler).
+# Fall back to local skewness computation when data_profile.json is absent.
+# Apply log1p when: (a) competition metric is RMSLE/RMSPE, (b) target is right-skewed (>0.5),
+# or (c) data_profile.json.target_distribution.recommend_log_transform == true.
+metric_str = spec.get("evaluation_metric", "").lower()
+try:
+    import json as _json
+    from pathlib import Path as _Path
+    dp = _json.load(open("outputs/logs/data_profile.json"))
+    target_dist = dp.get("target_distribution", {})
+    recommend_from_profile = target_dist.get("recommend_log_transform", None)
+    target_skewness = target_dist.get("skewness", None) or target_dist.get("target_skewness", None)
+    if recommend_from_profile is not None:
+        apply_log1p = bool(recommend_from_profile)
+        if target_skewness is None: target_skewness = 0.0
+    else:
+        raise FileNotFoundError
+except (FileNotFoundError, KeyError, Exception):
+    # data_profile.json absent or lacks the field — compute locally
+    try:
+        from scipy.stats import skew as _skew
+        target_skewness = float(_skew(y.dropna()))
+    except ImportError:
+        q25, q50, q75 = float(y.quantile(0.25)), float(y.quantile(0.50)), float(y.quantile(0.75))
+        target_skewness = (q25 + q75 - 2*q50) / max(q75 - q25, 1e-9)
+    apply_log1p = (target_skewness > 0.5) or ("rmsle" in metric_str) or ("rmspe" in metric_str)
+
 print(json.dumps({
     "n_train": int(len(tr_idx)),
     "n_holdout": int(len(ho_idx)),
     "actual_strategy": actual_strategy,
     "feature_cols": feature_cols,
+    "target_skewness": round(target_skewness, 3),
+    "apply_log1p": apply_log1p,
 }))
 EOF
 ```
+
+**Log1p rule**: when `apply_log1p == true`, transform `y_tr` and `y_ho` with `np.log1p(np.maximum(y, 0))` before fitting any model. After predicting, apply `np.expm1` and clip to 0 before scoring on the original scale. Use the original-scale predictions for submission.
 
 ---
 
@@ -240,11 +273,22 @@ X_tr, X_ho = X_full.iloc[tr_idx], X_full.iloc[ho_idx]
 y_tr, y_ho = y_full.iloc[tr_idx], y_full.iloc[ho_idx]
 
 def score_regression(y_true, y_pred, metric):
-    mae  = float(mean_absolute_error(y_true, y_pred))
-    rmse = float(np.sqrt(mean_squared_error(y_true, y_pred)))
-    r2   = float(r2_score(y_true, y_pred))
-    primary = mae if "mae" in metric else rmse if "rmse" in metric else mae
-    return {"mae": mae, "rmse": rmse, "r2": r2, "primary": primary}
+    y_true_arr = np.asarray(y_true, dtype=float)
+    y_pred_arr = np.maximum(np.asarray(y_pred, dtype=float), 0)
+    mae  = float(mean_absolute_error(y_true_arr, y_pred_arr))
+    rmse = float(np.sqrt(mean_squared_error(y_true_arr, y_pred_arr)))
+    r2   = float(r2_score(y_true_arr, y_pred_arr))
+    rmsle = float(np.sqrt(np.mean(
+        (np.log1p(y_pred_arr) - np.log1p(np.maximum(y_true_arr, 0))) ** 2
+    )))
+    # Primary: use competition metric if specified; RMSE default when unspecified.
+    # All four metrics are always recorded for reviewer inspection.
+    if "rmsle" in metric:   primary = rmsle
+    elif "r2" in metric:    primary = -r2        # negate: lower=better convention
+    elif "rmse" in metric:  primary = rmse
+    elif "mae" in metric:   primary = mae
+    else:                   primary = rmse        # default fallback
+    return {"mae": mae, "rmse": rmse, "rmsle": rmsle, "r2": r2, "primary": primary}
 
 def score_classification(y_true, y_pred, y_proba, metric, n_classes):
     acc = float(accuracy_score(y_true, y_pred))
@@ -392,23 +436,170 @@ adjusted_score     = val_score / (1 + max(0, -gap_penalty) + complexity_penalty)
 
 **Simplicity preference**: If the best model's adjusted score is within `SIMPLICITY_MARGIN` of a simpler model's adjusted score, prefer the simpler model. "Simpler" = lower complexity tier or fewer parameters.
 
----
-
-## Step 6 — Consider ensemble
-
-Evaluate a simple average / soft-vote ensemble of the top-2 models **only if**:
-- Their raw validation scores are within 5% of each other, AND
-- The ensemble improves the **adjusted robust score** (not just raw validation score).
-
-If the ensemble's adjusted robust score is better than the best single model's adjusted score: accept the ensemble. Otherwise: reject.
-
-Record: `ensemble_attempted`, `ensemble_accepted`, `ensemble_rejection_reason`.
+**Multi-metric tiebreaking** (when `evaluation_metric` is absent or "unknown"): compute a rank for each model on each of MAE, RMSE, and RMSLE. Average the three ranks. Select the model with the best (lowest) average rank. This avoids single-metric bias and picks the model that is consistently good. When a competition metric IS specified, use it exclusively as `primary` — do not average with other metrics.
 
 ---
 
-## Step 7 — Refit on full training data
+## Step 6 — NNLS convex blend
 
-Refit the selected model (or ensemble) on **all** available training rows (not just the training split).
+During Step 4, **additionally save holdout predictions** for every successfully-fitted candidate into `candidate_ho_preds: dict[str, np.ndarray]` and test-set predictions into `candidate_test_preds: dict[str, np.ndarray]`.
+
+After evaluating all candidates, compute the NNLS blend:
+
+```python
+# Requires: candidate_ho_preds, candidate_test_preds, y_ho (original-scale if apply_log1p)
+try:
+    from scipy.optimize import nnls as _nnls
+    model_names = list(candidate_ho_preds.keys())
+    P_ho   = np.column_stack([candidate_ho_preds[m] for m in model_names])
+    P_test = np.column_stack([candidate_test_preds[m] for m in model_names])
+
+    # Evaluate in original scale: expm1 if log1p was applied during training
+    y_ho_eval  = np.expm1(y_ho) if apply_log1p else np.asarray(y_ho, dtype=float)
+    P_ho_eval  = np.expm1(np.maximum(P_ho,   0)) if apply_log1p else P_ho
+    P_test_eval= np.expm1(np.maximum(P_test, 0)) if apply_log1p else P_test
+
+    w_raw, _ = _nnls(P_ho_eval, y_ho_eval)
+    w_sum = w_raw.sum()
+    w = (w_raw / w_sum) if w_sum > 1e-12 else np.eye(1, len(model_names))[0]
+
+    blend_ho_score = float(score_regression(y_ho_eval, P_ho_eval @ w, metric)["primary"])
+    best_single_score = min(val_scores[m] for m in model_names)
+
+    ensemble_accepted = blend_ho_score <= best_single_score * 1.001  # lower-is-better
+    blend_coef = dict(zip(model_names, [round(float(v), 6) for v in w]))
+    blend_test_pred = np.maximum(P_test_eval @ w, 0)
+    ensemble_rejection_reason = (
+        None if ensemble_accepted else
+        f"NNLS blend {blend_ho_score:.4f} did not improve best single {best_single_score:.4f}"
+    )
+
+except ImportError:
+    # scipy unavailable: inverse-error weighting as fallback
+    model_names = list(candidate_ho_preds.keys())
+    inv = {m: 1.0 / (val_scores[m] + 1e-9) for m in model_names}
+    total = sum(inv.values())
+    blend_coef = {m: round(v / total, 6) for m, v in inv.items()}
+    P_test = np.column_stack([candidate_test_preds[m] for m in model_names])
+    w = np.array([blend_coef[m] for m in model_names])
+    blend_test_pred = np.maximum(P_test @ w, 0)
+    ensemble_accepted = True
+    ensemble_rejection_reason = "scipy unavailable; used inverse-error weighting"
+```
+
+**Record**: `ensemble_attempted: true`, `ensemble_accepted`, `ensemble_rejection_reason`, `blend_coef`.
+
+Use `blend_test_pred` as the final submission predictions when `ensemble_accepted == true`.
+
+---
+
+## Step 7 — Refit on full training data + extract feature importances
+
+Refit the selected model (or each component of the blend) on **all** available training rows (not just the training split).
+
+After refitting, extract feature importances for the top 50 features:
+
+```python
+feature_importances = []
+
+def _extract_importances(model, model_name, weight=1.0):
+    cols = feature_cols  # from Step 2
+    if hasattr(model, "feature_importances_"):
+        imp = np.asarray(model.feature_importances_, dtype=float)
+    elif hasattr(model, "coef_"):
+        imp = np.abs(np.asarray(model.coef_).ravel())
+    else:
+        return []
+    pairs = sorted(zip(cols, imp * weight), key=lambda x: -x[1])[:50]
+    return [{"feature": c, "importance": round(float(v), 6), "source_model": model_name}
+            for c, v in pairs]
+
+if ensemble_accepted and blend_coef:
+    # Weighted-average importances across blend components
+    agg = {}
+    for mname, w in blend_coef.items():
+        if w < 0.01 or mname not in fitted_candidates: continue
+        for entry in _extract_importances(fitted_candidates[mname], mname, w):
+            f = entry["feature"]
+            agg[f] = agg.get(f, 0.0) + entry["importance"]
+    feature_importances = [{"feature": f, "importance": round(v, 6)}
+                           for f, v in sorted(agg.items(), key=lambda x: -x[1])[:50]]
+else:
+    feature_importances = _extract_importances(final_model, best_model_name)
+```
+
+---
+
+## Step 7.5 — Sub-target modeling (when `sub_target_candidates` is non-empty)
+
+Read `spec_parse.json → detected_structure.split_pattern.sub_target_candidates`. If this list is non-empty and the task is regression, try predicting each sub-target separately and summing the results.
+
+```python
+import json, numpy as np, pandas as pd
+from pathlib import Path
+
+spec      = json.load(open("outputs/logs/spec_parse.json"))
+sub_cands = spec.get("detected_structure", {}).get("split_pattern", {}).get("sub_target_candidates", [])
+task_type = spec.get("task_type", "")
+
+sub_target_result = {"attempted": False, "accepted": False}
+
+if sub_cands and "regression" in task_type:
+    train_file = spec.get("train_file") or spec.get("train_target_file")
+    pred_file  = spec.get("prediction_file") or spec.get("validation_covariates_file")
+    target_col = spec["target_column"]
+    row_id_col = spec.get("row_id_column")
+
+    train_df = pd.read_csv(train_file) if str(train_file).endswith(".csv") else pd.read_excel(train_file)
+    pred_df  = pd.read_csv(pred_file)  if str(pred_file).endswith(".csv")  else pd.read_excel(pred_file)
+
+    # feature_cols and X_full are already constructed in Step 2
+    # final_model (or blend) is already fitted in Step 7
+
+    sub_ho_preds   = {}  # holdout predictions per sub-target
+    sub_test_preds = {}  # test predictions per sub-target
+
+    for sub_info in sub_cands:
+        sub_col = sub_info["column"]
+        if sub_col not in train_df.columns: continue
+
+        y_sub_full = np.log1p(np.maximum(train_df[sub_col].values, 0))
+        y_sub_tr   = y_sub_full[tr_idx]
+        y_sub_ho   = y_sub_full[ho_idx]
+
+        # Reuse the same best single model type (not the ensemble)
+        from sklearn.base import clone
+        sub_model = clone(final_model)
+        sub_model.fit(X_full.iloc[tr_idx], y_sub_tr)
+
+        sub_ho_preds[sub_col]   = np.expm1(np.maximum(sub_model.predict(X_full.iloc[ho_idx]), 0))
+        X_pred = pred_df[feature_cols].copy()
+        for c in X_pred.select_dtypes(include=[np.number]).columns: X_pred[c] = X_pred[c].fillna(X_pred[c].median())
+        sub_test_preds[sub_col] = np.expm1(np.maximum(sub_model.predict(X_pred), 0))
+
+    if len(sub_ho_preds) == len(sub_cands):
+        combined_ho   = sum(sub_ho_preds.values())
+        combined_test = sum(sub_test_preds.values())
+
+        y_ho_orig = np.expm1(y_ho) if apply_log1p else y_ho  # original scale
+        combined_ho_score = float(score_regression(y_ho_orig, combined_ho, metric)["primary"])
+        direct_ho_score   = float(score_regression(y_ho_orig,
+            np.expm1(np.maximum(final_preds_ho, 0)) if apply_log1p else final_preds_ho, metric)["primary"])
+
+        sub_accepted = combined_ho_score < direct_ho_score
+        if sub_accepted:
+            final_test_predictions = combined_test  # overwrite submission predictions
+
+        sub_target_result = {
+            "attempted": True,
+            "sub_targets": [s["column"] for s in sub_cands],
+            "combined_holdout_score": round(combined_ho_score, 5),
+            "direct_holdout_score":   round(direct_ho_score, 5),
+            "accepted": sub_accepted,
+            "note": ("Sub-target sum used for submission"
+                     if sub_accepted else "Direct prediction retained (sub-target sum did not improve)")
+        }
+```
 
 ---
 
@@ -442,6 +633,7 @@ Write `outputs/logs/model_search.json`:
       "model_name": "string",
       "train_score": 0.0,
       "val_score": 0.0,
+      "val_metrics": {"mae": 0.0, "rmse": 0.0, "rmsle": 0.0, "r2": 0.0},
       "train_val_gap": 0.0,
       "relative_gap": 0.0,
       "adjusted_robust_score": 0.0,
@@ -451,13 +643,27 @@ Write `outputs/logs/model_search.json`:
       "failure_reason": null
     }
   ],
+  "apply_log1p": false,
+  "target_skewness": 0.0,
   "ensemble_attempted": false,
   "ensemble_accepted": false,
   "ensemble_rejection_reason": "string or null",
+  "blend_coef": {},
   "best_model_name": "string",
   "best_val_score": 0.0,
   "best_adjusted_robust_score": 0.0,
-  "used_baseline": false
+  "used_baseline": false,
+  "feature_importances": [
+    {"feature": "string", "importance": 0.0}
+  ],
+  "sub_target_modeling": {
+    "attempted": false,
+    "sub_targets": [],
+    "combined_holdout_score": null,
+    "direct_holdout_score": null,
+    "accepted": false,
+    "note": "string or null"
+  }
 }
 ```
 
@@ -468,12 +674,16 @@ Write `outputs/logs/final_model.json`:
   "run_id": "<run_id>",
   "model_name": "string",
   "val_score": 0.0,
+  "val_metrics": {"mae": 0.0, "rmse": 0.0, "rmsle": 0.0, "r2": 0.0},
   "adjusted_robust_score": 0.0,
   "train_score": 0.0,
   "train_val_gap": 0.0,
   "relative_gap": 0.0,
   "evaluation_metric": "string",
+  "apply_log1p": false,
+  "blend_coef": {},
   "refitted_on_full_data": true,
+  "sub_target_accepted": false,
   "feature_columns": [],
   "complexity": {},
   "selection_rationale": "string — why this model was selected over alternatives",
@@ -503,8 +713,15 @@ Write `outputs/logs/final_model.json`:
 
 - **Always run baselines before candidates.** No candidate may be evaluated before at least one baseline.
 - **Record train AND validation scores for every model.** No model entry is complete without both.
+- **Record all four metrics (MAE, RMSE, RMSLE, R²) for every regression model.** `primary` uses the competition metric when specified; RMSE when unspecified.
 - **Final selection uses adjusted robust score, not raw validation score alone.**
+- **Multi-metric tiebreaking**: when `evaluation_metric` is absent/unknown, rank each candidate on all three error metrics and select by average rank.
 - **Simplicity preference is applied after adjusted score comparison**, not instead of it.
+- **Log1p apply rule**: apply `np.log1p` to the target before training when `target_skewness > 0.5` OR `evaluation_metric contains "rmsle"`. Always reverse with `np.expm1` + clip-to-zero before scoring on original scale and before writing submission.
+- **NNLS blend**: always attempt after all candidates are evaluated. Save holdout and test predictions during Step 4 for every successful candidate.
+- **Sub-target modeling**: always check `spec_parse.json → detected_structure.split_pattern.sub_target_candidates` in Step 7.5. Skip gracefully when the list is empty.
+- **Sub-component models are NEVER standalone submission candidates.** When sub-targets (e.g. casual, registered) are predicted separately, each sub-model's CV score is measured against its own sub-target (not the actual target). This makes their scores incomparable to direct target models. The only valid way to compare a sub-target approach to direct models is to evaluate the **sum of sub-target predictions** against the actual target. Only models that predict the actual target column (direct regressors, the sub-target *sum*, and the NNLS blend of direct regressors) may appear in the final selection pool. Never add sub_registered, sub_casual, or any individual sub-component model as a standalone submission candidate.
+- **Feature importances**: always extract and write top-50 features after refitting. Skip gracefully when the final model has no `feature_importances_` or `coef_` attribute.
 - **Never hardcode model choices based on dataset-specific knowledge.**
 - **Never use validation targets or future values** during fitting or feature engineering.
 - **Never fit transformers on the full dataset before the split.**
@@ -517,9 +734,7 @@ Write `outputs/logs/final_model.json`:
 ## Closed-loop verdict (stage `prediction_sanity`)
 
 Honor the dataset's **official metric** (from `spec_parse.json`) for model
-selection — for an Award-B panel this is **block-averaged MAE** via blocked
-GroupKFold cross-validation; a `log1p`-target variant is added when the target is
-right-skewed. After selecting, emit a sanity
+selection. After selecting, emit a sanity
 verdict to `outputs/logs/{run_id}_llm_gate_prediction_sanity.json` in the shared
 schema (see `analysis-orchestrator` → "Closed-loop verdict protocol"). Emit
 `fail` on degenerate (near-constant) predictions, non-finite values, heavy

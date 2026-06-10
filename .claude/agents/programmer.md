@@ -60,6 +60,49 @@ The pipeline lives in `src/data_agent/`:
 
 ---
 
+## Round improvements (rounds 2 and 3)
+
+When the orchestrator prompt says "round {N}" with N > 1, **before running `python main.py`**:
+
+### Step R1 — Read the previous review
+```bash
+python - <<'PY'
+import glob, json
+reviews = sorted(glob.glob("outputs/logs/analysis_review_*.json"))
+if reviews:
+    r = json.load(open(reviews[-1]))
+    high = [s for s in r.get("suggestions", []) if s.get("expected_impact") == "high"]
+    skip = r.get("do_not_repeat", [])
+    print(json.dumps({"prev_round": r.get("round"), "high_priority": high, "do_not_repeat": skip}, indent=2))
+else:
+    print("{}")
+PY
+```
+
+### Step R2 — Implement high-priority suggestions in the pipeline
+
+For each suggestion with `expected_impact == "high"`, apply the change to the indicated module. Never hardcode dataset-specific column names — resolve them from `spec_parse.json` or `data_profile.json` at runtime.
+
+| `category` | Module to modify | Typical change |
+|---|---|---|
+| `feature_engineering` | `src/data_agent/features.py` | Add/extend `_build_time_features`, `_build_group_features`, or a new method |
+| `hyperparameter_tuning` | `src/data_agent/models.py` | Update `CANDIDATE_CONFIGS` tuning ranges or `n_estimators` / `num_leaves` |
+| `model_selection` | `src/data_agent/models.py` | Add a new model class to the candidate pool |
+| `ensemble` | `src/data_agent/models.py` | Update blending weights or add NNLS blend |
+| `target_transform` | `src/data_agent/features.py` | Add `log1p`/`expm1` target handling around model fitting |
+| `cv_validity` | `src/data_agent/models.py` | Fix the CV split to match the actual train/test day structure |
+
+**Constraints during implementation:**
+- Never use `df["specific_column_name"]` — always read column names from `spec_parse.json` or `data_profile.json`.
+- Do not touch `scripts/award_a_reference/` or test files.
+- If the suggestion references a specific column (e.g. "add lag of the target column"), resolve it dynamically:
+  ```python
+  import json; spec = json.load(open("outputs/logs/spec_parse.json")); target = spec["target_column"]
+  ```
+- Skip any suggestion that appears in `do_not_repeat` from a prior round.
+
+---
+
 ## Execution rules
 
 1. **Always read `DATA_DESCRIPTION.md` first** — the schema module does this automatically.

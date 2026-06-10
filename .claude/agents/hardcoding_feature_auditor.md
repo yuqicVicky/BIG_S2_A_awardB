@@ -386,6 +386,42 @@ Read `model_search.json` if available. For regression: if `train_score / baselin
 
 If `predict_only_cols` contains columns that appear in `feature_columns` (e.g., due to a merge producing extra columns), flag them — the model was never trained on these patterns.
 
+**Check 11 — CV-level target leakage from precomputed aggregate features**
+
+This check detects the most common source of misleadingly optimistic CV scores: aggregate features (target means, medians, rolling stats) computed from the **full training dataset before the CV loop**, rather than per-fold.
+
+Read `feature_manifest.json` (latest) and `model_search.json`. Look for feature names matching patterns:
+- `*_mean`, `*_median`, `*_std`, `*_agg*`, `*hagg*`, `*rolling*`, `*lag*`, `month_*`, `ym_*`, `week_*`
+
+For each such feature, determine (from the programming scripts under root `*.py` or `src/`) whether it was computed:
+- **Per-fold** (computed inside the CV loop using only the training portion of each fold) → SAFE
+- **Pre-computed on full data** (computed before the CV loop using all training rows) → CV-LEAKY
+
+A feature is CV-leaky when:
+1. It uses the target column (`y`) in its computation, AND
+2. It is computed using rows that will later appear in the validation fold
+
+CV-leaky features produce optimistic CV scores. The effect can be substantial (0.05–0.20 RMSLE units) when the feature captures month- or group-level target means.
+
+**Classification rules:**
+- Pre-computed **target** aggregate (e.g., `month_log_mean` using `log1p(count)`) → **HIGH severity**
+- Pre-computed **feature** aggregate (e.g., `month_mean_temp`) → LOW (not target-leaky)
+- Per-fold target aggregate → SAFE
+
+Report findings as:
+```json
+{
+  "check": "cv_level_leakage",
+  "feature": "<feature_name>",
+  "computation": "pre_fold | per_fold | unknown",
+  "uses_target": true | false,
+  "severity": "HIGH | LOW",
+  "detail": "..."
+}
+```
+
+Also compute the **calibration gap**: `abs(cv_rmsle - holdout_rmsle)` from `model_search.json`. If gap > 0.05 and any HIGH-severity CV-leaky features exist, report: "Calibration gap {gap:.3f} is consistent with CV-leaky precomputed features. CV scores are unreliable for model selection."
+
 ### Step 3 — Compute overall verdict
 
 | Verdict | Condition |

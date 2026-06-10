@@ -265,6 +265,11 @@ def _match_metric(t: str) -> str | None:
         return ACCURACY
     if "rmse" in t or "root mean squared" in t or "root-mean-squared" in t:
         return RMSE
+    # block_mae must be checked before the plain \bmae\b branch so that a
+    # description mentioning "block mae" / "block-averaged MAE" selects the
+    # period-averaged metric and not the plain row-level MAE.
+    if re.search(r"block[\s_-]?mae", t, re.IGNORECASE) or re.search(r"block[\s_-]?averaged[\s_-]?mae", t, re.IGNORECASE):
+        return BLOCK_MAE
     if re.search(r"\bmae\b", t) or "mean absolute error" in t:
         return MAE
     return None

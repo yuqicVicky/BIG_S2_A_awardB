@@ -89,10 +89,13 @@ Reads `spec_parse.json` and `data_profile.json`, produces a concrete modeling pl
 ### Step 4 — Plan Review Loop (efficiency-first, max 3 rounds)
 
 **Before dispatching any reviewer:** read `analysis_plan.json → critique.verdict`.
-- `PASS` or `WARN`: accept the plan immediately. Skip the entire review loop. The
-  planner already ran 12 self-critique checks; no external review is needed for
-  a clean or advisory-only plan.
-- `FAIL`: enter the review loop below.
+- `PASS`: accept the plan immediately. Skip the entire review loop.
+- `WARN`: dispatch the plan-reviewer **once** (round 1 only) with the abbreviated
+  prompt below. If the reviewer returns `approved == true` or zero FAIL findings,
+  accept the plan. Do NOT iterate further on WARN plans — only FAIL findings trigger
+  revision. This one-pass check catches structural errors the 12-point self-critique
+  missed (e.g. wrong CV strategy) without burning tokens on style issues.
+- `FAIL`: enter the full review loop below.
 
 ```
 FOR round = 1 TO 3:
@@ -140,24 +143,42 @@ FOR round = 1 TO 3:
       Do not re-implement items already in place.}"
 
   ── Phase B: Model search ──
-  Dispatch model-search-agent (prompt ≤120 words):
-    "Train candidate models on the prepared feature matrices.
-     Use blocked GroupKFold CV. Write model_search.json,
-     final_model.json, and submission.csv (keep-best).
-     This is round {round}."
 
-  ── Phase C: Feature audit (round 1 only) ──
-  IF round == 1:
-    Dispatch hardcoding-and-feature-auditor (mode "feature-audit")
-    → writes outputs/logs/feature_audit_review.json
-  ELSE:
-    Skip audit (already verified in round 1; re-running wastes tokens)
+  Check whether `scripts/run_modeling_agent.py` exists:
+
+  **If the script EXISTS** — dispatch these 4 agents in parallel (specialist mode):
+    1. `gbdt-specialist`: "Train GBDT candidate for round {round}. Beat the floor in outputs/logs/{run_id}_model_selection.json."
+    2. `trees-specialist`: "Train bagged-trees candidate for round {round}. Beat the floor."
+    3. `linear-encoding-specialist`: "Train linear candidate for round {round}. Beat the floor."
+    After all three complete, dispatch:
+    4. `ensemble-meta`: "Combine all candidates + floor. Write {run_id}_meta_choice.csv and ensemble_meta.json."
+
+  **If the script DOES NOT EXIST** — dispatch model-search-agent (general mode):
+    Dispatch model-search-agent (prompt ≤120 words):
+      "Train candidate models on the prepared feature matrices.
+       Use blocked GroupKFold CV. Detect competition metric from spec_parse.json;
+       use RMSLE if specified, multi-metric ranking if not.
+       Apply NNLS convex blend across model families.
+       Write model_search.json, final_model.json, and submission.csv (keep-best).
+       This is round {round}."
+
+  ── Phase C: Feature audit (every round) ──
+  Dispatch hardcoding-and-feature-auditor (mode "feature-audit")
+  → writes outputs/logs/feature_audit_review.json (overwritten each round)
+
+  The audit must run every round because new features are added in each round.
+  Skipping it in round 2+ was a bug: it allowed CV-level target leakage from
+  precomputed aggregate features to go undetected.
 
   ── Phase D: Review ──
   Dispatch results-reviewer (prompt ≤80 words):
     "Review round {round} results. Write compact JSON only.
      Keep suggestion text ≤50 words each."
   → writes outputs/logs/analysis_review_{round}.json
+
+  IMPORTANT: analysis_review_{round}.json must be written ONLY by results-reviewer.
+  If the programmer wrote a file with this name as a side-effect, the orchestrator
+  must dispatch results-reviewer to overwrite it before reading approved_for_final.
 
   ── Phase E: Decide whether to continue ──
   Read analysis_review_{round}.json:
@@ -184,7 +205,7 @@ beats the previous best. The model-search agent enforces this internally.
 **Outputs:**
 - `outputs/logs/model_search.json`, `outputs/logs/final_model.json`
 - `submission.csv` (repo root, keep-best)
-- `outputs/logs/feature_audit_review.json` (round 1 only)
+- `outputs/logs/feature_audit_review.json` (every round — overwritten)
 - `outputs/logs/analysis_review_{1,2,3}.json` (only rounds that run)
 
 ---

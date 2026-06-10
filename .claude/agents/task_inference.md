@@ -124,6 +124,91 @@ Record all detected structure in `detected_structure`.
 
 ---
 
+## Step 4b — Detect train/test split pattern and sub-target candidates
+
+Run this after Step 4. It refines `detected_structure` with the actual split pattern, which directly controls CV strategy design in the planner.
+
+```bash
+cd <project_root> && python - <<'EOF'
+import json, pandas as pd, numpy as np
+from pathlib import Path
+
+spec = json.load(open("outputs/logs/spec_parse.json")) if Path("outputs/logs/spec_parse.json").exists() else {}
+train_file = spec.get("train_file")
+pred_file  = spec.get("prediction_file")
+row_id_col = spec.get("row_id_column")
+target_col = spec.get("target_column")
+
+def load(p):
+    if not p or not Path(p).exists(): return None
+    try: return pd.read_csv(p) if str(p).endswith(".csv") else pd.read_excel(p)
+    except: return None
+
+train_df = load(train_file)
+pred_df  = load(pred_file)
+result = {"split_type": "unknown", "cv_recommendation": "group_kfold_by_time", "sub_target_candidates": []}
+
+if train_df is not None and pred_df is not None and row_id_col in (train_df.columns if train_df is not None else []):
+    try:
+        tr_dt = pd.to_datetime(train_df[row_id_col], errors="coerce")
+        te_dt = pd.to_datetime(pred_df[row_id_col], errors="coerce")
+        tr_ym = set((tr_dt.dt.year * 100 + tr_dt.dt.month).dropna().astype(int))
+        te_ym = set((te_dt.dt.year * 100 + te_dt.dt.month).dropna().astype(int))
+        tr_days = sorted(tr_dt.dt.day.dropna().unique().astype(int).tolist())
+        te_days = sorted(te_dt.dt.day.dropna().unique().astype(int).tolist())
+        ym_overlap = tr_ym & te_ym
+
+        if ym_overlap and tr_days and te_days and set(tr_days) != set(te_days):
+            result["split_type"] = "within_month_cross_day"
+            result["train_day_range"] = [min(tr_days), max(tr_days)]
+            result["test_day_range"]  = [min(te_days), max(te_days)]
+            result["shared_year_months"] = len(ym_overlap)
+            result["cv_recommendation"] = "hold_out_test_day_range_within_months"
+            result["cv_warning"] = (
+                f"CRITICAL: train covers days {min(tr_days)}-{max(tr_days)}, "
+                f"test covers days {min(te_days)}-{max(te_days)} of the SAME {len(ym_overlap)} months. "
+                "A simple last-N% chronological holdout does NOT simulate this split and will produce "
+                "misleadingly optimistic local scores. The planner MUST design CV to hold out "
+                "late-month rows while keeping early-month rows of the same month in train."
+            )
+            result["within_month_features_valid"] = True
+        elif not ym_overlap:
+            result["split_type"] = "chronological"
+            result["cv_recommendation"] = "time_series_split"
+    except Exception as e:
+        result["split_detection_error"] = str(e)
+
+    # Detect sub-target candidates: train-only numeric columns correlated with target
+    if target_col and train_df is not None and pred_df is not None:
+        train_only = [c for c in train_df.columns if c not in pred_df.columns
+                      and c != target_col and c != row_id_col]
+        sub_targets = []
+        if target_col in train_df.columns:
+            y = pd.to_numeric(train_df[target_col], errors="coerce")
+            for c in train_only:
+                x = pd.to_numeric(train_df[c], errors="coerce")
+                if x.notna().sum() > 10 and y.notna().sum() > 10:
+                    try:
+                        r = float(np.corrcoef(x.dropna(), y[x.notna()])[0, 1])
+                        if abs(r) > 0.5:
+                            sub_targets.append({"column": c, "corr_with_target": round(r, 3)})
+                    except: pass
+        result["sub_target_candidates"] = sub_targets
+        if sub_targets:
+            result["sub_target_note"] = (
+                "These train-only columns are highly correlated with the target and absent from test. "
+                "They are leakage as FEATURES but valid as independent prediction TARGETS. "
+                "Consider training separate models for each and summing predictions."
+            )
+
+print(json.dumps(result, indent=2))
+EOF
+```
+
+Add the output to `spec_parse.json` under `detected_structure.split_pattern`. If `split_type == "within_month_cross_day"`, add a `WARN` to the warnings list with the `cv_warning` text.
+
+---
+
 ## Step 5 — Validate required submission schema
 
 Confirm the sample submission file, if found, has:

@@ -144,6 +144,22 @@ For supervised: validate → eda → leakage_check → preprocess → baseline �
 - If time column detected, is a time-based split used? If not: **MAJOR**.
 - Is holdout data kept completely separate from training and validation? **CRITICAL** if plan implies contamination.
 
+### Critique Check 6b — CV strategy must reflect actual split pattern
+
+Read `spec_parse.json → detected_structure.split_pattern` before designing CV. This field is populated by `task-inference-agent` from the real data.
+
+| `split_pattern.split_type` | Required CV approach |
+|----------------------------|----------------------|
+| `within_month_cross_day` | Hold out test-day rows from held-out months. **Do NOT use last-N% chronological split** — it evaluates on the same day-range as training (e.g., days 1-19) instead of the real test day-range (e.g., days 20-31), producing misleadingly optimistic local scores. |
+| `chronological` | Standard time-series split or last-K-months holdout. |
+| `unknown` or absent | Default to group_kfold by the detected time column groups. |
+
+If `split_pattern.within_month_features_valid == true`: note in the plan that aggregate features computed over train-days of each month are valid for test rows of the same month (those train-days are always in the training set).
+
+If `split_pattern.sub_target_candidates` is non-empty: add a plan step to consider training separate sub-models for each candidate and summing predictions — this can significantly improve score when the target decomposes into behaviorally distinct components.
+
+Verdict: **MAJOR** if `split_type == "within_month_cross_day"` and plan uses a simple chronological split.
+
 ### Critique Check 7 — Hardcoding risks
 
 Does the plan reference any column name, file name, metric, or task assumption that is not derived from `spec_parse.json` or `data_profile.json`? **CRITICAL** if yes.

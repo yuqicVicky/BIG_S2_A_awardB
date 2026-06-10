@@ -150,6 +150,119 @@ class GroupMeanRegressor:
 _AGG_STATS = ("mean", "median", "std", "min", "max", "q25", "q75", "count")
 
 
+class GroupMedianImputer:
+    """Leakage-safe per-group median imputation for high-missingness numeric columns.
+
+    ``fit(X, y=None)`` computes, per group key, the median of each target
+    numeric column (fit on the training fold only). ``transform`` fills missing
+    values in those columns using the per-group median, falling back to the
+    global median for groups unseen during fit. Fit *inside* the Pipeline so
+    validation/test rows never influence the imputation statistics — no leakage.
+
+    Generic: the group column and columns to impute are selected dynamically
+    (highest-cardinality non-aggregate string column; columns with any NaN).
+    No column name is hardcoded.
+    """
+
+    def __init__(self, group_col: str | None = None, impute_cols: list[str] | None = None):
+        self.group_col = group_col          # discovered at fit-time when None
+        self.impute_cols = impute_cols      # discovered at fit-time when None
+        self._group_col_fit: str | None = None
+        self._impute_cols_fit: list[str] = []
+        self._medians: dict[str, dict] = {}  # col -> {group -> median}
+        self._global: dict[str, float] = {}  # col -> global median fallback
+
+    def get_params(self, deep: bool = True) -> dict:
+        return {"group_col": self.group_col, "impute_cols": self.impute_cols}
+
+    def set_params(self, **params):
+        for k, v in params.items():
+            setattr(self, k, v)
+        return self
+
+    def fit(self, X: pd.DataFrame, y=None) -> "GroupMedianImputer":
+        Xr = X.reset_index(drop=True)
+
+        # Resolve the group column: use the caller-supplied one if valid, else
+        # pick the string column with the most unique values among short-string
+        # (categorical) columns — excluding free-text (mean token length >= 3).
+        gc = self.group_col if (self.group_col and self.group_col in Xr.columns) else None
+        if gc is None:
+            best, best_n = None, 0
+            for col in Xr.columns:
+                if not (pd.api.types.is_object_dtype(Xr[col]) or pd.api.types.is_string_dtype(Xr[col])):
+                    continue
+                non_empty = Xr[col].dropna().astype(str)
+                non_empty = non_empty[non_empty.str.strip() != ""]
+                if len(non_empty) == 0:
+                    continue
+                # Skip free-text columns (long average token length)
+                mean_tokens = float(non_empty.str.split().map(len).mean())
+                if mean_tokens >= 3.0:
+                    continue
+                n = int(Xr[col].nunique(dropna=True))
+                if n > best_n:
+                    best, best_n = col, n
+            gc = best
+        self._group_col_fit = gc
+
+        # Resolve columns to impute: caller-supplied list if given, else all
+        # numeric columns (fit per-group medians for ALL numeric cols — even those
+        # fully present in train — so that transform can fill val/test rows whose
+        # missing values were not visible during training).
+        if self.impute_cols is not None:
+            cols = [c for c in self.impute_cols if c in Xr.columns]
+        else:
+            cols = [
+                c for c in Xr.columns
+                if c != gc and pd.api.types.is_numeric_dtype(Xr[c])
+                and not pd.api.types.is_bool_dtype(Xr[c])
+            ]
+        self._impute_cols_fit = cols
+
+        self._global = {}
+        self._medians = {}
+        for col in cols:
+            num = pd.to_numeric(Xr[col], errors="coerce")
+            self._global[col] = float(num.median()) if num.notna().any() else 0.0
+            if gc and gc in Xr.columns:
+                frame = pd.DataFrame({"g": Xr[gc].astype(str), "v": num})
+                grp_med = frame.groupby("g", dropna=False)["v"].median().to_dict()
+                # Replace NaN group medians with global fallback
+                self._medians[col] = {
+                    k: float(v) if (v is not None and pd.notna(v)) else self._global[col]
+                    for k, v in grp_med.items()
+                }
+            else:
+                self._medians[col] = {}
+        return self
+
+    def transform(self, X: pd.DataFrame) -> pd.DataFrame:
+        if not self._impute_cols_fit:
+            return X
+        out = X.copy()
+        gc = self._group_col_fit
+        for col in self._impute_cols_fit:
+            if col not in out.columns:
+                continue
+            missing_mask = out[col].isna()
+            if not missing_mask.any():
+                continue
+            if gc and gc in out.columns and self._medians.get(col):
+                group_keys = out[gc].astype(str)
+                fallback = self._global.get(col, 0.0)
+                fill_vals = group_keys.map(
+                    lambda k, d=self._medians[col], fb=fallback: d.get(k, fb)
+                )
+                out.loc[missing_mask, col] = fill_vals[missing_mask]
+            else:
+                out.loc[missing_mask, col] = self._global.get(col, 0.0)
+        return out
+
+    def fit_transform(self, X, y=None, **kwargs):
+        return self.fit(X, y).transform(X)
+
+
 def _agg_col_name(keys: list[str], stat: str) -> str:
     return f"tgt_{stat}__" + "_".join(keys)
 
@@ -219,18 +332,32 @@ class GroupTargetAggregator:
 
     def transform(self, X: pd.DataFrame) -> pd.DataFrame:
         out = X.copy()
+        out_idx = out.index
         for keys in (self.group_specs or []):
             keys = list(keys)
             tbl = self.tables_.get(tuple(keys))
             have_keys = all(k in out.columns for k in keys)
+            if tbl is None or not have_keys:
+                # Fill with global fallback — no merge needed
+                for stat in self.stats:
+                    col = _agg_col_name(keys, stat)
+                    fill = 0.0 if stat == "count" else self.global_.get(stat, 0.0)
+                    out[col] = fill
+                continue
+
+            # Single merge per group spec (not one per stat) — significantly
+            # faster on large DataFrames: 8 stat columns joined in one pass.
+            valid_stats = [s for s in self.stats if s in tbl.columns]
+            merged = out[keys].reset_index(drop=True).merge(
+                tbl[valid_stats], how="left", left_on=keys, right_index=True
+            )
             for stat in self.stats:
                 col = _agg_col_name(keys, stat)
                 fill = 0.0 if stat == "count" else self.global_.get(stat, 0.0)
-                if tbl is None or stat not in tbl.columns or not have_keys:
+                if stat in valid_stats:
+                    out[col] = merged[stat].fillna(fill).to_numpy()
+                else:
                     out[col] = fill
-                    continue
-                merged = out[keys].merge(tbl[[stat]], how="left", left_on=keys, right_index=True)
-                out[col] = merged[stat].fillna(fill).to_numpy()
         return out
 
     def fit_transform(self, X, y=None, **kwargs):
@@ -491,6 +618,15 @@ def _train_regression(bundle: FeatureBundle, block_column: str | None, random_st
             clip_min if clip_min is not None else -np.inf,
             clip_max if clip_max is not None else np.inf,
         )
+
+    # ── isotonic post-calibration (distribution shift guard) ─────────────────
+    # If the test predictions are substantially shifted relative to training
+    # (test median > 1.5x training median) while OOF predictions match training
+    # well, the model is extrapolating outside its training range. Fitting an
+    # isotonic regressor on (OOF predictions → observed y) and applying it to
+    # the test predictions corrects systematic level shifts without overfitting.
+    # Dataset-agnostic: the shift ratio is computed purely from prediction arrays.
+    predictions = _maybe_isotonic_calibrate(predictions, oof_preds, selected_name, stack, y)
 
     holdout_strategy = dict(cv_desc)
     selected_detail = _selected_detail(scores, selected_name)
@@ -1154,20 +1290,52 @@ def _build_candidates(bundle: FeatureBundle, train_df: pd.DataFrame, random_stat
 
     _gs = bundle.group_aggregate_keys
     _tx = bundle.text_columns
-    preprocessor = _make_preprocessor(
-        bundle.numeric_columns, bundle.categorical_columns, scale_numeric=False,
-        text_columns=_tx, group_specs=_gs,
-    )
-    scaled_preprocessor = _make_preprocessor(
-        bundle.numeric_columns, bundle.categorical_columns, scale_numeric=True,
-        text_columns=_tx, group_specs=_gs,
-    )
+
+    # ── group-median imputer (leakage-safe per-group imputation) ──────────────
+    # Fit per-group medians for ALL numeric feature columns using the highest-
+    # cardinality short-string (non-free-text) column as the grouping key.
+    # This fills missing values in both training and prediction frames using
+    # fold-level training statistics — no leakage. Especially useful when
+    # a numeric column is fully present in training but missing at predict time.
+    # Generic: no column name is hardcoded; detection is by dtype + mean token length.
+    _gmi_group_col: str | None = None
+    _text_col_set = set(bundle.text_columns or [])
+    # Identify the best grouping column: highest cardinality short-string column
+    # that is NOT a free-text column (text columns have high mean token length).
+    _best_gc_n = 0
+    for col in bundle.feature_columns:
+        if col not in train_df.columns or col in _text_col_set:
+            continue
+        if not (pd.api.types.is_object_dtype(train_df[col]) or pd.api.types.is_string_dtype(train_df[col])):
+            continue
+        n = int(train_df[col].nunique(dropna=True))
+        if n > _best_gc_n:
+            _gmi_group_col, _best_gc_n = col, n
+
+    def _make_preprocessor_fresh(scale: bool) -> object:
+        """Return a new preprocessor with freshly instantiated stateful transformers.
+
+        Each call creates independent mutable objects so concurrent CV folds
+        and repeated factory calls never share state. GroupTargetAggregator and
+        GroupMedianImputer both accumulate per-fold fit state, so they MUST be
+        freshly instantiated for every Pipeline construction — sharing them across
+        factory calls would cause fold N's fitted statistics to bleed into fold N+1.
+        """
+        gmi = GroupMedianImputer(group_col=_gmi_group_col) if _gmi_group_col is not None else None
+        return _make_preprocessor(
+            bundle.numeric_columns, bundle.categorical_columns, scale_numeric=scale,
+            text_columns=_tx, group_specs=_gs, group_median_imputer=gmi,
+        )
+
+    # Do NOT cache a single preprocessor and close over it in lambdas.
+    # Each lambda must call _make_preprocessor_fresh() at call time so that every
+    # Pipeline constructed during CV gets its own stateful transformer instances.
 
     candidates.append(
         (
             "hist_gradient_boosting",
             lambda: Pipeline([
-                ("preprocess", preprocessor),
+                ("preprocess", _make_preprocessor_fresh(scale=False)),
                 ("model", HistGradientBoostingRegressor(random_state=rs, max_iter=400, learning_rate=0.05)),
             ]),
         )
@@ -1176,7 +1344,7 @@ def _build_candidates(bundle: FeatureBundle, train_df: pd.DataFrame, random_stat
         (
             "extra_trees",
             lambda: Pipeline([
-                ("preprocess", preprocessor),
+                ("preprocess", _make_preprocessor_fresh(scale=False)),
                 ("model", ExtraTreesRegressor(n_estimators=400, random_state=rs, n_jobs=-1, min_samples_leaf=2, max_features="sqrt")),
             ]),
         )
@@ -1185,7 +1353,7 @@ def _build_candidates(bundle: FeatureBundle, train_df: pd.DataFrame, random_stat
         (
             "random_forest",
             lambda: Pipeline([
-                ("preprocess", preprocessor),
+                ("preprocess", _make_preprocessor_fresh(scale=False)),
                 ("model", RandomForestRegressor(n_estimators=300, random_state=rs, n_jobs=-1, min_samples_leaf=2)),
             ]),
         )
@@ -1193,14 +1361,14 @@ def _build_candidates(bundle: FeatureBundle, train_df: pd.DataFrame, random_stat
     candidates.append(
         (
             "ridge",
-            lambda: Pipeline([("preprocess", scaled_preprocessor), ("model", Ridge(alpha=1.0))]),
+            lambda: Pipeline([("preprocess", _make_preprocessor_fresh(scale=True)), ("model", Ridge(alpha=1.0))]),
         )
     )
     candidates.append(
         (
             "elastic_net",
             lambda: Pipeline([
-                ("preprocess", scaled_preprocessor),
+                ("preprocess", _make_preprocessor_fresh(scale=True)),
                 ("model", ElasticNet(alpha=0.001, l1_ratio=0.2, random_state=rs, max_iter=5000)),
             ]),
         )
@@ -1209,7 +1377,7 @@ def _build_candidates(bundle: FeatureBundle, train_df: pd.DataFrame, random_stat
         (
             "gradient_boosting",
             lambda: Pipeline([
-                ("preprocess", preprocessor),
+                ("preprocess", _make_preprocessor_fresh(scale=False)),
                 ("model", GradientBoostingRegressor(n_estimators=300, learning_rate=0.05, max_depth=4, random_state=rs, subsample=0.85)),
             ]),
         )
@@ -1233,7 +1401,7 @@ def _build_candidates(bundle: FeatureBundle, train_df: pd.DataFrame, random_stat
             (
                 "hgb_log",
                 lambda: LogTargetRegressor(Pipeline([
-                    ("preprocess", preprocessor),
+                    ("preprocess", _make_preprocessor_fresh(scale=False)),
                     ("model", HistGradientBoostingRegressor(random_state=rs, max_iter=400, learning_rate=0.05)),
                 ])),
             )
@@ -1243,7 +1411,7 @@ def _build_candidates(bundle: FeatureBundle, train_df: pd.DataFrame, random_stat
             (
                 "hgb_sqrt",
                 lambda: SqrtTargetRegressor(Pipeline([
-                    ("preprocess", preprocessor),
+                    ("preprocess", _make_preprocessor_fresh(scale=False)),
                     ("model", HistGradientBoostingRegressor(random_state=rs, max_iter=400, learning_rate=0.05)),
                 ])),
             )
@@ -1262,7 +1430,7 @@ def _build_candidates(bundle: FeatureBundle, train_df: pd.DataFrame, random_stat
             (
                 "lightgbm",
                 lambda: Pipeline([
-                    ("preprocess", preprocessor),
+                    ("preprocess", _make_preprocessor_fresh(scale=False)),
                     ("model", lgb.LGBMRegressor(
                         n_estimators=800,
                         learning_rate=0.04,
@@ -1283,7 +1451,7 @@ def _build_candidates(bundle: FeatureBundle, train_df: pd.DataFrame, random_stat
             (
                 "lightgbm_strong",
                 lambda _sl=_strong_leaves: Pipeline([
-                    ("preprocess", preprocessor),
+                    ("preprocess", _make_preprocessor_fresh(scale=False)),
                     ("model", lgb.LGBMRegressor(
                         n_estimators=1200,
                         learning_rate=0.02,
@@ -1306,7 +1474,7 @@ def _build_candidates(bundle: FeatureBundle, train_df: pd.DataFrame, random_stat
                 (
                     "lightgbm_sqrt",
                     lambda: SqrtTargetRegressor(Pipeline([
-                        ("preprocess", preprocessor),
+                        ("preprocess", _make_preprocessor_fresh(scale=False)),
                         ("model", lgb.LGBMRegressor(
                             n_estimators=800,
                             learning_rate=0.04,
@@ -1328,7 +1496,7 @@ def _build_candidates(bundle: FeatureBundle, train_df: pd.DataFrame, random_stat
                 (
                     "lightgbm_log",
                     lambda: LogTargetRegressor(Pipeline([
-                        ("preprocess", preprocessor),
+                        ("preprocess", _make_preprocessor_fresh(scale=False)),
                         ("model", lgb.LGBMRegressor(
                             n_estimators=800,
                             learning_rate=0.04,
@@ -1355,7 +1523,7 @@ def _build_candidates(bundle: FeatureBundle, train_df: pd.DataFrame, random_stat
                 (
                     "xgboost",
                     lambda: Pipeline([
-                        ("preprocess", preprocessor),
+                        ("preprocess", _make_preprocessor_fresh(scale=False)),
                         ("model", xgb.XGBRegressor(
                             n_estimators=800,
                             learning_rate=0.04,
@@ -1382,7 +1550,7 @@ def _build_candidates(bundle: FeatureBundle, train_df: pd.DataFrame, random_stat
         candidates.append((
             "catboost",
             lambda: Pipeline([
-                ("preprocess", preprocessor),
+                ("preprocess", _make_preprocessor_fresh(scale=False)),
                 ("model", CatBoostRegressor(
                     iterations=1200, learning_rate=0.03, depth=6, l2_leaf_reg=3.0,
                     loss_function="MAE", random_seed=rs, thread_count=-1,
@@ -1394,7 +1562,7 @@ def _build_candidates(bundle: FeatureBundle, train_df: pd.DataFrame, random_stat
             candidates.append((
                 "catboost_log",
                 lambda: LogTargetRegressor(Pipeline([
-                    ("preprocess", preprocessor),
+                    ("preprocess", _make_preprocessor_fresh(scale=False)),
                     ("model", CatBoostRegressor(
                         iterations=1200, learning_rate=0.03, depth=6, l2_leaf_reg=3.0,
                         loss_function="RMSE", random_seed=rs, thread_count=-1,
@@ -1532,6 +1700,7 @@ def _make_preprocessor(
     scale_numeric: bool,
     text_columns: list[str] | None = None,
     group_specs=None,
+    group_median_imputer: "GroupMedianImputer | None" = None,
 ):
     """Build the feature preprocessor.
 
@@ -1539,6 +1708,11 @@ def _make_preprocessor(
     infrequent grouping) + free-text (TF-IDF→SVD). When ``group_specs`` is given,
     a :class:`GroupTargetAggregator` is prepended so per-group target statistics
     become numeric features — fit per CV fold, hence leakage-safe.
+
+    When ``group_median_imputer`` is given it is placed at the head of the pipeline
+    (before ``GroupTargetAggregator``) so that per-group medians are computed on
+    the training fold only and then used to fill missing values in the same fold
+    before the aggregate statistics are computed — fully leakage-safe.
     """
     text_columns = text_columns or []
     group_specs = group_specs or []
@@ -1565,12 +1739,18 @@ def _make_preprocessor(
         transformers.append((f"text{i}", _text_pipeline(), col))
 
     column_transform = ColumnTransformer(transformers=transformers, remainder="drop")
+
+    # Build the head steps: group_median_imputer (optional) → group_agg (optional) → columns
+    head_steps: list[tuple] = []
+    if group_median_imputer is not None:
+        head_steps.append(("group_median_impute", group_median_imputer))
     if group_specs:
-        return Pipeline([
-            ("group_agg", GroupTargetAggregator(group_specs)),
-            ("columns", column_transform),
-        ])
-    return column_transform
+        head_steps.append(("group_agg", GroupTargetAggregator(group_specs)))
+    head_steps.append(("columns", column_transform))
+
+    if len(head_steps) == 1:
+        return column_transform
+    return Pipeline(head_steps)
 
 
 def _one_hot_encoder() -> OneHotEncoder:
@@ -1601,6 +1781,68 @@ def _sanitize_predictions(pred: np.ndarray, y_train: pd.Series) -> np.ndarray:
     finite_mean = float(pd.to_numeric(y_train, errors="coerce").mean())
     pred = np.where(np.isfinite(pred), pred, finite_mean)
     return pred
+
+
+def _maybe_isotonic_calibrate(
+    predictions: np.ndarray,
+    oof_preds: dict,
+    selected_name: str,
+    stack,
+    y: pd.Series,
+) -> np.ndarray:
+    """Apply isotonic regression post-calibration when test predictions are
+    substantially shifted above the training distribution.
+
+    Triggered when test_median / train_median > 1.5.  Fits an isotonic
+    regressor on (OOF predictions → y_train), then applies it to the test
+    predictions to correct systematic level shifts caused by extrapolation.
+    Only applied when enough OOF coverage is available (>= 50 rows).
+
+    Dataset-agnostic: no column names are used.
+    """
+    if not SKLEARN_AVAILABLE:
+        return predictions
+
+    try:
+        from sklearn.isotonic import IsotonicRegression
+    except Exception:
+        return predictions
+
+    try:
+        train_median = float(np.median(pd.to_numeric(y, errors="coerce").dropna()))
+        test_median = float(np.median(predictions[np.isfinite(predictions)]))
+        if train_median <= 0 or test_median <= 0:
+            return predictions
+        ratio = test_median / train_median
+        if ratio <= 1.5:
+            return predictions  # no significant shift — skip calibration
+
+        # Collect OOF predictions for the selected model
+        sel_oof = oof_preds.get(selected_name)
+        if sel_oof is None and stack is not None and selected_name == stack.get("name"):
+            sel_oof = stack.get("oof")
+        if sel_oof is None:
+            return predictions
+
+        mask = np.isfinite(sel_oof) & np.isfinite(np.asarray(y, dtype=float))
+        if int(mask.sum()) < 50:
+            return predictions  # not enough coverage for reliable calibration
+
+        oof_fit = sel_oof[mask]
+        y_fit = np.asarray(y, dtype=float)[mask]
+
+        iso = IsotonicRegression(out_of_bounds="clip")
+        iso.fit(oof_fit, y_fit)
+
+        calibrated = iso.predict(predictions)
+        calibrated = np.asarray(calibrated, dtype=float)
+        # Sanity: calibrated median should not deviate more than 50% from training
+        cal_median = float(np.median(calibrated[np.isfinite(calibrated)]))
+        if cal_median > 0 and abs(cal_median / train_median - 1.0) < 0.50:
+            return calibrated
+        return predictions
+    except Exception:
+        return predictions
 
 
 def _compute_residual_analysis(y_true: np.ndarray, y_pred: np.ndarray) -> dict:
