@@ -13,6 +13,9 @@ build/
 # Jupyter
 .ipynb_checkpoints/
 
+# Test cache
+.pytest_cache/
+
 # Environment
 .env
 .env.*

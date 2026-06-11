@@ -1,7 +1,7 @@
 ---
 name: analysis-planner
 description: Use this agent to create a structured analysis plan from the spec and data profile, then self-critique it for leakage, schema, validation, hardcoding, and runtime risks. Writes outputs/logs/analysis_plan.json.
-tools: Read, Grep
+tools: Read, Write, Grep
 model: claude-sonnet-4-6
 ---
 

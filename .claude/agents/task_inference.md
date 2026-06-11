@@ -1,7 +1,7 @@
 ---
 name: task-inference-agent
 description: Use this agent to infer the analysis task type, target variable, target type, and recommended metrics from the user request and data profile. Parses DATA_DESCRIPTION.md as primary authority and writes outputs/logs/spec_parse.json.
-tools: Read, Grep
+tools: Read, Write, Grep
 model: claude-sonnet-4-6
 ---
 
@@ -282,7 +282,7 @@ After writing the file, print a one-paragraph summary (≤ 100 words) covering: 
 
 In addition to `spec_parse.json`, emit a consistency verdict to
 `outputs/logs/{run_id}_llm_gate_task_inference.json` in the shared schema (see
-`analysis-orchestrator` → "Closed-loop verdict protocol"). Emit `fail` when the
+the verdict schema in `src/data_agent/gates.py`). Emit `fail` when the
 resolved `task_type` contradicts the data, the description's official metric, or
 the sample-submission value format — e.g. a regression metric
 (`rmse`/`rmsle`/`mae`/`r2`) paired with a classification `task_type`, or a

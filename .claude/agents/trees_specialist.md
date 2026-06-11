@@ -16,10 +16,15 @@ to blend. You produce a *candidate* only; you never touch the repo-root `submiss
 - `data/DATA_DESCRIPTION.md` (read first).
 - `outputs/logs/{run_id}_model_selection.json` — the floor's CV score (the bar to beat).
 
-## Action (reuse the tested engine; never hardcode a column)
+## Action (reuse the tested engine; never hardcode a column or a budget)
 ```bash
-AWARDB_SEEDS=3 python scripts/run_modeling_agent.py --approach trees --run-id "$RUN_ID"
+python scripts/run_modeling_agent.py --approach trees --run-id "$RUN_ID"
 ```
+The **orchestrator / `modeling-watchdog`** derives and exports the budget at launch
+(`AWARDB_TIME_BUDGET_SEC`, `AWARDB_SEEDS`, `AWARDB_TUNE_ITER`, `AWARDB_MAX_SPLITS`) plus
+`AWARDB_HEARTBEAT_PATH`. Do **not** set any fixed seed/iteration counts yourself — bagged
+trees are the slowest family, so the watchdog will hold this run to its time slice.
+
 Runs GroupKFold CV over the bagged-trees family on the same leakage-safe group/target
 aggregate + text features, applies any monotonic constraint, writes
 `outputs/logs/{run_id}_cand_trees.csv` and `outputs/logs/{run_id}_agent_trees.json`

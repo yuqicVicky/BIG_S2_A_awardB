@@ -19,6 +19,7 @@ from typing import Any
 import numpy as np
 import pandas as pd
 
+from .leakage_guard import scan_precomputed_target_leakage
 from .schema import SchemaSpec, read_table
 from .task import TaskSpec, resolve_task_spec
 
@@ -39,6 +40,9 @@ class FeatureBundle:
     # Leakage-safe group/target-aggregate keys: each entry is a list of column
     # names to group the training target by (overlapping categoricals only).
     group_aggregate_keys: list = field(default_factory=list)
+    # Code-enforced leakage invariant over the *static* feature set (filled by the
+    # guard in ``build_feature_bundle``): {status, severity, findings, ...}.
+    leakage_guard: dict = field(default_factory=dict)
 
 
 LEAKAGE_NAME_TOKENS = [
@@ -206,6 +210,19 @@ def build_feature_bundle(spec: SchemaSpec, force_task_type: str | None = None) -
         },
     }
 
+    # ── code-enforced leakage invariant over the static feature set ───────────
+    # Every model trains through this one chokepoint, so any feature the agent
+    # added is checked here. Safe per-fold aggregates live inside the model
+    # Pipeline (not in feature_columns) and so are not seen by this scan.
+    leakage_guard = scan_precomputed_target_leakage(
+        train_aligned,
+        feature_columns,
+        spec.target_column,
+        group_aggregate_keys=group_aggregate_keys,
+        name_tokens=LEAKAGE_NAME_TOKENS,
+    )
+    profile["leakage_guard"] = leakage_guard
+
     return FeatureBundle(
         train_df=train_aligned,
         predict_df=predict_aligned,
@@ -218,6 +235,7 @@ def build_feature_bundle(spec: SchemaSpec, force_task_type: str | None = None) -
         profile=profile,
         text_columns=text_columns,
         group_aggregate_keys=group_aggregate_keys,
+        leakage_guard=leakage_guard,
     )
 
 

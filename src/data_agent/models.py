@@ -19,6 +19,7 @@ from typing import Any, Callable
 import numpy as np
 import pandas as pd
 
+from .heartbeat import emit
 from .task import (
     ACCURACY,
     BINARY,
@@ -557,19 +558,45 @@ def _train_regression(bundle: FeatureBundle, block_column: str | None, random_st
     cand_score: dict[str, float] = {}
 
     # ── out-of-fold cross-validation for every candidate ──────────────────────
+    # The wall-clock budget is enforced *between folds* (not only between
+    # candidates) and a per-candidate ceiling stops any single runaway model
+    # (e.g. a near-OLS ElasticNet on a wide one-hot matrix) from consuming the
+    # whole slice. A candidate that cannot finish all folds in time is abandoned
+    # rather than registered with a gap-filled OOF that would corrupt selection.
     for name, factory in candidates:
         if budget.exhausted():
             scores.append({"name": name, "status": "skipped", "error": "time_budget_exhausted"})
             continue
+        # Per-candidate ceiling: at most half the total slice (floored at 90s) so
+        # one model can never eat the budget, while legitimate slow models
+        # (e.g. RandomForest) still complete. With the per-fold deadline check
+        # below this bounds any overrun to ~one fold.
+        cand_cap = max(90.0, 0.5 * budget.total)
+        cand_start = time.monotonic()
         try:
             oof = np.full(len(X), np.nan, dtype=float)
             fold_scores = []
+            aborted = False
             for tr_idx, va_idx in folds:
+                if budget.exhausted() or (time.monotonic() - cand_start) > cand_cap:
+                    aborted = True
+                    break
                 est = factory()
                 est.fit(X.iloc[tr_idx], y.iloc[tr_idx])
                 p = _sanitize_predictions(est.predict(X.iloc[va_idx]), y)
                 oof[va_idx] = p
                 fold_scores.append(_score_idx(va_idx, y.iloc[va_idx], p))
+            if aborted:
+                # Do not register a partially-evaluated candidate: its OOF has
+                # holes and its score is not comparable to full-fold candidates.
+                scores.append({"name": name, "status": "skipped",
+                               "error": "candidate_time_cap",
+                               "detail": {"folds_done": int(len(fold_scores)),
+                                          "elapsed_sec": round(time.monotonic() - cand_start, 1)}})
+                emit("candidate_timeout", model=name,
+                     elapsed_sec=round(time.monotonic() - cand_start, 1),
+                     folds_done=int(len(fold_scores)))
+                continue
             mask = ~np.isnan(oof)
             overall = _score_idx(np.flatnonzero(mask), y[mask], oof[mask])
             mae = float(mean_absolute_error(y[mask], oof[mask]))
@@ -583,6 +610,8 @@ def _train_regression(bundle: FeatureBundle, block_column: str | None, random_st
             oof_preds[name] = oof
             factories[name] = factory
             cand_score[name] = overall
+            emit("candidate_done", model=name, partial_cv=overall,
+                 best_so_far=(max if greater else min)(cand_score.values()))
         except Exception as exc:
             scores.append({"name": name, "status": "failed", "error": str(exc)})
 
@@ -689,10 +718,15 @@ def _time_budget_seconds() -> float:
 
 class _TimeBudget:
     def __init__(self, seconds: float):
-        self.deadline = time.monotonic() + max(30.0, float(seconds))
+        self.total = max(30.0, float(seconds))
+        self.deadline = time.monotonic() + self.total
 
     def exhausted(self) -> bool:
         return time.monotonic() >= self.deadline
+
+    def remaining(self) -> float:
+        """Seconds left before the wall-clock deadline (never negative)."""
+        return max(0.0, self.deadline - time.monotonic())
 
 
 def _coarsen_datetime_blocks(series: pd.Series, n: int, k: int = 5):
@@ -727,11 +761,13 @@ def _coarsen_datetime_blocks(series: pd.Series, n: int, k: int = 5):
     return None, None
 
 
-def _resolve_cv_groups(train_df: pd.DataFrame, group_col: str | None, n: int, k: int = 5):
+def _resolve_cv_groups(train_df: pd.DataFrame, group_col: str | None, n: int, k: int | None = None):
     """Resolve the GroupKFold grouping series, guarding against a unique-per-row key
     (an hourly timestamp, a row id) that would silently collapse GroupKFold into
     ordinary KFold. A too-granular datetime key is coarsened to whole-period blocks.
     Returns ``(groups, reason)``; ``groups is None`` means shuffled KFold."""
+    if k is None:
+        k = _max_splits()
     if not group_col or group_col not in train_df.columns:
         return None, None
     s = train_df[group_col].reset_index(drop=True)
@@ -746,10 +782,12 @@ def _resolve_cv_groups(train_df: pd.DataFrame, group_col: str | None, n: int, k:
     return None, f"'{group_col}' too granular ({nun}/{n}); shuffled KFold"
 
 
-def _make_cv_folds(n: int, groups: pd.Series | None, random_state: int, max_splits: int = 5):
+def _make_cv_folds(n: int, groups: pd.Series | None, random_state: int, max_splits: int | None = None):
     """Return ``(folds, description)``. Group whole periods out (GroupKFold) when
     a grouping key is available so validation mirrors the disjoint hidden periods;
     otherwise shuffled KFold. Degrades to manual folds without sklearn."""
+    if max_splits is None:
+        max_splits = _max_splits()
     if SKLEARN_AVAILABLE and groups is not None:
         ng = int(groups.nunique())
         # Only group when the key yields whole held-out blocks. A near-unique-per-row
@@ -791,6 +829,15 @@ def _seed_count() -> int:
         return 3
 
 
+def _max_splits() -> int:
+    """Inner CV fold count. A real knob (default 5 → unchanged behaviour) so the
+    orchestrator/watchdog can derive a leaner fold count under time pressure."""
+    try:
+        return max(2, int(os.environ.get("AWARDB_MAX_SPLITS", "5")))
+    except Exception:
+        return 5
+
+
 def _final_predict(factory: Callable, X, y, X_pred, random_state: int, n_seeds: int | None = None) -> np.ndarray:
     """Fit on full training data and predict, averaging over several seeds for
     estimators that expose a ``random_state`` (variance reduction). Deterministic
@@ -811,6 +858,7 @@ def _final_predict(factory: Callable, X, y, X_pred, random_state: int, n_seeds: 
             pass
         est.fit(X, y)
         preds.append(np.asarray(est.predict(X_pred), dtype=float))
+        emit("seed_done", fold=s)
     return np.mean(preds, axis=0)
 
 
@@ -949,10 +997,16 @@ def _tune_top_models(factories, cand_score, oof_preds, scores, X, y, folds,
             cfg = {f"model__{k}": _py(rng.choice(np.array(v, dtype=object))) for k, v in space.items()}
             try:
                 oof = np.full(len(X), np.nan, dtype=float)
+                budget_hit = False
                 for tr_idx, va_idx in folds:
+                    if budget.exhausted():
+                        budget_hit = True
+                        break
                     est = factory().set_params(**cfg)
                     est.fit(X.iloc[tr_idx], y.iloc[tr_idx])
                     oof[va_idx] = _sanitize_predictions(est.predict(X.iloc[va_idx]), y)
+                if budget_hit:
+                    break  # out of time mid-draw: stop tuning this family
                 m = ~np.isnan(oof)
                 sc = score_idx(np.flatnonzero(m), y[m], oof[m])
             except Exception:
@@ -970,6 +1024,7 @@ def _tune_top_models(factories, cand_score, oof_preds, scores, X, y, folds,
             scores.append({"name": tname, "status": "ok", "score": best_score,
                            "detail": {metric_name: best_score, "tuned_from": base_name,
                                       "params": {k.replace("model__", ""): v for k, v in best_cfg.items()}}})
+            emit("tune_done", model=tname, partial_cv=best_score)
 
 
 # ── classification path ─────────────────────────────────────────────────────────
@@ -1369,7 +1424,12 @@ def _build_candidates(bundle: FeatureBundle, train_df: pd.DataFrame, random_stat
             "elastic_net",
             lambda: Pipeline([
                 ("preprocess", _make_preprocessor_fresh(scale=True)),
-                ("model", ElasticNet(alpha=0.001, l1_ratio=0.2, random_state=rs, max_iter=5000)),
+                # max_iter/tol bounded + randomised coordinate selection so a
+                # single fit on a wide one-hot matrix converges fast and can
+                # never stall the slice (the previous alpha=0.001/max_iter=5000
+                # near-OLS fit could run for many minutes per fold).
+                ("model", ElasticNet(alpha=0.001, l1_ratio=0.2, random_state=rs,
+                                     max_iter=2000, tol=1e-3, selection="random")),
             ]),
         )
     )
@@ -1694,6 +1754,52 @@ def _text_pipeline():
     ])
 
 
+def _load_custom_head_transformers() -> list[tuple]:
+    """Agent-authored, per-run feature transformers registered into the consumed
+    model Pipeline. **No-op by default** — returns ``[]`` unless an optional
+    ``custom_features`` module exposing ``build_head_transformers()`` is present.
+
+    This is the seam for *agent-directed, code-enforced* feature engineering: the
+    agent decides features per dataset and registers them here as transformers in
+    the one pipeline the model trains on — never a standalone matrix. Each item is
+    ``(step_name, transformer, [output_numeric_column_names])``:
+
+    * the transformer is sklearn-compatible: ``fit(X: DataFrame, y) -> self`` and
+      ``transform(X: DataFrame) -> DataFrame`` (it appends its columns and returns
+      the whole frame, like :class:`GroupTargetAggregator`);
+    * the output names are registered into the numeric feature set so the
+      ``ColumnTransformer`` keeps them;
+    * the factory must return **fresh** instances on each call — this runs once per
+      fold via ``_make_preprocessor`` so per-fold fit state never leaks across folds.
+
+    Because these run as head steps *inside* the per-fold Pipeline, any target use
+    is fit on the training fold only (leakage-safe), and the leakage guard still
+    checks their static output. Nothing here is hardcoded: the module is optional
+    and resolves its own columns from the data.
+    """
+    try:
+        from . import custom_features  # type: ignore  # optional, absent by default
+    except Exception:
+        return []
+    factory = getattr(custom_features, "build_head_transformers", None)
+    if not callable(factory):
+        return []
+    try:
+        items = list(factory())
+    except Exception:
+        return []
+    cleaned: list[tuple] = []
+    for it in items:
+        try:
+            name, transformer, out_names = it
+        except Exception:
+            continue
+        if transformer is None:
+            continue
+        cleaned.append((str(name), transformer, [str(c) for c in (out_names or [])]))
+    return cleaned
+
+
 def _make_preprocessor(
     numeric_columns: list[str],
     categorical_columns: list[str],
@@ -1718,6 +1824,15 @@ def _make_preprocessor(
     group_specs = group_specs or []
     agg_names = _aggregate_feature_names(group_specs)
     numeric_all = list(numeric_columns) + agg_names
+
+    # Agent-authored per-run transformers (no-op unless a custom_features module is
+    # present). Their declared output columns join the numeric feature set so the
+    # ColumnTransformer keeps them; the transformers themselves are prepended below.
+    custom_head = _load_custom_head_transformers()
+    for _cname, _ct, _couts in custom_head:
+        for c in _couts:
+            if c not in numeric_all:
+                numeric_all.append(c)
 
     numeric_steps = [("imputer", SimpleImputer(strategy="median"))]
     if scale_numeric:
@@ -1746,6 +1861,9 @@ def _make_preprocessor(
         head_steps.append(("group_median_impute", group_median_imputer))
     if group_specs:
         head_steps.append(("group_agg", GroupTargetAggregator(group_specs)))
+    # Agent-authored transformers run inside the per-fold Pipeline → leakage-safe.
+    for _cname, _ct, _couts in custom_head:
+        head_steps.append((f"custom_{_cname}", _ct))
     head_steps.append(("columns", column_transform))
 
     if len(head_steps) == 1:

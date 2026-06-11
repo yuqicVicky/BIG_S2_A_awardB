@@ -19,10 +19,14 @@ touch the repo-root `submission.csv`.
 - `outputs/logs/{run_id}_model_selection.json` — the floor's CV score (the bar to beat).
 - `outputs/logs/{run_id}_profile.json` — group-aggregate keys, text columns, metric.
 
-## Action (reuse the tested engine; never hardcode a column)
+## Action (reuse the tested engine; never hardcode a column or a budget)
 ```bash
-AWARDB_SEEDS=1 python scripts/run_modeling_agent.py --approach linear --run-id "$RUN_ID"
+python scripts/run_modeling_agent.py --approach linear --run-id "$RUN_ID"
 ```
+The **orchestrator / `modeling-watchdog`** derives and exports the budget at launch
+(`AWARDB_TIME_BUDGET_SEC`, `AWARDB_SEEDS`, `AWARDB_TUNE_ITER`, `AWARDB_MAX_SPLITS`) plus
+`AWARDB_HEARTBEAT_PATH`. Do **not** set any fixed seed/iteration counts yourself.
+
 This runs GroupKFold CV over the linear family on the same leakage-safe encodings,
 applies any monotonic constraint, writes `outputs/logs/{run_id}_cand_linear.csv`, and
 the candidate JSON `outputs/logs/{run_id}_agent_linear.json` (shared schema: `role`,

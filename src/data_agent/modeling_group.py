@@ -22,7 +22,12 @@ Knobs (all optional):
 |---|---|---|
 | ``AWARDB_MODELING_GROUP`` | ``1`` | set ``0``/``false`` to disable Step 2 |
 | ``AWARDB_TIME_BUDGET_SEC`` | ``5400`` | shared wall-clock cap (floor + group) |
-| ``AWARDB_GROUP_TUNE_ITER`` | ``max(tune, 48)`` | per-specialist tuning iterations |
+| ``AWARDB_GROUP_TUNE_ITER`` | ``AWARDB_TUNE_ITER`` | per-specialist tuning iterations (honoured as-is — never silently raised) |
+| ``AWARDB_SEEDS`` | ``3`` | seed-averaging count for the final fit |
+| ``AWARDB_MAX_SPLITS`` | ``5`` | inner CV fold count |
+
+The orchestrator/``modeling-watchdog`` derive these from the wall-clock that remains
+and pass them at launch; the engine honours them exactly.
 """
 
 from __future__ import annotations
@@ -63,8 +68,10 @@ def _global_budget_seconds() -> float:
 
 
 def _group_tune_iter() -> int:
-    """Specialists tune their single family harder than the floor (which splits a
-    smaller budget across the top-2 families). Respects a globally-disabled tuner."""
+    """Per-specialist tuning iterations. The orchestrator/watchdog owns the time
+    budget, so an explicit ``AWARDB_GROUP_TUNE_ITER`` (or ``AWARDB_TUNE_ITER``) is
+    honoured **exactly** — never silently raised to a floor. Respects a
+    globally-disabled tuner (``AWARDB_TUNE_ITER<=0``)."""
     try:
         base = int(os.environ.get("AWARDB_TUNE_ITER", "24"))
     except (TypeError, ValueError):
@@ -72,9 +79,9 @@ def _group_tune_iter() -> int:
     if base <= 0:  # tuning disabled globally → honour that
         return 0
     try:
-        return int(os.environ.get("AWARDB_GROUP_TUNE_ITER", str(max(base, 24))))
+        return max(0, int(os.environ.get("AWARDB_GROUP_TUNE_ITER", str(base))))
     except (TypeError, ValueError):
-        return max(base, 24)
+        return base
 
 
 @contextlib.contextmanager

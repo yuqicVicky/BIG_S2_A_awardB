@@ -17,11 +17,17 @@ candidate submission); you never touch the repo-root `submission.csv` — the
 - `outputs/logs/{run_id}_model_selection.json` — the deterministic floor's CV score: the **bar you must try to beat**.
 - `outputs/logs/{run_id}_profile.json` — feature bundle profile (group-aggregate keys, text columns, metric).
 
-## Action (reuse the tested engine — never reimplement modeling or hardcode a column)
+## Action (reuse the tested engine — never reimplement modeling, hardcode a column, or hardcode a budget)
 ```bash
-AWARDB_TUNE_ITER=40 AWARDB_SEEDS=5 python scripts/run_modeling_agent.py \
-    --approach gbdt --run-id "$RUN_ID"
+python scripts/run_modeling_agent.py --approach gbdt --run-id "$RUN_ID"
 ```
+The **orchestrator / `modeling-watchdog`** derives the time/seed/tuning budget from the
+wall-clock that actually remains and exports it at launch (`AWARDB_TIME_BUDGET_SEC`,
+`AWARDB_SEEDS`, `AWARDB_TUNE_ITER`, `AWARDB_MAX_SPLITS`) together with
+`AWARDB_HEARTBEAT_PATH`. Do **not** set these yourself — no fixed iteration or seed
+counts. The engine honours whatever the launcher passed (and its own safe defaults if
+nothing was passed) and streams progress to the heartbeat the watchdog reads.
+
 This builds the bundle from the schema, runs the GroupKFold cross-validation over the
 GBDT family with randomized tuning (and the leakage-safe group/target-aggregate +
 TF-IDF features), applies any monotonic constraint, writes the candidate submission to

@@ -13,6 +13,8 @@ import pandas as pd
 
 from .audit import audit_summary_text, extract_dynamic_terms, run_audit, write_audit_log
 from .features import build_feature_bundle, _read_description
+from .gates import write_verdict
+from .leakage_guard import guard_to_verdict
 from .models import train_and_predict
 from .reporting import write_report
 from .schema import discover_schema, write_schema_json
@@ -48,6 +50,12 @@ def run_analysis(repo_root: Path) -> dict[str, Any]:
     print(f"Training rows: {bundle.profile['train_rows']}")
     print(f"Prediction rows: {bundle.profile['prediction_rows']}")
     print(f"Features: {len(bundle.feature_columns)}")
+
+    # Code-enforced leakage floor over the static feature set (deterministic; an
+    # LLM auditor verdict still overrides via {run_id}_llm_gate_leakage.json).
+    write_verdict(guard_to_verdict(bundle.leakage_guard), logs_dir, run_id)
+    if bundle.leakage_guard.get("status") == "fail":
+        print(f"[leakage-guard] FAIL: {bundle.leakage_guard.get('summary')}")
 
     print(f"Task type: {bundle.task.task_type} | metric: {bundle.task.metric} | output: {bundle.task.output_kind}")
 

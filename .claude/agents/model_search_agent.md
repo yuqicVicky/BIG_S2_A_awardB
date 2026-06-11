@@ -736,7 +736,7 @@ Write `outputs/logs/final_model.json`:
 Honor the dataset's **official metric** (from `spec_parse.json`) for model
 selection. After selecting, emit a sanity
 verdict to `outputs/logs/{run_id}_llm_gate_prediction_sanity.json` in the shared
-schema (see `analysis-orchestrator` → "Closed-loop verdict protocol"). Emit
+schema (see the verdict schema in `src/data_agent/gates.py`). Emit
 `fail` on degenerate (near-constant) predictions, non-finite values, heavy
 clipping, a large train↔prediction distribution shift, a suspiciously perfect
 holdout (leakage/overfit), or a candidate that fails to beat its baseline. Use
