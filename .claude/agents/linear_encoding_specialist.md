@@ -1,6 +1,6 @@
 ---
 name: linear-encoding-specialist
-description: Parallel modeling-group specialist for regularized linear models (Ridge / ElasticNet) driven by leakage-safe group/target-aggregate encodings and TF-IDF text features. Trains a focused linear candidate with cross-validation and reports its cross-validated block-MAE and a candidate submission. One member of the division-of-labor modeling group dispatched in parallel by the orchestrator.
+description: Parallel modeling-group specialist for regularized linear models (Ridge / ElasticNet) driven by leakage-safe group/target-aggregate encodings and TF-IDF text features. Trains a focused linear candidate with cross-validation and reports its cross-validated block-MAE and a candidate submission. One member of the division-of-labor modeling group dispatched in parallel by the CLAUDE.md workflow during Step 6.
 tools: Read, Write, Bash, Glob, Grep
 model: claude-sonnet-4-6
 ---
@@ -21,17 +21,21 @@ touch the repo-root `submission.csv`.
 
 ## Action (reuse the tested engine; never hardcode a column or a budget)
 ```bash
-python scripts/run_modeling_agent.py --approach linear --run-id "$RUN_ID"
+python scripts/run_modeling_agent.py --approach linear --run-id "$RUN_ID" \
+    --cv-folds "outputs/logs/${RUN_ID}_cv_folds.json" \
+    --feature-spec "outputs/logs/${RUN_ID}_feature_spec.json"
 ```
-The **orchestrator / `modeling-watchdog`** derives and exports the budget at launch
-(`AWARDB_TIME_BUDGET_SEC`, `AWARDB_SEEDS`, `AWARDB_TUNE_ITER`, `AWARDB_MAX_SPLITS`) plus
-`AWARDB_HEARTBEAT_PATH`. Do **not** set any fixed seed/iteration counts yourself.
+Do **not** hardcode seed/iteration counts. The launcher (or the optional
+`modeling-watchdog`) derives and exports the budget at launch (`AWARDB_TIME_BUDGET_SEC`,
+`AWARDB_SEEDS`, `AWARDB_TUNE_ITER`, `AWARDB_MAX_SPLITS`, `AWARDB_HEARTBEAT_PATH`);
+otherwise the engine uses its own safe defaults.
 
-This runs GroupKFold CV over the linear family on the same leakage-safe encodings,
-applies any monotonic constraint, writes `outputs/logs/{run_id}_cand_linear.csv`, and
-the candidate JSON `outputs/logs/{run_id}_agent_linear.json` (shared schema: `role`,
+This runs **canonical-fold** CV over the linear family on the floor's + authored
+leakage-safe encodings, applies any monotonic constraint, writes
+`outputs/logs/{run_id}_cand_linear.csv`, the OOF `outputs/logs/{run_id}_oof_linear.csv`,
+and the candidate JSON `outputs/logs/{run_id}_agent_linear.json` (shared schema: `role`,
 `approach`, `selected_model`, `cv_metric`, `cv_score`, `lower_is_better`,
-`candidate_submission`, `monotonic_applied`).
+`candidate_submission`, `oof_path`, `monotonic_applied`).
 
 Report your `cv_score` to the orchestrator and whether it beats the floor. Linear models
 rarely win outright on a panel, but they add **diversity** the `ensemble-meta` can blend.

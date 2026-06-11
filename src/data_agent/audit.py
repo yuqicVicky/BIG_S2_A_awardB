@@ -92,8 +92,10 @@ STATIC_TERMS: dict[str, list[str]] = {
 
 # ── paths configuration ───────────────────────────────────────────────────────
 
-# Directories/files to scan (relative to repo root, as strings to match)
-SCAN_TARGETS = ["src/", "main.py", "scripts/"]
+# Directories/files to scan (relative to repo root, as strings to match).
+# outputs/scratch/ holds LLM-authored runtime scripts (e.g. programmer_pipeline.py);
+# they must obey the same no-hardcoding rules as the committed pipeline.
+SCAN_TARGETS = ["src/", "main.py", "scripts/", "outputs/scratch/"]
 
 # Paths that make every finding in them acceptable regardless of content
 ALWAYS_ACCEPTABLE_PATH_FRAGMENTS = [

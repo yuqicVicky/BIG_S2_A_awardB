@@ -486,9 +486,18 @@ class TopKVoteClassifier:
 def train_and_predict(
     bundle: FeatureBundle, block_column: str | None = None, random_state: int = 42,
     families: set[str] | None = None,
+    folds: list[tuple[np.ndarray, np.ndarray]] | None = None,
+    scored_mask: np.ndarray | None = None,
 ) -> ModelResult:
+    """Train candidates and predict. When ``folds`` is given (the canonical shared
+    folds from ``cv.load_canonical_folds`` aligned to the valid-target frame), CV
+    uses them verbatim instead of building its own — so every Step-6 candidate
+    scores OOF on the SAME partition. ``scored_mask`` restricts OOF scoring to the
+    held-out rows of single-holdout strategies. Both default ``None`` =
+    backward-compatible behaviour."""
     if bundle.task.task_type == REGRESSION:
-        return _train_regression(bundle, block_column, random_state, families=families)
+        return _train_regression(bundle, block_column, random_state, families=families,
+                                 folds=folds, scored_mask=scored_mask)
     return _train_classification(bundle, random_state, families=families)
 
 
@@ -510,7 +519,9 @@ def _candidate_family(name: str) -> str:
 # ── regression path (Award A behaviour, preserved) ─────────────────────────────
 
 def _train_regression(bundle: FeatureBundle, block_column: str | None, random_state: int,
-                      families: set[str] | None = None) -> ModelResult:
+                      families: set[str] | None = None,
+                      folds: list[tuple[np.ndarray, np.ndarray]] | None = None,
+                      scored_mask: np.ndarray | None = None) -> ModelResult:
     y = pd.to_numeric(bundle.target, errors="coerce")
     valid_mask = y.notna()
     if valid_mask.sum() < 5:
@@ -531,11 +542,20 @@ def _train_regression(bundle: FeatureBundle, block_column: str | None, random_st
     # block, coarsening a too-granular datetime key to whole-period blocks so the
     # CV actually mirrors held-out periods. Dataset-agnostic.
     group_col = bundle.profile.get("time_column") or block_column
-    groups, block_reason = _resolve_cv_groups(train_df, group_col, len(X))
-    folds, cv_desc = _make_cv_folds(len(X), groups, random_state)
-    cv_desc["group_column"] = group_col
-    if block_reason:
-        cv_desc["block_reason"] = block_reason
+    if folds is not None:
+        # Canonical shared folds (cv.py) — every Step-6 candidate uses these exact
+        # folds, so OOF scores are directly comparable for keep-best.
+        cv_desc = {"type": "canonical_external", "n_splits": len(folds), "group_column": group_col}
+    else:
+        groups, block_reason = _resolve_cv_groups(train_df, group_col, len(X))
+        folds, cv_desc = _make_cv_folds(len(X), groups, random_state)
+        cv_desc["group_column"] = group_col
+        if block_reason:
+            cv_desc["block_reason"] = block_reason
+    if scored_mask is not None:
+        scored_mask = np.asarray(scored_mask, dtype=bool)
+        if len(scored_mask) != len(X):
+            scored_mask = None  # misaligned — ignore rather than corrupt scoring
 
     def _score_idx(idx, y_true, y_pred) -> float:
         hf = train_df.iloc[idx].reset_index(drop=True)
@@ -562,7 +582,9 @@ def _train_regression(bundle: FeatureBundle, block_column: str | None, random_st
     # candidates) and a per-candidate ceiling stops any single runaway model
     # (e.g. a near-OLS ElasticNet on a wide one-hot matrix) from consuming the
     # whole slice. A candidate that cannot finish all folds in time is abandoned
-    # rather than registered with a gap-filled OOF that would corrupt selection.
+    # rather than registered with a gap-filled OOF that would corrupt selection
+    # (the common-OOF NNLS keep-best requires every candidate scored on the same
+    # full partition).
     for name, factory in candidates:
         if budget.exhausted():
             scores.append({"name": name, "status": "skipped", "error": "time_budget_exhausted"})
@@ -598,6 +620,11 @@ def _train_regression(bundle: FeatureBundle, block_column: str | None, random_st
                      folds_done=int(len(fold_scores)))
                 continue
             mask = ~np.isnan(oof)
+            if scored_mask is not None:
+                mask = mask & scored_mask
+            if mask.sum() < 5:
+                scores.append({"name": name, "status": "failed", "error": "insufficient_oof_coverage"})
+                continue
             overall = _score_idx(np.flatnonzero(mask), y[mask], oof[mask])
             mae = float(mean_absolute_error(y[mask], oof[mask]))
             scores.append({
@@ -680,6 +707,8 @@ def _train_regression(bundle: FeatureBundle, block_column: str | None, random_st
         sel_oof = stack.get("oof")
     if sel_oof is not None:
         m = ~np.isnan(sel_oof)
+        if scored_mask is not None:
+            m = m & scored_mask
         y_true_holdout = np.asarray(y[m], dtype=float)
         y_pred_holdout = sel_oof[m]
     else:
@@ -708,12 +737,13 @@ def _train_regression(bundle: FeatureBundle, block_column: str | None, random_st
 # ── cross-validation, stacking, seed-averaging helpers ─────────────────────────
 
 def _time_budget_seconds() -> float:
-    """Global wall-clock budget for model search (env-overridable). Default 90
-    min — comfortably inside the Award-B 2-hour cap with margin for I/O/report."""
+    """Global wall-clock budget for model search (env-overridable). Default 45
+    min — keeps the full pipeline inside the Award-B 2-hour cap including I/O and
+    report generation (typically 15-20 min). Set AWARDB_TIME_BUDGET_SEC to override."""
     try:
-        return float(os.environ.get("AWARDB_TIME_BUDGET_SEC", "5400"))
+        return float(os.environ.get("AWARDB_TIME_BUDGET_SEC", "2700"))
     except Exception:
-        return 5400.0
+        return 2700.0
 
 
 class _TimeBudget:
@@ -824,9 +854,9 @@ def _seedable_param(est) -> str | None:
 
 def _seed_count() -> int:
     try:
-        return max(1, int(os.environ.get("AWARDB_SEEDS", "3")))
+        return max(1, int(os.environ.get("AWARDB_SEEDS", "2")))
     except Exception:
-        return 3
+        return 2
 
 
 def _max_splits() -> int:
@@ -923,9 +953,9 @@ def _tune_iters() -> int:
     # A leaner default + early-stopping (see _tune_top_models) keeps the cheap wins
     # and drops the long tail of no-improvement iterations that only chase CV noise.
     try:
-        return max(0, int(os.environ.get("AWARDB_TUNE_ITER", "12")))
+        return max(0, int(os.environ.get("AWARDB_TUNE_ITER", "6")))
     except Exception:
-        return 12
+        return 6
 
 
 def _py(v):
@@ -1391,7 +1421,7 @@ def _build_candidates(bundle: FeatureBundle, train_df: pd.DataFrame, random_stat
             "hist_gradient_boosting",
             lambda: Pipeline([
                 ("preprocess", _make_preprocessor_fresh(scale=False)),
-                ("model", HistGradientBoostingRegressor(random_state=rs, max_iter=400, learning_rate=0.05)),
+                ("model", HistGradientBoostingRegressor(random_state=rs, max_iter=150, learning_rate=0.05)),
             ]),
         )
     )
@@ -1400,7 +1430,7 @@ def _build_candidates(bundle: FeatureBundle, train_df: pd.DataFrame, random_stat
             "extra_trees",
             lambda: Pipeline([
                 ("preprocess", _make_preprocessor_fresh(scale=False)),
-                ("model", ExtraTreesRegressor(n_estimators=400, random_state=rs, n_jobs=-1, min_samples_leaf=2, max_features="sqrt")),
+                ("model", ExtraTreesRegressor(n_estimators=200, random_state=rs, n_jobs=-1, min_samples_leaf=2, max_features="sqrt")),
             ]),
         )
     )
@@ -1409,7 +1439,7 @@ def _build_candidates(bundle: FeatureBundle, train_df: pd.DataFrame, random_stat
             "random_forest",
             lambda: Pipeline([
                 ("preprocess", _make_preprocessor_fresh(scale=False)),
-                ("model", RandomForestRegressor(n_estimators=300, random_state=rs, n_jobs=-1, min_samples_leaf=2)),
+                ("model", RandomForestRegressor(n_estimators=150, random_state=rs, n_jobs=-1, min_samples_leaf=2)),
             ]),
         )
     )
@@ -1438,7 +1468,7 @@ def _build_candidates(bundle: FeatureBundle, train_df: pd.DataFrame, random_stat
             "gradient_boosting",
             lambda: Pipeline([
                 ("preprocess", _make_preprocessor_fresh(scale=False)),
-                ("model", GradientBoostingRegressor(n_estimators=300, learning_rate=0.05, max_depth=4, random_state=rs, subsample=0.85)),
+                ("model", GradientBoostingRegressor(n_estimators=100, learning_rate=0.05, max_depth=4, random_state=rs, subsample=0.85)),
             ]),
         )
     )
@@ -1462,7 +1492,7 @@ def _build_candidates(bundle: FeatureBundle, train_df: pd.DataFrame, random_stat
                 "hgb_log",
                 lambda: LogTargetRegressor(Pipeline([
                     ("preprocess", _make_preprocessor_fresh(scale=False)),
-                    ("model", HistGradientBoostingRegressor(random_state=rs, max_iter=400, learning_rate=0.05)),
+                    ("model", HistGradientBoostingRegressor(random_state=rs, max_iter=150, learning_rate=0.05)),
                 ])),
             )
         )
@@ -1472,7 +1502,7 @@ def _build_candidates(bundle: FeatureBundle, train_df: pd.DataFrame, random_stat
                 "hgb_sqrt",
                 lambda: SqrtTargetRegressor(Pipeline([
                     ("preprocess", _make_preprocessor_fresh(scale=False)),
-                    ("model", HistGradientBoostingRegressor(random_state=rs, max_iter=400, learning_rate=0.05)),
+                    ("model", HistGradientBoostingRegressor(random_state=rs, max_iter=150, learning_rate=0.05)),
                 ])),
             )
         )
@@ -1492,7 +1522,7 @@ def _build_candidates(bundle: FeatureBundle, train_df: pd.DataFrame, random_stat
                 lambda: Pipeline([
                     ("preprocess", _make_preprocessor_fresh(scale=False)),
                     ("model", lgb.LGBMRegressor(
-                        n_estimators=800,
+                        n_estimators=500,
                         learning_rate=0.04,
                         num_leaves=63,
                         subsample=0.85,
@@ -1513,7 +1543,7 @@ def _build_candidates(bundle: FeatureBundle, train_df: pd.DataFrame, random_stat
                 lambda _sl=_strong_leaves: Pipeline([
                     ("preprocess", _make_preprocessor_fresh(scale=False)),
                     ("model", lgb.LGBMRegressor(
-                        n_estimators=1200,
+                        n_estimators=700,
                         learning_rate=0.02,
                         num_leaves=_sl,
                         subsample=0.8,
@@ -1536,7 +1566,7 @@ def _build_candidates(bundle: FeatureBundle, train_df: pd.DataFrame, random_stat
                     lambda: SqrtTargetRegressor(Pipeline([
                         ("preprocess", _make_preprocessor_fresh(scale=False)),
                         ("model", lgb.LGBMRegressor(
-                            n_estimators=800,
+                            n_estimators=500,
                             learning_rate=0.04,
                             num_leaves=63,
                             subsample=0.85,
@@ -1558,7 +1588,7 @@ def _build_candidates(bundle: FeatureBundle, train_df: pd.DataFrame, random_stat
                     lambda: LogTargetRegressor(Pipeline([
                         ("preprocess", _make_preprocessor_fresh(scale=False)),
                         ("model", lgb.LGBMRegressor(
-                            n_estimators=800,
+                            n_estimators=500,
                             learning_rate=0.04,
                             num_leaves=63,
                             subsample=0.85,
@@ -1585,7 +1615,7 @@ def _build_candidates(bundle: FeatureBundle, train_df: pd.DataFrame, random_stat
                     lambda: Pipeline([
                         ("preprocess", _make_preprocessor_fresh(scale=False)),
                         ("model", xgb.XGBRegressor(
-                            n_estimators=800,
+                            n_estimators=500,
                             learning_rate=0.04,
                             max_depth=6,
                             subsample=0.85,
@@ -1612,7 +1642,7 @@ def _build_candidates(bundle: FeatureBundle, train_df: pd.DataFrame, random_stat
             lambda: Pipeline([
                 ("preprocess", _make_preprocessor_fresh(scale=False)),
                 ("model", CatBoostRegressor(
-                    iterations=1200, learning_rate=0.03, depth=6, l2_leaf_reg=3.0,
+                    iterations=600, learning_rate=0.03, depth=6, l2_leaf_reg=3.0,
                     loss_function="MAE", random_seed=rs, thread_count=-1,
                     allow_writing_files=False, verbose=False,
                 )),
@@ -1624,7 +1654,7 @@ def _build_candidates(bundle: FeatureBundle, train_df: pd.DataFrame, random_stat
                 lambda: LogTargetRegressor(Pipeline([
                     ("preprocess", _make_preprocessor_fresh(scale=False)),
                     ("model", CatBoostRegressor(
-                        iterations=1200, learning_rate=0.03, depth=6, l2_leaf_reg=3.0,
+                        iterations=600, learning_rate=0.03, depth=6, l2_leaf_reg=3.0,
                         loss_function="RMSE", random_seed=rs, thread_count=-1,
                         allow_writing_files=False, verbose=False,
                     )),

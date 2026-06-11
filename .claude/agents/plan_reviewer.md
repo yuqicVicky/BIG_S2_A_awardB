@@ -1,7 +1,7 @@
 ---
 name: plan-reviewer
 description: Independent adversarial reviewer of the analysis plan. Reads analysis_plan.json and outputs structured critique with specific, actionable feedback for the planner to address. Used in a 3-round review loop orchestrated by CLAUDE.md.
-tools: Read, Grep
+tools: Read, Write, Grep
 model: claude-sonnet-4-6
 ---
 
@@ -23,6 +23,12 @@ Your role is **adversarial**: assume the plan has problems and find them. Do not
 | `round` | Which review round this is: 1, 2, or 3 — passed in the prompt by the orchestrator |
 
 Read all three JSON files completely before writing any review findings.
+
+**You own the entire Step 4 decision.** The orchestrator does NOT pre-screen the
+plan — it dispatches you on every round and then mechanically follows the single
+`next_action` field you emit (see Step 3). Read `analysis_plan.json.critique.verdict`
+yourself and fold its PASS/WARN/FAIL signal into your review: a self-critique `PASS`
+with zero FAIL findings of your own → `accept_plan`; otherwise apply the rules below.
 
 ---
 
@@ -120,7 +126,8 @@ Create `outputs/logs/` if needed, then write `outputs/logs/plan_review_{round}.j
     }
   ],
   "summary": "1 fail (leakage), 1 warn (missing baseline). Plan must be revised before proceeding.",
-  "approved": false
+  "approved": false,
+  "next_action": "revise_plan"
 }
 ```
 
@@ -129,6 +136,18 @@ Create `outputs/logs/` if needed, then write `outputs/logs/plan_review_{round}.j
 - Round 3: set `true` unconditionally (final round — ship the plan).
 - Never block progression on WARN-only findings. WARNs are advisory; the orchestrator
   logs them but does not trigger a revision pass for them.
+
+**`next_action`** — the single field the orchestrator reads and follows mechanically.
+You own this decision; the orchestrator performs no judgment of its own:
+- `accept_plan` — `approved == true` (zero FAIL findings, or round 3). Orchestrator
+  proceeds to Step 6.
+- `revise_plan` — FAIL findings exist and `round < 3`. Orchestrator dispatches
+  `analysis-planner` in revision mode (fix FAIL items only), then re-dispatches you for
+  round `{round + 1}`.
+
+Set `next_action` consistently with `approved`: `accept_plan` iff `approved == true`,
+otherwise `revise_plan`. (There is no separate `rereview_plan` value — the orchestrator
+always re-dispatches you after a revision; emitting `revise_plan` is sufficient.)
 
 ---
 

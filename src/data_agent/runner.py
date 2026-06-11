@@ -5,6 +5,7 @@ from __future__ import annotations
 from datetime import datetime
 import hashlib
 import json
+import os
 from pathlib import Path
 from typing import Any
 
@@ -111,18 +112,24 @@ def run_analysis(repo_root: Path) -> dict[str, Any]:
     pre_audit_summary = audit_summary_text(pre_audit)
     post_audit_summary = audit_summary_text(post_audit)
 
-    md_path, pdf_path = write_report(
-        repo_root=repo_root,
-        run_id=run_id,
-        schema=schema.to_dict(),
-        profile=bundle.profile,
-        model_result=model_result_dict,
-        submission_check=submission_check,
-        pre_audit_summary=pre_audit_summary,
-        post_audit_summary=post_audit_summary,
-    )
-    print(f"Report markdown: {md_path}")
-    print(f"Report PDF: {pdf_path}")
+    # Floor seeding in Step 6A sets AWARDB_SKIP_REPORT=1 — the real report is authored
+    # once in Step 7 by report-writer, so the floor need not regenerate report.pdf (P7).
+    if os.environ.get("AWARDB_SKIP_REPORT"):
+        md_path = pdf_path = None
+        print("Report generation skipped (AWARDB_SKIP_REPORT=1)")
+    else:
+        md_path, pdf_path = write_report(
+            repo_root=repo_root,
+            run_id=run_id,
+            schema=schema.to_dict(),
+            profile=bundle.profile,
+            model_result=model_result_dict,
+            submission_check=submission_check,
+            pre_audit_summary=pre_audit_summary,
+            post_audit_summary=post_audit_summary,
+        )
+        print(f"Report markdown: {md_path}")
+        print(f"Report PDF: {pdf_path}")
 
     manifest = {
         "run_id": run_id,
@@ -315,6 +322,10 @@ def _py(value: Any) -> Any:
 
 
 def _remove_stale_outputs(repo_root: Path) -> None:
+    # When re-seeding the floor in a later improvement round, the orchestrator sets
+    # AWARDB_KEEP_OUTPUTS=1 so a previously promoted best submission.csv survives (P7).
+    if os.environ.get("AWARDB_KEEP_OUTPUTS"):
+        return
     for name in ["submission.csv", "report.pdf"]:
         path = repo_root / name
         if path.exists():
@@ -334,6 +345,12 @@ def _json_default(value: Any) -> Any:
 
 
 def _run_id(repo_root: Path) -> str:
+    # The Claude orchestrator exports AWARDB_RUN_ID before dispatching `python main.py`
+    # so the floor's {run_id}_* files match the run_id the agents expect (P5b). Falls
+    # back to a fresh stamp when unset (standalone runs).
+    env = os.environ.get("AWARDB_RUN_ID")
+    if env:
+        return env
     stamp = datetime.utcnow().strftime("%Y%m%d_%H%M%S")
     digest = hashlib.sha256(str(repo_root).encode("utf-8")).hexdigest()[:8]
     return f"{stamp}_{digest}"

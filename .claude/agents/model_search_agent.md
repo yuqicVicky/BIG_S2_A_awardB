@@ -19,7 +19,31 @@ You are the Model Search Agent. You train baselines, then candidate models, reco
 | `data_profile.json` | `outputs/logs/data_profile.json` |
 | `analysis_plan.json` | `outputs/logs/analysis_plan.json` |
 | `validation_strategy.json` | `outputs/logs/validation_strategy.json` |
-| Existing `submission.csv` | Repo root (context only) |
+| `{run_id}_cv_folds.json` | `outputs/logs/` — the **canonical shared folds** (single CV source) |
+| `{run_id}_feature_spec.json` | `outputs/logs/` — the analysis-programmer's **authored features** |
+| `{run_id}_oof_floor.csv`, `{run_id}_oof_*.csv` | `outputs/logs/` — candidates' OOF for the keep-best blend |
+| Existing `submission.csv` | Repo root (the floor baseline / current best) |
+
+---
+
+## ⚠️ Canonical folds + authored features (overrides any split logic below)
+
+- **Use the canonical folds, not your own split.** Load `{run_id}_cv_folds.json` via
+  `src/data_agent/cv.load_canonical_folds(path, valid_mask=<target.notna()>)` and use **those
+  exact `(train_idx, val_idx)` folds** for ALL cross-validation and OOF here. The
+  `make_split`/`train_test_split` snippets in the steps below are **superseded** — do not build
+  your own holdout; that is the cause of incomparable CV (P1).
+- **Append the authored features.** Read `{run_id}_feature_spec.json` and left-join
+  `features_train`/`features_pred` (by row order) onto your feature matrix before training. The
+  fastest correct path is to run the shared engine, which does both for you:
+  ```bash
+  python scripts/run_modeling_agent.py --approach full --run-id "$RUN_ID" \
+      --cv-folds "outputs/logs/${RUN_ID}_cv_folds.json" \
+      --feature-spec "outputs/logs/${RUN_ID}_feature_spec.json"
+  ```
+  This writes `{run_id}_cand_full.csv` + `{run_id}_oof_full.csv` + `{run_id}_agent_full.json`
+  (your search candidate + OOF on the canonical folds). You may still author extra candidates,
+  but every candidate MUST emit an OOF on these folds (`cv.write_oof`).
 
 ---
 
@@ -709,6 +733,55 @@ Write `outputs/logs/final_model.json`:
 
 ---
 
+## Step 9 — Common-OOF NNLS keep-best (you own `submission.csv` in general mode)
+
+You own the repo-root `submission.csv` promotion. Every candidate has scored OOF on the
+**same canonical folds**, so you compare them apples-to-apples and blend them. Use the shared
+helper `src/data_agent/cv.nnls_keep_best`:
+
+```python
+import json, glob, numpy as np, pandas as pd
+from src.data_agent.cv import nnls_keep_best
+
+spec   = json.load(open("outputs/logs/spec_parse.json"))
+sample = pd.read_csv(spec["sample_submission_file"])
+# y_true aligned to the OOF row order (valid-target train rows, raw order):
+train  = pd.read_csv(spec["train_file"]); y = pd.to_numeric(train[spec["target_column"]], errors="coerce")
+y_true = y[y.notna()].to_numpy()
+
+cands = []
+for oof_csv in glob.glob("outputs/logs/*_oof_*.csv"):       # floor, full(search), any extra
+    name = oof_csv.split("_oof_")[-1].rsplit(".",1)[0]
+    oof  = pd.read_csv(oof_csv)["oof_pred"].to_numpy()
+    cand_csv = oof_csv.replace("_oof_", "_cand_")
+    if len(oof) != len(y_true):  # align by scored rows only
+        continue
+    test = pd.read_csv(cand_csv)[spec["target_column"]].to_numpy()
+    cands.append({"name": name, "oof": oof, "test": test})
+
+ms   = json.load(open(sorted(glob.glob("outputs/logs/*_model_selection.json"))[-1]))
+res  = nnls_keep_best(cands, y_true, metric_name=ms.get("metric_name","mae"),
+                      greater_is_better=bool(ms.get("greater_is_better", False)))
+```
+
+- `nnls_keep_best` scores each candidate's OOF on the one official metric, NNLS-blends across
+  candidates (sum-to-one weights applied to their test predictions), and returns the blend only
+  when it **strictly beats** the best single (never regresses); else the best single.
+- **Provisional promotion + rollback (P6):** before overwriting `submission.csv`, copy the
+  current file to `{run_id}_prior_best.csv`. Write the chosen `res["chosen_test"]` to
+  `submission.csv` (sample-submission row order, finite, correct dtype) **only if**
+  `res["chosen_score"]` strictly beats the current best. Write `{run_id}_promotion.json`:
+  `{round, promoted_choice: res["choice"], promoted_cv_score, prior_best_choice,
+  prior_best_submission, nnls_weights: res["blend_weights"], oof_scores: res["scores"]}`.
+- Record the same in `model_search.json` (`candidates_compared`, `promoted_choice`,
+  `promoted_cv_score`, `overwrote_submission`). Then write `prediction_sanity.json` (below).
+
+If a Step-6C reviewer later flags the promoted candidate HIGH leakage/overfit, the lead sets
+`revert_promotion` — the orchestrator restores `{run_id}_prior_best.csv` and passes a
+`blacklist_candidate` you must exclude from the NNLS pool next round.
+
+---
+
 ## Constraints
 
 - **Always run baselines before candidates.** No candidate may be evaluated before at least one baseline.
@@ -736,10 +809,18 @@ Write `outputs/logs/final_model.json`:
 Honor the dataset's **official metric** (from `spec_parse.json`) for model
 selection. After selecting, emit a sanity
 verdict to `outputs/logs/{run_id}_llm_gate_prediction_sanity.json` in the shared
-schema (see the verdict schema in `src/data_agent/gates.py`). Emit
+schema (see CLAUDE.md → "Closed-loop verdict protocol"; schema in `src/data_agent/gates.py`). Emit
 `fail` on degenerate (near-constant) predictions, non-finite values, heavy
 clipping, a large train↔prediction distribution shift, a suspiciously perfect
-holdout (leakage/overfit), or a candidate that fails to beat its baseline. Use
+holdout (leakage/overfit), or a candidate that fails to beat its baseline.
+
+In addition — because this agent owns `submission.csv` in general mode — write the full
+human-readable result to `outputs/logs/prediction_sanity.json` after writing
+`submission.csv`: `{"verdict": "PASS|WARN|FAIL", "high_overfitting_risk": bool, "checks":
+[{"name": ..., "verdict": ..., "detail": ...}]}` covering finite values, non-constant
+predictions, plausible range vs the training target, and train↔prediction distribution
+shift. The Step-7 report cites this file (Section 8.6); `supervisor-gatekeeper` re-checks
+and may overwrite it in Step 8. Use
 `suggested_corrections` such as `reexamine_model_pool` or `prefer_regularized`;
 the orchestrator drops remaining leakage-suspected features and re-runs model
 selection once. Your verdict takes precedence over the deterministic

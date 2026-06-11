@@ -509,7 +509,7 @@ Write to `outputs/logs/overfitting_leakage_audit.json`.
 
 When auditing features for leakage, also emit a verdict to
 `outputs/logs/{run_id}_llm_gate_leakage.json` in the shared schema (see
-the verdict schema in `src/data_agent/gates.py`). Emit `fail` when a
+CLAUDE.md → "Closed-loop verdict protocol"; schema in `src/data_agent/gates.py`). Emit `fail` when a
 column in the model feature set is a target derivative, an effective ID, a
 post-outcome / future field, or suspiciously predictive. Put the offending
 column names in `suggested_corrections.drop_columns`; the orchestrator drops

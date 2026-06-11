@@ -260,6 +260,8 @@ def run_modeling_group(
     logs_dir: Path,
     t_start: float,
     random_state: int = 42,
+    folds=None,
+    scored_mask=None,
 ) -> tuple[ModelingResult, dict[str, Any]]:
     """Run the keep-best modeling group and return ``(best_modeling, meta)``.
 
@@ -322,6 +324,8 @@ def run_modeling_group(
                     block_column=schema.block_column,
                     random_state=random_state,
                     families={fam},
+                    folds=folds,
+                    scored_mask=scored_mask,
                 )
             cand_mr = cand_modeling.model_result_obj
             # A family with no real candidate falls back to the full pool — that is

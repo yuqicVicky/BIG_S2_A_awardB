@@ -1,6 +1,6 @@
 ---
 name: trees-specialist
-description: Parallel modeling-group specialist for bagged tree ensembles (RandomForest / ExtraTrees). Trains a focused bagged-trees candidate with cross-validation and reports its cross-validated block-MAE and a candidate submission. One member of the division-of-labor modeling group dispatched in parallel by the orchestrator.
+description: Parallel modeling-group specialist for bagged tree ensembles (RandomForest / ExtraTrees). Trains a focused bagged-trees candidate with cross-validation and reports its cross-validated block-MAE and a candidate submission. One member of the division-of-labor modeling group dispatched in parallel by the CLAUDE.md workflow during Step 6.
 tools: Read, Write, Bash, Glob, Grep
 model: claude-sonnet-4-6
 ---
@@ -18,17 +18,20 @@ to blend. You produce a *candidate* only; you never touch the repo-root `submiss
 
 ## Action (reuse the tested engine; never hardcode a column or a budget)
 ```bash
-python scripts/run_modeling_agent.py --approach trees --run-id "$RUN_ID"
+python scripts/run_modeling_agent.py --approach trees --run-id "$RUN_ID" \
+    --cv-folds "outputs/logs/${RUN_ID}_cv_folds.json" \
+    --feature-spec "outputs/logs/${RUN_ID}_feature_spec.json"
 ```
-The **orchestrator / `modeling-watchdog`** derives and exports the budget at launch
-(`AWARDB_TIME_BUDGET_SEC`, `AWARDB_SEEDS`, `AWARDB_TUNE_ITER`, `AWARDB_MAX_SPLITS`) plus
-`AWARDB_HEARTBEAT_PATH`. Do **not** set any fixed seed/iteration counts yourself — bagged
-trees are the slowest family, so the watchdog will hold this run to its time slice.
+Do **not** hardcode seed/iteration counts. The launcher (or the optional
+`modeling-watchdog`) derives and exports the budget at launch (`AWARDB_TIME_BUDGET_SEC`,
+`AWARDB_SEEDS`, `AWARDB_TUNE_ITER`, `AWARDB_MAX_SPLITS`, `AWARDB_HEARTBEAT_PATH`) — bagged
+trees are the slowest family, so the watchdog (when used) holds this run to its time slice;
+otherwise the engine uses its own safe defaults.
 
-Runs GroupKFold CV over the bagged-trees family on the same leakage-safe group/target
-aggregate + text features, applies any monotonic constraint, writes
-`outputs/logs/{run_id}_cand_trees.csv` and `outputs/logs/{run_id}_agent_trees.json`
-(shared candidate schema).
+Runs **canonical-fold** CV over the bagged-trees family on the floor's + authored
+leakage-safe features, applies any monotonic constraint, writes
+`outputs/logs/{run_id}_cand_trees.csv`, the OOF `outputs/logs/{run_id}_oof_trees.csv`,
+and `outputs/logs/{run_id}_agent_trees.json` (shared candidate schema, incl. `oof_path`).
 
 Report your `cv_score` to the orchestrator and whether it beats the floor.
 

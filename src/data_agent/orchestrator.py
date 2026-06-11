@@ -12,6 +12,7 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 import json
+import os
 from pathlib import Path
 import time
 from typing import Any
@@ -323,6 +324,34 @@ def _run_award_b(repo_root, run_id, logs_dir, artifacts_dir, goal, random_state)
 
     _feat_state = {"columns": list(bundle.feature_columns)}
 
+    # ── canonical shared folds (cv.py) ─────────────────────────────────────────
+    # When the LLM validation-and-schema-guardian has chosen a strategy
+    # (outputs/logs/validation_strategy.json), derive ONE concrete fold assignment
+    # and reuse it for the floor + the modeling group so every Step-6 candidate
+    # scores OOF on the same partition (keep-best comparability). Best-effort: any
+    # failure falls back to the internal GroupKFold (backward-compat).
+    _canon_folds = None
+    _scored_mask = None
+    try:
+        from .cv import build_canonical_folds, load_canonical_folds, write_cv_folds_json
+        _vs_path = logs_dir / "validation_strategy.json"
+        if bundle.task.task_type == REGRESSION and _vs_path.exists():
+            _vstrat = json.loads(_vs_path.read_text(encoding="utf-8"))
+            _fa, _scored, _desc = build_canonical_folds(
+                bundle.train_df, validation_strategy=_vstrat,
+                target=bundle.target, random_state=random_state)
+            write_cv_folds_json(logs_dir / f"{run_id}_cv_folds.json", run_id=run_id,
+                                fold_assignment=_fa, scored_rows=_scored, description=_desc)
+            _valid_mask = pd.to_numeric(bundle.target, errors="coerce").notna().to_numpy()
+            _cf = load_canonical_folds(logs_dir / f"{run_id}_cv_folds.json", valid_mask=_valid_mask)
+            if _cf.folds:
+                _canon_folds, _scored_mask = _cf.folds, _cf.scored_mask
+                print(f"[cv] canonical folds: {_cf.strategy} n_folds={_cf.n_folds} "
+                      f"scored={int(_cf.scored_mask.sum())}")
+    except Exception as _cv_exc:
+        print(f"[cv] canonical folds unavailable ({type(_cv_exc).__name__}: {_cv_exc}); "
+              f"using internal CV")
+
     def _produce_modeling():
         cols = _feat_state["columns"]
         bundle.feature_columns = cols
@@ -330,7 +359,8 @@ def _run_award_b(repo_root, run_id, logs_dir, artifacts_dir, goal, random_state)
         bundle.categorical_columns = [c for c in bundle.categorical_columns if c in cols]
         bundle.text_columns = [c for c in bundle.text_columns if c in cols]
         return train_and_evaluate_models(
-            bundle=bundle, block_column=schema.block_column, random_state=random_state)
+            bundle=bundle, block_column=schema.block_column, random_state=random_state,
+            folds=_canon_folds, scored_mask=_scored_mask)
 
     def _sanity_critic(modeling_):
         m = modeling_.model_result_obj
@@ -376,12 +406,23 @@ def _run_award_b(repo_root, run_id, logs_dir, artifacts_dir, goal, random_state)
         print("[modeling-group] floor submission checkpointed (keep-best safety net)")
     except Exception as _fl_exc:
         print(f"[modeling-group] floor checkpoint skipped: {_fl_exc}")
+    # Persist the floor's OOF (on canonical folds) so the keep-best owner can blend
+    # it with the LLM candidates' OOF on the same rows.
+    try:
+        from .cv import write_oof as _write_oof_floor
+        _sel = mr.selected_model_name
+        _oof_full = (getattr(mr, "holdout_by_model", None) or {}).get(_sel)
+        if _oof_full is not None:
+            _write_oof_floor(logs_dir / f"{run_id}_oof_floor.csv", _oof_full, scored_mask=_scored_mask)
+    except Exception as _oof_exc:
+        print(f"[cv] floor OOF not written ({type(_oof_exc).__name__}: {_oof_exc})")
     try:
         from .modeling_group import run_modeling_group
         modeling, _meta = run_modeling_group(
             bundle=bundle, schema=schema, description=description,
             floor_modeling=modeling, repo_root=repo_root, run_id=run_id,
-            logs_dir=logs_dir, t_start=t_start, random_state=random_state)
+            logs_dir=logs_dir, t_start=t_start, random_state=random_state,
+            folds=_canon_folds, scored_mask=_scored_mask)
         state.model_results["modeling_group"] = _meta
         if _meta.get("choice") != "floor":
             mr = modeling.model_result_obj
@@ -544,11 +585,19 @@ def _run_award_b(repo_root, run_id, logs_dir, artifacts_dir, goal, random_state)
     except Exception:
         pass
 
-    # Report + review (gate at WARN; persist report_review.json with `approved`)
-    report_out = write_analysis_report(state=state, repo_root=repo_root)
-    state.report_review = review_report(state=state)
-    _rr = state.report_review or {}
-    print(f"Report: {state.report_path} ({report_out['report_format']}) | review: {_rr.get('verdict')}")
+    # Report + review (gate at WARN; persist report_review.json with `approved`).
+    # Floor seeding in Step 6A sets AWARDB_SKIP_REPORT=1 — the real report is authored
+    # once in Step 7 by report-writer, so the floor skips report generation here (P7).
+    if os.environ.get("AWARDB_SKIP_REPORT"):
+        report_out = {"report_format": "skipped"}
+        state.report_review = {"verdict": "SKIPPED", "approved": True}
+        _rr = state.report_review
+        print("Report generation skipped (AWARDB_SKIP_REPORT=1)")
+    else:
+        report_out = write_analysis_report(state=state, repo_root=repo_root)
+        state.report_review = review_report(state=state)
+        _rr = state.report_review or {}
+        print(f"Report: {state.report_path} ({report_out['report_format']}) | review: {_rr.get('verdict')}")
     _rr_status = PASS if _rr.get("approved") else (FAIL if str(_rr.get("verdict", "")).upper() == "FAIL" else WARN)
     _rr_reasons = list(_rr.get("required_revisions") or [])
     _emit_gate(logs_dir, run_id, "report", Verdict(

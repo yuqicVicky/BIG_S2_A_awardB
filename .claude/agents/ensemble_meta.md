@@ -1,6 +1,6 @@
 ---
 name: ensemble-meta
-description: Combines the parallel modeling group's candidate submissions with the deterministic floor, choosing the best by cross-validated block-MAE and optionally blending the strongest diverse candidates. Writes the chosen prediction for the supervisor to gate. Pure aggregation — adds no new model.
+description: Combines the parallel modeling group's candidate submissions with the deterministic floor, choosing the best by cross-validated block-MAE and optionally blending the strongest diverse candidates, then promotes the chosen prediction to repo-root submission.csv (keep-best) at the end of Step 6. Pure aggregation — adds no new model.
 tools: Read, Write, Bash, Glob, Grep
 model: claude-sonnet-4-6
 ---
@@ -14,37 +14,66 @@ cross-validated `block_mae`, you decide the single best prediction to propose to
 `supervisor-gatekeeper`. You **keep-best** — you never regress below the floor.
 
 ## Inputs
-- `outputs/logs/{run_id}_model_selection.json` — the floor's CV score + its `submission.csv`.
-- `outputs/logs/{run_id}_agent_*.json` — each specialist's candidate (`cv_score`, `candidate_submission`, `lower_is_better`).
-- `outputs/logs/{run_id}_ensemble_meta.json` — the **in-process** group's result (its
-  diverse-first specialists + convex NNLS blend + chosen CV score). Read it first: the
-  current `submission.csv` already reflects this choice, so never select anything worse.
+- `outputs/logs/{run_id}_oof_*.csv` — each candidate's **OOF predictions on the canonical
+  folds** (floor + gbdt/trees/linear specialists). Plus matching `{run_id}_cand_*.csv` (test).
+- `outputs/logs/{run_id}_model_selection.json` — the official metric + direction.
+- `outputs/logs/{run_id}_cv_folds.json` — the canonical folds (defines the OOF row order).
+- `outputs/logs/spec_parse.json` — target, row_id, files, sample submission.
 
-## Procedure
-1. Collect every candidate's `cv_score` (lower is better for block-MAE — use the resolved
-   official metric named in `model_selection.json`) including the floor and the in-process
-   blend.
-2. **Best-single:** the candidate with the best CV score.
-3. **Diversity blend (optional):** if the best two come from *different* families and their
-   CV scores are within ~3% of each other, average their candidate-submission prediction
-   columns (a simple, robust convex blend). The floor's own internal stack already blends
-   within-family, so only blend across families here.
-4. Choose blend vs best-single by whichever you can justify as more robust; when in doubt,
-   take the **best-single** (no blend).
-5. Write the chosen prediction to `outputs/logs/{run_id}_meta_choice.csv` and a summary
-   `outputs/logs/{run_id}_ensemble_meta.json`:
-   ```json
-   {"candidates": {"floor": 0.0, "gbdt": 0.0, "linear": 0.0, "trees": 0.0},
-    "choice": "floor|gbdt|blend(gbdt+trees)", "chosen_cv_score": 0.0,
-    "chosen_submission": "outputs/logs/{run_id}_meta_choice.csv"}
-   ```
+## Procedure — common-OOF NNLS (apples-to-apples; never test-pred averaging)
+Every candidate scored OOF on the **same** folds, so score them all on one metric and
+NNLS-blend across them. Use the shared helper `src/data_agent/cv.nnls_keep_best`:
 
-## Hand-off to the supervisor
-Do **not** overwrite the repo-root `submission.csv` yourself. Report `choice` and
-`chosen_cv_score` to the orchestrator; the `supervisor-gatekeeper` overwrites
-`submission.csv` with the chosen prediction **only if** it strictly beats the **current**
-submission's CV score, otherwise it keeps the current one (keep-best). Every row id from
-the sample submission must be present, in order, with finite values.
+```python
+import json, glob, numpy as np, pandas as pd
+from src.data_agent.cv import nnls_keep_best
+
+spec  = json.load(open("outputs/logs/spec_parse.json"))
+train = pd.read_csv(spec["train_file"]); y = pd.to_numeric(train[spec["target_column"]], errors="coerce")
+y_true = y[y.notna()].to_numpy()
+cands = []
+for oof_csv in glob.glob("outputs/logs/*_oof_*.csv"):        # floor + specialists
+    oof = pd.read_csv(oof_csv)["oof_pred"].to_numpy()
+    if len(oof) != len(y_true):
+        continue
+    test = pd.read_csv(oof_csv.replace("_oof_", "_cand_"))[spec["target_column"]].to_numpy()
+    cands.append({"name": oof_csv.split("_oof_")[-1].rsplit(".",1)[0], "oof": oof, "test": test})
+ms  = json.load(open(sorted(glob.glob("outputs/logs/*_model_selection.json"))[-1]))
+res = nnls_keep_best(cands, y_true, metric_name=ms.get("metric_name","block_mae"),
+                     greater_is_better=bool(ms.get("greater_is_better", False)))
+```
+
+`nnls_keep_best` returns `{scores, best_single, blend_weights, choice, chosen_test,
+chosen_score}` — the blend only when it strictly beats the best single (never regresses).
+Write the chosen prediction to `outputs/logs/{run_id}_meta_choice.csv` and a summary
+`outputs/logs/{run_id}_ensemble_meta.json`:
+```json
+{"oof_cv_scores": {"floor": 0.0, "gbdt": 0.0, "trees": 0.0, "linear": 0.0},
+ "nnls_weights": {"floor": 0.0, "gbdt": 0.0},
+ "choice": "best_single|blend(floor+gbdt)", "chosen_cv_score": 0.0,
+ "chosen_submission": "outputs/logs/{run_id}_meta_choice.csv"}
+```
+
+## Promote to submission.csv (keep-best + rollback) — you own this write
+You own the repo-root `submission.csv` promotion in specialist mode. **Provisional promotion
+(P6):** copy the current `submission.csv` to `{run_id}_prior_best.csv` first; then overwrite
+`submission.csv` with `{run_id}_meta_choice.csv` **only if** `res["chosen_score"]` strictly
+beats the current best (the floor's `{run_id}_model_selection.json` or the prior promoted
+score). Every sample-submission row id must be present, in order, with finite values. Write
+`{run_id}_promotion.json` (`round, promoted_choice, promoted_cv_score, prior_best_choice,
+prior_best_submission, nnls_weights, oof_scores`) and record `submission_cv_score` +
+`overwrote_submission` in `{run_id}_ensemble_meta.json`. If a Step-6C reviewer flags the
+promoted candidate HIGH leakage/overfit, the lead sets `revert_promotion` — the orchestrator
+restores `{run_id}_prior_best.csv` and passes a `blacklist_candidate` to exclude next round.
+The `supervisor-gatekeeper` re-checks in Step 8.
+
+## Prediction sanity — you own this in specialist mode
+Because you own the final `submission.csv` in specialist mode, after promoting it write the
+full human-readable result to `outputs/logs/prediction_sanity.json`:
+`{"verdict": "PASS|WARN|FAIL", "high_overfitting_risk": bool, "checks": [{"name": ...,
+"verdict": ..., "detail": ...}]}` covering finite values, non-constant predictions, a
+plausible range vs the training target, and a train↔prediction distribution check. The
+Step-7 report cites this file (Section 8.6); `supervisor-gatekeeper` re-checks it in Step 8.
 
 ## Constraints
 - Pure aggregation: introduce no new model and no new feature.

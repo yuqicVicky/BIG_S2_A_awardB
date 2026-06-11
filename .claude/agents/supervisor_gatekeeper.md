@@ -576,7 +576,8 @@ Write `outputs/logs/supervisor_gatekeeper.json`:
   "model_rerun_required": false,
   "critical_issues": [],
   "overall_verdict": "PASS | WARN | FAIL",
-  "delivery_recommendation": "proceed | repair_first | deliver_with_warnings | halt"
+  "delivery_recommendation": "proceed | repair_first | deliver_with_warnings | halt",
+  "next_action": "deliver | repair_first | run_deterministic_fallback"
 }
 ```
 
@@ -588,6 +589,18 @@ Write `outputs/logs/supervisor_gatekeeper.json`:
 | CRITICAL issues, fixable, `review_pass == 1` | `repair_first` |
 | CRITICAL issues, not fixable OR `review_pass > 1` | `deliver_with_warnings` |
 | Missing `submission.csv` AND not fixable | `halt` |
+
+**`next_action`** — the single field the orchestrator reads and follows mechanically.
+You own this decision; the orchestrator performs no judgment of its own:
+- `deliver` — `delivery_recommendation` is `proceed` or `deliver_with_warnings`.
+  Orchestrator finalizes the run.
+- `repair_first` — `delivery_recommendation == repair_first`. Orchestrator dispatches the
+  one repair agent you name in `issues` (model-search / report / validation), then
+  re-dispatches you for the final gate.
+- `run_deterministic_fallback` — `submission.csv` is missing and the subagent pipeline
+  did not produce it (`delivery_recommendation == halt`). Orchestrator runs
+  `python main.py` to regenerate the deliverable, then re-enters at Step 7. This replaces
+  any orchestrator-side check of whether `submission.csv` exists — you make the call.
 
 ---
 
@@ -625,8 +638,8 @@ Update `overall_verdict` and `delivery_recommendation` accordingly.
 
 `supervisor_gatekeeper.json` is the human-facing review. In addition, emit the
 aggregate release verdict to `outputs/logs/{run_id}_llm_gate_supervisor.json` in
-the shared schema (see the verdict schema in `src/data_agent/gates.py`). Compute
-its `status` as the **worst** of every stage verdict written
+the shared schema (see CLAUDE.md → "Closed-loop verdict protocol"; schema in
+`src/data_agent/gates.py`). Compute its `status` as the **worst** of every stage verdict written
 so far (`{run_id}_gate_{stage}.json` and any `{run_id}_llm_gate_{stage}.json`),
 and list each stage's reasons. A `fail` is logged and surfaced but **does not
 halt** — recommend `deliver_with_warnings`. Your verdict takes precedence over

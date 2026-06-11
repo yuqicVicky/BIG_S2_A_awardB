@@ -19,8 +19,12 @@ The plan-critic role is **merged into this agent**. You must produce both the dr
 |-------|--------|
 | `spec_parse.json` | `outputs/logs/spec_parse.json` |
 | `data_profile.json` | `outputs/logs/data_profile.json` |
+| `validation_strategy.json` | `outputs/logs/validation_strategy.json` (from Step 3; the chosen CV strategy) |
 
-Read both files completely before writing any plan step.
+Read all available files completely before writing any plan step. Reconcile the plan's
+cross-validation design with `validation_strategy.json` when it is present (it is the
+single source of CV truth); if it is absent, design the CV strategy from the data structure
+yourself and note the absence.
 
 ---
 
@@ -217,6 +221,7 @@ Write `outputs/logs/analysis_plan.json`:
   "row_id_column": "<from spec_parse.json>",
   "validation_strategy": "time_based | group_based | stratified | random",
   "evaluation_metric": "<from spec_parse.json>",
+  "modeling_mode": "specialist | general",
   "steps": [ ... ],
   "feature_plan": {
     "exclude_columns": [],
@@ -238,7 +243,14 @@ Write `outputs/logs/analysis_plan.json`:
 }
 ```
 
-After writing, print a one-paragraph summary (≤ 100 words) covering: task type, validation strategy, number of steps, and any open warnings.
+**`modeling_mode`** — you own the Step 6 modeling-path decision so the orchestrator does
+not branch on file existence. Attempt to Read `scripts/run_modeling_agent.py` (a missing
+file returns an error); set `modeling_mode: "specialist"` if it exists (parallel
+gbdt/trees/linear specialists +
+ensemble-meta), else `"general"` (single model-search-agent). The orchestrator reads this
+one field and dispatches the corresponding agents — it makes no judgment of its own.
+
+After writing, print a one-paragraph summary (≤ 100 words) covering: task type, validation strategy, modeling mode, number of steps, and any open warnings.
 
 ---
 
