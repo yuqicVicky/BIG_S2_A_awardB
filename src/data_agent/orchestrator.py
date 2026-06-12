@@ -98,6 +98,15 @@ def run_orchestrated_analysis(
 
     try:
         if award_b:
+            # AWARDB_SKIP_FLOOR=1: if the floor OOF already exists for this run_id,
+            # skip the full main.py run — useful when restarting after a crash or
+            # when the orchestrator calls main.py again in rounds 2-3.
+            floor_oof = logs_dir / f"{run_id}_oof_floor.csv"
+            if os.environ.get("AWARDB_SKIP_FLOOR") and floor_oof.exists():
+                print(f"[orchestrator] floor already seeded ({floor_oof.name}); "
+                      f"skipping full run (AWARDB_SKIP_FLOOR=1)")
+                return {"run_id": run_id, "floor_skipped": True,
+                        "floor_oof": str(floor_oof)}
             return _run_award_b(repo_root, run_id, logs_dir, artifacts_dir, goal, random_state)
         return _run_generic(repo_root, run_id, logs_dir, artifacts_dir, goal, file_path, random_state)
     except Exception as exc:  # safety net — never lose the deliverable

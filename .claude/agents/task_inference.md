@@ -109,6 +109,13 @@ with `split_type`, `cv_recommendation`, sub-period ranges when applicable, and
 `sub_target_candidates` (each `{column, corr_with_target}`). If `split_type` is the
 within-period case, add the `cv_warning` text to `warnings`.
 
+These fields — `split_pattern` (+ `split_type`, `cv_recommendation`, sub-period ranges,
+`sub_target_candidates`) together with `file_schemas` (every file's every column + `n_rows`) —
+are the **authoritative source** the `analysis-planner` reads to build its `data_coverage` map
+(one row per `file_schemas` column) and `completeness_constraints` (submission-frame expansion
+from `file_schemas[prediction_file].n_rows`, sub-target decomposition from `sub_target_candidates`).
+Make `file_schemas` exhaustive — a column missing here is a column the planner cannot account for.
+
 ---
 
 ## Step 5 — Validate submission schema

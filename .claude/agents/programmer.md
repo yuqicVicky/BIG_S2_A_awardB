@@ -24,9 +24,18 @@ never write a literal column name, file name, or magic constant into your code.
 |-------|--------|
 | `spec_parse.json` | `outputs/logs/` (target, row_id, files, task, structure) |
 | `data_profile.json` | `outputs/logs/` (missing, target_distribution, split_structure) |
-| `analysis_plan.json` | `outputs/logs/` (`feature_plan`: derive/exclude, aggregates, text) |
+| `analysis_plan.json` | `outputs/logs/` — your **build blueprint**: `feature_plan` (the concrete features to author), `data_coverage` (every column's intended `usage`), `completeness_constraints` (submission-frame expansion, full-train refit, sub-target, missing handling) |
 | `{run_id}_cv_folds.json` | `outputs/logs/` (**canonical shared folds** — used to fit per-fold aggregates leakage-safely) |
 | `run_id`, `round`, `repair_mode`, `critical_issues` | from orchestrator |
+
+**Treat `analysis_plan.json.feature_plan` as the build blueprint:** implement each listed feature
+family (direct numeric, categorical encoding, datetime-derived, text TF-IDF→SVD, per-fold target
+aggregates, flagged interactions/lags), and materialise every `data_coverage.available_sources`
+column whose `usage` is not `excluded`/`key`/`target`. Honor the `completeness_constraints`
+(expand the prediction frame to the submission rows, refit per-fold transformers on full train
+before inference). Your emitted `{run_id}_feature_spec.json` should be traceable back to the plan's
+feature groups — the Step-6A′ ablation gate then validates which groups actually earn their place.
+Experimental `lag_features` flagged in the plan are expected to be ablation-tested, not assumed good.
 
 ---
 

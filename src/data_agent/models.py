@@ -656,6 +656,7 @@ def _train_regression(bundle: FeatureBundle, block_column: str | None, random_st
     if stack is not None:
         scores.append(stack["score_entry"])
         cand_score[stack["name"]] = stack["score"]
+        oof_preds[stack["name"]] = stack["oof"]  # expose stacked OOF so write_oof finds it
 
     selected_name = (max if greater else min)(cand_score, key=lambda n: cand_score[n])
 
