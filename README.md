@@ -42,8 +42,9 @@ communicate only through JSON logs in `outputs/logs/`.
    leakage, validation, and hardcoding.
 5. **plan-reviewer** — adversarial plan review (bounded loop, accept on pass).
 6. **analysis-programmer + modeling group** — the programmer implements the planned
-   features *inside the model's feature engine*; the `gbdt`, `trees`, and
-   `linear-encoding` specialists search models in parallel; `ensemble-meta`
+   features *inside the model's feature engine*; the `modeling-specialist` (one
+   parametrized agent, run once per `gbdt`/`trees`/`linear` family) searches models in
+   parallel; `ensemble-meta`
    keeps the best candidate or a leakage-safe blend. A `hardcoding-and-feature-auditor`
    and a `results-reviewer` audit and steer each round.
 7. **report-writer-reviewer + validation-and-schema-guardian** — generate and

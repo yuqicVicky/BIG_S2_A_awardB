@@ -246,7 +246,7 @@ Write `outputs/logs/analysis_plan.json`:
 **`modeling_mode`** — you own the Step 6 modeling-path decision so the orchestrator does
 not branch on file existence. Attempt to Read `scripts/run_modeling_agent.py` (a missing
 file returns an error); set `modeling_mode: "specialist"` if it exists (parallel
-gbdt/trees/linear specialists +
+`modeling-specialist` runs, one per gbdt/trees/linear family, +
 ensemble-meta), else `"general"` (single model-search-agent). The orchestrator reads this
 one field and dispatches the corresponding agents — it makes no judgment of its own.
 

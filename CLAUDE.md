@@ -28,7 +28,7 @@ that owns the artifact — the reviewer never fixes it itself.
 
 | Agent | Role | Judges / produces |
 |-------|------|-------------------|
-| `data-format-converter`, `data-profiler`, `task-inference-agent`, `analysis-planner`, `analysis-programmer`, `model-search-agent`, `gbdt/trees/linear-specialist`, `ensemble-meta`, `report-writer` | doer | produce analysis artifacts |
+| `data-format-converter`, `data-profiler`, `task-inference-agent`, `analysis-planner`, `analysis-programmer`, `model-search-agent`, `modeling-specialist` (one parametrized agent, run once per `gbdt`/`trees`/`linear` family), `ensemble-meta`, `report-writer` | doer | produce analysis artifacts |
 | `validation-and-schema-guardian` | doer | picks CV strategy (3) + formats/validates submission (7) — never reviews another agent's work |
 | `plan-reviewer` | reviewer | the plan |
 | `model-performance-reviewer` (+ Step-6 **lead**) | reviewer | modeling result; **lead** consolidates the 3 Step-6 reports + owns the loop `next_action` |
@@ -54,18 +54,22 @@ elapsed > 90 min, skip directly to Step 7. Every other branch is read from a rev
 
 ---
 
-## Optional cross-cutting supervisors
+## Cross-cutting supervisors
 
-Two advisory agents may be dispatched when the budget allows; both are **skipped under the
-800k-token / 90-min shortcut** and neither can ever regress the deterministic floor:
+Neither can ever regress the deterministic floor; both are **skipped under the 800k-token /
+90-min shortcut**:
 
-- **`modeling-watchdog`** — *efficiency*, Step 6B. When specialists are launched in the background,
-  it tails their heartbeat files, derives each one's time slice from the wall-clock that actually
-  remains, and kills/restarts a run projected to overrun so the round stays within its slice.
-- **`optimizer`** — *quality + full-pipeline critic*. An independent `continue|revise|stop`
-  discriminator at step boundaries the reviewers and the `llm_gate` files do not cover, plus a
-  one-shot bounded redo of a suboptimal step. The reviewers catch what is *wrong*; the optimizer
-  finds what is *suboptimal* or *directionally off*.
+- **`modeling-watchdog`** — *efficiency*, **wired into Step 6B `specialist` mode** (see there). It
+  runs **concurrently** with the background-launched specialist trainings (not a sequential step):
+  it tails their shared heartbeat files live, projects each run's total from the wall-clock that
+  actually remains, and `pkill`s / recommends one leaner restart for any run projected to overrun
+  its slice, so the round stays inside its time budget. Per-process memory is bounded separately by
+  the `ulimit -v` cap on each background launch.
+- **`optimizer`** — *quality + full-pipeline critic* (**available, not currently wired into the
+  8-step body**). An independent `continue|revise|stop` discriminator at step boundaries the
+  reviewers and the `llm_gate` files do not cover, plus a one-shot bounded redo of a suboptimal
+  step. The reviewers catch what is *wrong*; the optimizer finds what is *suboptimal* or
+  *directionally off*. Dispatch it manually when budget allows.
 
 ---
 
@@ -106,7 +110,14 @@ and `DATA_DESCRIPTION.md`). The prose here gives the **control logic** only.
 - **A.** Dispatch `analysis-programmer` (**features only**): round 1 seeds the floor **once** with `AWARDB_RUN_ID=$RUN_ID AWARDB_SKIP_REPORT=1 python main.py` (→ `submission.csv` baseline, `{run_id}_model_selection.json`, `{run_id}_profile.json`, `{run_id}_oof_floor.csv`, `{run_id}_cv_folds.json` if absent); rounds 2-3 reuse it (`AWARDB_KEEP_OUTPUTS=1` if re-running). It then authors `outputs/scratch/{run_id}/feature_pipeline.py` and writes `{run_id}_features_train/pred.parquet` + `{run_id}_feature_spec.json` (per-fold aggregates use `{run_id}_cv_folds.json`). No modeling, no candidate, no `submission.csv`. Round > 1: apply only the **feature-related** `merged_high_impact_suggestions` to its script, rebuild.
 - **B.** Branch on `analysis_plan.json.modeling_mode` (no judgment of your own). All modeling consumes `{run_id}_cv_folds.json` + the authored `{run_id}_feature_spec.json` and emits `{run_id}_oof_<name>.csv`:
   - `general` → dispatch `model-search-agent` (trains the full pool on canonical folds + authored features; **owns `submission.csv` keep-best** via common-OOF NNLS over floor + search).
-  - `specialist` → dispatch `gbdt/trees/linear-specialist` **in parallel** (each `--cv-folds --feature-spec`), then `ensemble-meta` (common-OOF NNLS over floor + specialists, **promotes `submission.csv` keep-best**).
+  - `specialist` → **background-launch + live watchdog** (the watchdog supervises *concurrently*, it is **not** a sequential step). For each family in {gbdt, trees, linear}, the orchestrator starts its training as a **background** process (Bash `run_in_background`) so all three run at once and the heartbeat is live:
+    ```
+    AWARDB_HEARTBEAT_PATH=outputs/logs/{run_id}_<fam>-specialist_progress.jsonl \
+      bash -c 'ulimit -v <mem_kb>; python scripts/run_modeling_agent.py --approach <fam> \
+        --run-id {run_id} --cv-folds outputs/logs/{run_id}_cv_folds.json \
+        --feature-spec outputs/logs/{run_id}_feature_spec.json'
+    ```
+    `ulimit -v <mem_kb>` is a per-process **virtual-memory hard cap** so a runaway model is OOM-killed by the OS without taking the round down; derive `<mem_kb>` from available RAM (e.g. a fraction of total / number of parallel roles) — never a fixed literal. **In the same batch**, concurrently dispatch `modeling-watchdog` (prompt: `run_id`, `round`, `rounds_left`, `remaining_wall_clock_sec`, `roles="gbdt trees linear"`). It tails the shared heartbeats **while the runs are live**, projects each run's total from its per-unit cost, and `pkill`s any projected to overrun its time slice, writing `{run_id}_<fam>-specialist_watchdog.json` + a `budget_pressure` signal. For each role it killed, **relaunch once** in the background with that file's `recommended_budget`. After all roles emit `final_done` (or are killed), dispatch `ensemble-meta` (common-OOF NNLS over floor + surviving specialists, **promotes `submission.csv` keep-best**). If `scripts/run_modeling_agent.py` is absent or `pkill` is unavailable, fall back to plain parallel Task dispatch of `modeling-specialist` (one instance per family, `family` passed in the prompt; no watchdog) — the floor is the safety net.
   - The mode owner also writes `prediction_sanity.json`, `{run_id}_promotion.json`, and `{run_id}_prior_best.csv`.
 - **C.** Dispatch the **three reviewers in parallel** (one batch, 3 Task calls): `model-performance-reviewer` (review mode), `feature-leakage-reviewer` (reads `{run_id}_feature_spec.json` + `feature_pipeline.py`), `generalization-reviewer`. Each writes only its own report.
 - **D.** After all three finish, re-dispatch `model-performance-reviewer` (**lead** mode): it reads the 3 reports, merges their high-impact suggestions (tagged by `source_reviewer`), may set `revert_promotion`+`blacklist_candidate`, writes `analysis_review_{r}.json`, and **owns `next_action`**.
@@ -145,7 +156,7 @@ It produces `submission.csv` + `report.pdf` via the in-process pipeline; then re
 | 4 | `analysis-planner` | `spec_parse.json`, `data_profile.json`, `validation_strategy.json` | `analysis_plan.json` |
 | 5 | `plan-reviewer` ↔ `analysis-planner` | `analysis_plan.json`, `spec_parse.json`, `data_profile.json` | `plan_review_{1,2,3}.json` |
 | 6A | `analysis-programmer` (features) | `analysis_plan.json`, `spec_parse.json`, `data_profile.json`, `{run_id}_cv_folds.json` (+ `analysis_review_{r-1}.json` round>1) | floor (round 1): `{run_id}_profile/state/submission_check.json`, `{run_id}_model_selection.json`, `{run_id}_oof_floor.csv`, `submission.csv`; features: `{run_id}_features_train/pred.parquet`, `{run_id}_feature_spec.json`, `outputs/scratch/{run_id}/feature_pipeline.py` |
-| 6B | `model-search-agent` (general) **or** `gbdt/trees/linear-specialist`+`ensemble-meta` (specialist) | `{run_id}_cv_folds.json`, `{run_id}_feature_spec.json`, `{run_id}_oof_floor.csv`, `{run_id}_model_selection.json`, `spec_parse.json`, `validation_strategy.json` | general: `model_search.json`+`final_model.json`; specialist: `{run_id}_ensemble_meta.json`+`{run_id}_meta_choice.csv`+`{run_id}_cand_*.csv`+`{run_id}_agent_*.json`; both: `{run_id}_oof_*.csv`, `prediction_sanity.json`, `{run_id}_promotion.json`, `{run_id}_prior_best.csv`, `submission.csv` |
+| 6B | `model-search-agent` (general) **or** `modeling-specialist` (×3: gbdt/trees/linear)+`modeling-watchdog`+`ensemble-meta` (specialist) | `{run_id}_cv_folds.json`, `{run_id}_feature_spec.json`, `{run_id}_oof_floor.csv`, `{run_id}_model_selection.json`, `spec_parse.json`, `validation_strategy.json` | general: `model_search.json`+`final_model.json`; specialist: `{run_id}_<fam>-specialist_progress.jsonl` (heartbeats) + `{run_id}_<fam>-specialist_watchdog.json` (watchdog verdicts) + `{run_id}_ensemble_meta.json`+`{run_id}_meta_choice.csv`+`{run_id}_cand_*.csv`+`{run_id}_agent_*.json`; both: `{run_id}_oof_*.csv`, `prediction_sanity.json`, `{run_id}_promotion.json`, `{run_id}_prior_best.csv`, `submission.csv` |
 | 6C | `model-performance-reviewer` (review); `feature-leakage-reviewer`; `generalization-reviewer` — **parallel** | modeling outputs (6B), `{run_id}_profile.json`, `{run_id}_feature_spec.json`+`feature_pipeline.py` (feature reviewer), `validation_strategy.json`, `prediction_sanity.json`, `{run_id}_promotion.json`, `submission.csv` | `model_performance_review.json`; `feature_audit_review.json`; `overfitting_leakage_audit.json` |
 | 6D | `model-performance-reviewer` (lead) ↔ `analysis-programmer` | the 3 reports above + `analysis_review_{r-1}.json` | `analysis_review_{1,2,3}.json` (owns `next_action`) |
 | 7a | `validation-and-schema-guardian` (submission-validation) | `submission.csv`, `data/sample_submission.csv`, `spec_parse.json` | `submission_validation.json` + formatted `submission.csv` |
