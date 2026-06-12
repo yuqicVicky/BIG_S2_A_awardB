@@ -23,6 +23,14 @@ import argparse
 import json
 import os
 import sys
+
+# Prevent BLAS/OpenMP thread-pool deadlocks on macOS fork-based multiprocessing.
+# Must precede numpy import — the thread pool is initialised at import time.
+os.environ.setdefault("OMP_NUM_THREADS", "1")
+os.environ.setdefault("MKL_NUM_THREADS", "1")
+os.environ.setdefault("OPENBLAS_NUM_THREADS", "1")
+os.environ.setdefault("VECLIB_MAXIMUM_THREADS", "1")
+
 from pathlib import Path
 
 import numpy as np
@@ -61,6 +69,14 @@ def _append_authored_features(bundle, feature_spec_path: Path) -> list[str]:
                 if pd.api.types.is_numeric_dtype(ftr[c]):
                     bundle.numeric_columns.append(c)
                 added.append(c)
+        # If the spec provides pre-computed SVD columns for a text column, remove
+        # that raw text column from the bundle so the internal Pipeline doesn't
+        # re-run TF-IDF on top of the already-computed SVD representation.
+        text_svd_cols = spec.get("text_svd") or []
+        covered = {c.rsplit("__svd_", 1)[0] for c in text_svd_cols if "__svd_" in c}
+        for tc in covered:
+            bundle.text_columns = [c for c in (bundle.text_columns or []) if c != tc]
+            bundle.feature_columns = [c for c in bundle.feature_columns if c != tc]
         return added
     except Exception as exc:  # noqa: BLE001 — authored features are best-effort
         print(f"[features] authored features not applied: {type(exc).__name__}: {exc}")

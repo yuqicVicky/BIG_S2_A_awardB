@@ -759,6 +759,15 @@ class _TimeBudget:
         return max(0.0, self.deadline - time.monotonic())
 
 
+def _n_jobs() -> int:
+    """Safe parallel-jobs count. Default 1 avoids macOS fork-based deadlocks.
+    Set AWARDB_N_JOBS=-1 on Linux for full parallelism."""
+    try:
+        return int(os.environ.get("AWARDB_N_JOBS", "1"))
+    except Exception:
+        return 1
+
+
 def _coarsen_datetime_blocks(series: pd.Series, n: int, k: int = 5):
     """Derive a coarser temporal block from a too-granular datetime-like column so a
     blocked CV holds *whole periods* out instead of one row per group. Tries
@@ -1430,7 +1439,7 @@ def _build_candidates(bundle: FeatureBundle, train_df: pd.DataFrame, random_stat
             "extra_trees",
             lambda: Pipeline([
                 ("preprocess", _make_preprocessor_fresh(scale=False)),
-                ("model", ExtraTreesRegressor(n_estimators=200, random_state=rs, n_jobs=-1, min_samples_leaf=2, max_features="sqrt")),
+                ("model", ExtraTreesRegressor(n_estimators=200, random_state=rs, n_jobs=_n_jobs(), min_samples_leaf=2, max_features="sqrt")),
             ]),
         )
     )
@@ -1439,7 +1448,7 @@ def _build_candidates(bundle: FeatureBundle, train_df: pd.DataFrame, random_stat
             "random_forest",
             lambda: Pipeline([
                 ("preprocess", _make_preprocessor_fresh(scale=False)),
-                ("model", RandomForestRegressor(n_estimators=150, random_state=rs, n_jobs=-1, min_samples_leaf=2)),
+                ("model", RandomForestRegressor(n_estimators=150, random_state=rs, n_jobs=_n_jobs(), min_samples_leaf=2)),
             ]),
         )
     )
@@ -1531,7 +1540,7 @@ def _build_candidates(bundle: FeatureBundle, train_df: pd.DataFrame, random_stat
                         reg_alpha=0.1,
                         reg_lambda=0.1,
                         random_state=rs,
-                        n_jobs=-1,
+                        n_jobs=_n_jobs(),
                         verbose=-1,
                     )),
                 ]),
@@ -1552,7 +1561,7 @@ def _build_candidates(bundle: FeatureBundle, train_df: pd.DataFrame, random_stat
                         reg_alpha=0.05,
                         reg_lambda=0.05,
                         random_state=rs,
-                        n_jobs=-1,
+                        n_jobs=_n_jobs(),
                         verbose=-1,
                     )),
                 ]),
@@ -1575,7 +1584,7 @@ def _build_candidates(bundle: FeatureBundle, train_df: pd.DataFrame, random_stat
                             reg_alpha=0.1,
                             reg_lambda=0.1,
                             random_state=rs,
-                            n_jobs=-1,
+                            n_jobs=_n_jobs(),
                             verbose=-1,
                         )),
                     ])),
@@ -1597,7 +1606,7 @@ def _build_candidates(bundle: FeatureBundle, train_df: pd.DataFrame, random_stat
                             reg_alpha=0.1,
                             reg_lambda=0.1,
                             random_state=rs,
-                            n_jobs=-1,
+                            n_jobs=_n_jobs(),
                             verbose=-1,
                         )),
                     ])),
@@ -1623,7 +1632,7 @@ def _build_candidates(bundle: FeatureBundle, train_df: pd.DataFrame, random_stat
                             reg_alpha=0.1,
                             reg_lambda=1.0,
                             random_state=rs,
-                            n_jobs=-1,
+                            n_jobs=_n_jobs(),
                             verbosity=0,
                             eval_metric="mae",
                         )),
@@ -1643,7 +1652,7 @@ def _build_candidates(bundle: FeatureBundle, train_df: pd.DataFrame, random_stat
                 ("preprocess", _make_preprocessor_fresh(scale=False)),
                 ("model", CatBoostRegressor(
                     iterations=600, learning_rate=0.03, depth=6, l2_leaf_reg=3.0,
-                    loss_function="MAE", random_seed=rs, thread_count=-1,
+                    loss_function="MAE", random_seed=rs, thread_count=_n_jobs(),
                     allow_writing_files=False, verbose=False,
                 )),
             ]),
@@ -1655,7 +1664,7 @@ def _build_candidates(bundle: FeatureBundle, train_df: pd.DataFrame, random_stat
                     ("preprocess", _make_preprocessor_fresh(scale=False)),
                     ("model", CatBoostRegressor(
                         iterations=600, learning_rate=0.03, depth=6, l2_leaf_reg=3.0,
-                        loss_function="RMSE", random_seed=rs, thread_count=-1,
+                        loss_function="RMSE", random_seed=rs, thread_count=_n_jobs(),
                         allow_writing_files=False, verbose=False,
                     )),
                 ])),
