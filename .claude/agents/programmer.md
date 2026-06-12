@@ -74,6 +74,23 @@ Write `outputs/scratch/{run_id}/feature_pipeline.py` that, resolving all names a
      is_weekend, quarter, weekofyear, ordinal; + hour fields when sub-day). **Never** add the
      raw row_id / join-key / datetime string itself as a feature.
    - **Free text:** TF-IDF→SVD for text columns flagged in the profile.
+   - **Image sidecars (when `analysis_plan.feature_plan.image_features` is present):** implement the
+     planned extraction. Guard the imports (`PIL`, `matplotlib`); if unavailable, log a `degraded`
+     note and **omit** image features (the pipeline continues). Otherwise, resolving the colormap +
+     `key_columns` from `spec_parse.json.file_sidecars` (never hardcoded):
+     - **Dedupe by content**, then extract once per *unique* image (state-/group-constant images are
+       common — there may be far fewer unique images than rows). For each unique image: decode with
+       PIL → if a colormap is named, build a 256-entry RGB LUT for it and map each pixel to its
+       nearest LUT index via the matmul identity `‖u−l‖² = ‖u‖² + ‖l‖² − 2·u·lᵀ` (dedupe pixel
+       colors first for speed), **mask background** by nearest-LUT distance, and recover the scalar
+       field; else use grayscale. Summarize to the planned `summary_stats` (mean/std/percentiles/
+       `high_frac`/`cover`/spatial `cmass_x,cmass_y`) + optional small `TruncatedSVD` of a 32×32
+       grayscale downsample.
+     - Build a `key_columns → features` table and **left-join onto both** the train and prediction
+       frames by those keys; fill rows with a missing image from the **training** feature median.
+     - Images are a **static per-key observation — NOT target-derived**: do **not** put them in
+       `per_fold_aggregates`; record the columns under a new `image_features` group in the spec.
+       Fit any image SVD on fold-train rows only (reproducibility), not the prediction frame.
 3. Writes the feature matrices, **row-aligned**:
    - `{run_id}_features_train.parquet` — aligned to the **raw train-file row order** (CSV
      fallback if pyarrow is unavailable; record which in the spec).
@@ -86,6 +103,7 @@ Write `outputs/scratch/{run_id}/feature_pipeline.py` that, resolving all names a
     "feature_columns": ["..."],
     "per_fold_aggregates": [{"name": "...", "group_keys": ["..."], "source": "per_fold"}],
     "datetime_derived": ["..."], "text_svd": ["..."],
+    "image_features": ["..."],
     "target_transform": "log1p|none", "notes": "..."}
    ```
 

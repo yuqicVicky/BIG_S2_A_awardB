@@ -118,6 +118,29 @@ Make `file_schemas` exhaustive — a column missing here is a column the planner
 
 ---
 
+## Step 4c — Discover non-tabular sidecar modalities (images etc.)
+
+Some datasets ship **non-tabular sidecar files** the planner must also account for — most often a
+per-key image directory (e.g. `<split>/images/<modality>/<KEY1>_<KEY2>.<ext>`). The
+`data-format-converter` leaves these in place; you **catalogue** them so the planner can plan
+feature extraction and the coverage map stays complete. For each sidecar group found, record an
+entry in `file_sidecars`:
+
+- Scan `data/` for non-tabular file clusters (directories of `.png`/`.jpg`/`.npy`/… grouped under
+  an `images/<modality>/` or similar path). Resolve everything **at runtime, never hardcoded**:
+  - `key_columns` — infer from the filename token pattern matched against the dataset's
+    `join_keys` (e.g. `{jurisdiction}_{period_id}.png` → `["jurisdiction","period_id"]`).
+  - `modality` / `format` / `filename_pattern` — from the file extensions + token layout.
+  - `colormap` / encoding hints — only if `DATA_DESCRIPTION.md` states them (e.g. a named colormap
+    for heatmaps); else `null`.
+  - `n_files_train` / `n_files_pred` and the `path_train` / `path_pred` directories.
+- If no sidecar files exist, emit `file_sidecars: []`.
+
+`file_sidecars` joins `file_schemas` as authoritative input the planner reads: every sidecar must
+appear in the planner's `data_coverage` (used for feature extraction or justified-excluded).
+
+---
+
 ## Step 5 — Validate submission schema
 
 Confirm the sample submission (if present) has exactly `[row_id_column, target_column]` and a
@@ -151,6 +174,13 @@ row for every prediction row. If absent, add a `WARN` (do not halt).
     "split_pattern": { "split_type": "unknown", "cv_recommendation": "<computed>", "sub_target_candidates": [] }
   },
   "file_schemas": { "<file_path>": { "n_rows": 0, "n_cols": 0, "columns": [], "dtypes": {} } },
+  "file_sidecars": [
+    { "path_train": "<dir or null>", "path_pred": "<dir or null>",
+      "modality": "image | other", "format": "<ext>",
+      "filename_pattern": "<e.g. {jurisdiction}_{period_id}.png>",
+      "key_columns": [], "colormap": "<name or null>",
+      "n_files_train": 0, "n_files_pred": 0 }
+  ],
   "sample_submission_validated": true,
   "warnings": [],
   "errors": []

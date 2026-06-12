@@ -29,7 +29,7 @@ You produce `analysis_plan.json` with four blocks: `modeling_mode`, `data_covera
 
 | Input | Source |
 |-------|--------|
-| `spec_parse.json` | `outputs/logs/spec_parse.json` — target, row_id, join keys, metric, `file_schemas` (every file's every column), `detected_structure.split_pattern`, `sub_target_candidates` |
+| `spec_parse.json` | `outputs/logs/spec_parse.json` — target, row_id, join keys, metric, `file_schemas` (every file's every column), `file_sidecars` (non-tabular modalities, e.g. images), `detected_structure.split_pattern`, `sub_target_candidates` |
 | `data_profile.json` | `outputs/logs/data_profile.json` — per-column dtype/missingness, `text_like_columns`, datetime-parseable columns, target distribution |
 | `validation_strategy.json` | `outputs/logs/validation_strategy.json` — the chosen CV strategy (authoritative; do not re-design CV) |
 
@@ -67,12 +67,19 @@ train covariates, prediction/val covariates). For each, assign exactly one `usag
 | `interaction` | combined with another column (e.g. covariate × time-rank) |
 | `key` | join key / row_id / block column — used for joining or blocking, **not** a raw model feature |
 | `target` | the label |
+| `image` | a non-tabular **sidecar** (see `spec_parse.json.file_sidecars`) → extracted image features (Part 2) |
 | `excluded` | dropped — **justification is mandatory** (constant, fully-redundant, unusable) |
 
 **Hard rule:** `data_coverage.uncovered_columns` MUST be empty. Any column you cannot place is
 a planning defect — place it or justify-exclude it. This is how the plan guarantees *all data
 information is exploited*. The opaque period/id key is `key` (resolved to an ordinal rank), never
 a raw feature.
+
+**Sidecar modalities.** If `spec_parse.json.file_sidecars` is non-empty, the data has non-tabular
+inputs (e.g. per-key images) the coverage map must also account for. Add an `image_sidecars` list
+to `data_coverage` — one entry per sidecar — each either planned for extraction (`usage: image`,
+pointing to the Part-2 `image_features` block) or justified-excluded. A non-empty `file_sidecars`
+left unrepresented is the same coverage defect as a missing column.
 
 ---
 
@@ -93,10 +100,43 @@ applicable family, each **fold-safe**:
   ablation gate can validate them before they reach the model.
 - `imputation` — `{column: strategy}` using training statistics only (e.g. high-missingness
   covariates imputed from training group medians).
+- `image_features` — **when `spec_parse.json.file_sidecars` has an image modality** (see the
+  Image-modality method below). Prescribe `{source_sidecar, join_keys, method, summary_stats,
+  optional_svd, missing_fill}`.
 - `exclude_columns` — mirror the coverage map's `excluded` set.
 
 Add a short `rationale`: why this set is *comprehensive* (uses all signals) yet *guards against
 overfitting* (per-fold fits, experimental lags flagged, no raw id/text/datetime strings).
+
+### Image-modality features (the method to prescribe)
+
+When `file_sidecars` contains an image modality, prescribe a **dependency-light** extraction
+(numpy + Pillow + matplotlib only — **no torch/cv2 required**, so it runs on CPU in seconds) and
+record it as `feature_plan.image_features`:
+
+- **Decode → scalar field.** Read each image with PIL. If `DATA_DESCRIPTION.md` / the sidecar's
+  `colormap` says it is a **colormap heatmap** (a scalar field encoded as color, e.g. viridis),
+  invert that colormap to recover the underlying scalar: build a 256-entry RGB LUT for the named
+  colormap, map each pixel to its nearest LUT index (→ scalar in [0,1]), and **mask out background
+  pixels** by nearest-LUT distance (heatmaps sit on a plain background that is far from any
+  colormap color). If no colormap is stated, fall back to grayscale intensity.
+- **Summarize → low-dim per-image features.** From the masked scalar field emit ~8–12 cheap stats:
+  `mean, std, p10, p50, p90, high_frac` (fraction above mid-scale), `cover` (fraction of
+  non-background pixels — itself informative), and spatial `cmass_x, cmass_y` / quadrant means.
+  Optionally add a small `TruncatedSVD` (e.g. 8 comps) of a 32×32 grayscale downsample for coarse
+  spatial structure.
+- **Join.** These features are keyed by the sidecar's `key_columns`; left-join onto **both** the
+  train and prediction frames by those keys. Fill rows with a missing image from the **training**
+  feature median (`missing_fill: train_median`).
+- **Leakage.** Images are a **static observation per key — not target-derived** → no per-fold
+  target leakage; the programmer extracts once per *unique* image (dedupe by content) and fits any
+  SVD on fold-train only for reproducibility. Note in the `rationale` that if the image varies only
+  by a key already target-encoded (e.g. group-constant images), the features may be redundant — the
+  **Step-6A′ ablation gate decides empirically**, so plan them and let the gate prune if useless.
+- **Stay dataset-agnostic:** the colormap name and `key_columns` come from `spec_parse.json`
+  (`file_sidecars`) / `DATA_DESCRIPTION.md` at runtime — never hardcode a colormap or path. If
+  Pillow is unavailable, mark `image_features.degraded_if_no_pillow: true` (the programmer skips
+  image features gracefully and the floor still ships).
 
 ---
 
@@ -144,7 +184,10 @@ Before writing, verify and fix:
 5. **Overfit guard** — experimental lag/interaction features are flagged for ablation, not assumed
    beneficial. *(advisory)*
 6. **No hardcoding** — every column/file/count comes from `spec_parse.json` / `data_profile.json`,
-   never a literal. *(blocking)*
+   never a literal (incl. colormap names / sidecar paths — read from `file_sidecars`). *(blocking)*
+7. **Sidecars covered** — when `spec_parse.json.file_sidecars` is non-empty, every sidecar appears
+   in `data_coverage.image_sidecars` and either has a `feature_plan.image_features` extraction plan
+   or a justified exclusion. *(blocking)*
 
 `verdict`: `PASS` (all blocking satisfied), `WARN` (blocking satisfied, ≥1 advisory open),
 `FAIL` (any blocking unmet). Do not output a `FAIL` plan — fix it first.
@@ -161,13 +204,17 @@ Before writing, verify and fix:
   "data_coverage": {
     "available_sources": [
       {"source": "<file>", "column": "<name>", "dtype": "<from profile>",
-       "usage": "direct_feature|aggregate|text_svd|datetime_derived|interaction|key|target|excluded",
+       "usage": "direct_feature|aggregate|text_svd|datetime_derived|interaction|key|target|image|excluded",
        "justification": "<one line; mandatory when excluded>"}
     ],
     "uncovered_columns": [],
     "text_columns_exploited": ["..."],
     "datetime_sources": ["..."],
-    "target_aggregate_keys": [["..."]]
+    "target_aggregate_keys": [["..."]],
+    "image_sidecars": [
+      {"source": "<file_sidecars[i].path_*>", "modality": "image", "key_columns": ["..."],
+       "usage": "image | excluded", "justification": "<one line>"}
+    ]
   },
   "feature_plan": {
     "direct_numeric": ["..."],
@@ -178,6 +225,13 @@ Before writing, verify and fix:
     "interactions": ["..."],
     "lag_features": [{"name": "...", "group_keys": ["..."], "experimental": true}],
     "imputation": {"column": "strategy"},
+    "image_features": {
+      "source_sidecar": "<file_sidecars[i].path_*>", "join_keys": ["..."],
+      "method": "colormap_inversion_summary | grayscale_summary",
+      "summary_stats": ["mean","std","p10","p50","p90","high_frac","cover","cmass_x","cmass_y"],
+      "optional_svd": {"on": "grayscale_downsample_32x32", "n_components": 8},
+      "missing_fill": "train_median", "degraded_if_no_pillow": true
+    },
     "exclude_columns": ["..."],
     "rationale": "≤60 words: comprehensive (all signals) yet overfit-guarded (per-fold, lags flagged)"
   },
@@ -190,7 +244,7 @@ Before writing, verify and fix:
   },
   "critique": {
     "verdict": "PASS | WARN | FAIL",
-    "checks_performed": [1, 2, 3, 4, 5, 6],
+    "checks_performed": [1, 2, 3, 4, 5, 6, 7],
     "blocking_issues": [],
     "advisory_issues": [],
     "fixes_applied": []

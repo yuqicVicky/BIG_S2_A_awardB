@@ -56,6 +56,15 @@ Resolve every column name from `spec_parse.json` / `data_profile.json` — never
 - Dataset-specific column names hardcoded in feature logic (direct `df["term"]`, `== "term"`),
   rather than resolved from `spec_parse.json` → flag per the project anti-hardcoding rules.
 
+**Image-sidecar features (the `image_features` group, when present)**
+- These are a **static per-key observation — NOT target-derived**, so they are *not* a per-fold
+  aggregate and should **not** be flagged as aggregate leakage. Judge instead: (a) **join
+  correctness** — joined by the sidecar's `key_columns` only, no row_id / future-period key; (b)
+  prediction rows with a missing image are filled from **training** statistics (median), not from
+  the prediction set; (c) any image SVD is fit on fold-train rows, not the prediction frame; (d)
+  the colormap/path were resolved from `spec_parse.json.file_sidecars`, not hardcoded. A correctly
+  keyed static image feature is leakage-safe even though it is not per-fold.
+
 ---
 
 ## Output — `outputs/logs/feature_audit_review.json`

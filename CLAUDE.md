@@ -154,7 +154,7 @@ It produces `submission.csv` + `report.pdf` via the in-process pipeline; then re
 | Step | Agent(s) | Inputs | Outputs (in `outputs/logs/` unless noted) |
 |------|----------|--------|-------------------------------------------|
 | 1 | `data-format-converter` | `data/` | `data_conversion.json` |
-| 2a | `task-inference-agent` | `DATA_DESCRIPTION.md`, data CSVs | `spec_parse.json` |
+| 2a | `task-inference-agent` | `DATA_DESCRIPTION.md`, data CSVs, `data/` (sidecar scan) | `spec_parse.json` (incl. `file_schemas` + `file_sidecars` for non-tabular modalities e.g. images) |
 | 2b | `data-profiler` | data CSVs, `spec_parse.json` | `data_profile.json`, `missingness_profile.json`, `imputation_plan.json` |
 | 3a | `validation-and-schema-guardian` (schema-review) | `spec_parse.json`, `data_profile.json` | `validation_strategy.json`, `{run_id}_cv_folds.json` |
 | 3b | `hardcoding-and-feature-auditor` (pre) | repo `src/`+`scripts/`, `DATA_DESCRIPTION.md`, headers | `hardcoding_audit_pre.json` |
@@ -199,6 +199,8 @@ diagnostics — they inform a reviewer's `next_action` but never halt the workfl
 - **No hardcoding.** Resolve every column name, file path, task type, and metric at runtime from `spec_parse.json` / `data_profile.json` / `DATA_DESCRIPTION.md` — never literal. This applies equally to **LLM-authored code** under `outputs/scratch/{run_id}/` (e.g. `programmer_pipeline.py`) and to the embedded snippets agents write at runtime. Banned literals include `rate_per_10000_ed_visits`, `overdose_category`, `all_drugs/all_opioids/all_stimulants`, `918`, any fixed period-id map, any dev absolute path, or any term not derived from the data at runtime. `hardcoding-and-feature-auditor` enforces this (pre Step 3, post Step 8) over `src/`, `scripts/`, **and `outputs/scratch/`**; its search terms and classification rules live in its agent file.
 
 - **Datetime features (every dataset).** Scan all columns (incl. row_id/join keys) for datetime parseability; **never** add the raw row_id/join-key/datetime string as a model feature — only derived `col__<field>` columns (year, month, sin/cos, day, dayofweek, is_weekend, quarter, weekofyear, ordinal; + hour fields when sub-day). Record detection under `{run_id}_profile.json → feature_audit` and mention it in the report.
+
+- **Sidecar modalities (images etc.).** When `spec_parse.json.file_sidecars` is non-empty, the planner plans `feature_plan.image_features` and the programmer extracts dependency-light image features (colormap-inversion → scalar-field summaries via numpy+PIL+matplotlib; **no torch**), joined by the sidecar `key_columns`, written to the `image_features` group of `{run_id}_feature_spec.json`. They are a **static per-key observation — not target-derived** (no per-fold leakage), validated like any group by the Step-6A′ ablation gate. Pillow/sidecar absent → gracefully skipped; the floor still ships.
 
 ---
 

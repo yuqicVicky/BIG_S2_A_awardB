@@ -65,6 +65,7 @@ SEED = 42
 _NAMED_GROUP_KEYS = (
     ("per_fold_aggregates", "per_fold_aggregates"),  # value is list[{name,...}]
     ("text_svd", "text_svd"),
+    ("image_features", "image_features"),            # static per-key image-derived columns
     ("datetime_derived", "datetime_derived"),
     ("distribution_shift_interactions", "distribution_shift_interactions"),
 )
@@ -177,7 +178,7 @@ def _prune_spec(spec: dict, prune_cols: set[str]) -> dict:
         a for a in (spec.get("per_fold_aggregates") or [])
         if not (isinstance(a, dict) and a.get("name") in prune_cols)
     ]
-    for key in ("text_svd", "datetime_derived", "distribution_shift_interactions"):
+    for key in ("text_svd", "image_features", "datetime_derived", "distribution_shift_interactions"):
         if key in spec:
             out[key] = [c for c in spec[key] if c not in prune_cols]
     out["ablation_pruned_columns"] = sorted(prune_cols)

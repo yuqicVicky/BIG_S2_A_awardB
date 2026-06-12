@@ -47,6 +47,13 @@ thresholds yourself from the data and justify them — do not hardcode cutoffs.
 2. **Schema diff** between train and prediction: columns in-train-only, in-prediction-only,
    in-both. Train-only non-target columns matter downstream (possible sub-targets / leakage).
 
+2b. **Sidecar modalities (metadata only).** If `spec_parse.json.file_sidecars` is non-empty (e.g.
+   an image directory), record a light `sidecars` summary in the profile: per sidecar the path(s),
+   file count for train/pred, a few sample filenames, the `key_columns`, and how many distinct
+   `key_columns` tuples are covered vs how many train/pred rows need them (so the planner knows
+   coverage and whether images vary per key or are group-constant). **Do not load pixel data** —
+   filename/`os.stat` metadata only; this stays fast.
+
 3. **Split structure.** Decide whether train and prediction cover the **same calendar periods
    on different sub-periods** (e.g. same months, different days — a within-period cross
    sub-period split) versus a **chronological** (non-overlapping) split versus **mixed/unknown**.
