@@ -1,0 +1,25 @@
+{
+  "round": 1,
+  "reviewer": "model-performance-reviewer (lead)",
+  "source_reports": ["model_performance_review.json", "feature_audit_review.json", "overfitting_leakage_audit.json"],
+  "current_best_cv_score": 0.7850778998979647,
+  "baseline_cv_score": 0.8006771428984656,
+  "prev_round_cv_score": null,
+  "round_over_round_improvement_pct": null,
+  "merged_high_impact_suggestions": [
+    {
+      "source_reviewer": "model-performance-reviewer",
+      "category": "model_selection",
+      "suggestion": "gbdt specialist was killed by the watchdog after only 21.3s of its 700s budget while best_so_far=0.844 was still improving toward its eventual tuned stack(catboost_log+catboost+hgb_log)=0.7869 (best single candidate). Relaunch gbdt with the full recommended budget (seeds=2, tune_iter=12, inner_cv=3, wall_clock_sec=660) and verify final_done before re-scoring, since gbdt already carries 0.849 NNLS weight and is the dominant model.",
+      "expected_impact": "high",
+      "implementation_hint": "Relaunch gbdt specialist via run_modeling_agent.py --approach gbdt with wall_clock_sec=660 (loosen watchdog projection threshold so it does not kill near-startup runs that have already produced a scored candidate); confirm {run_id}_gbdt-specialist_progress.jsonl ends in final_done before ensemble-meta re-runs NNLS."
+    }
+  ],
+  "high_priority_suggestion_count": 1,
+  "blocking_leakage": false,
+  "approved_for_final": false,
+  "revert_promotion": false,
+  "blacklist_candidate": null,
+  "next_action": "continue_round",
+  "notes": "Top priority: gbdt specialist was prematurely killed at 21s/700s by an over-conservative watchdog while still improving (best=0.844 -> eventual 0.7869, gbdt holds 0.849 NNLS weight) -- relaunch with full budget. No HIGH-severity leakage (feature/overfitting audits both pass/low/medium); blend (0.7851) beats floor (0.8007) by 1.95%, modest but real. Round 1 of 3, ~50min elapsed of 90min shortcut window -- proceed to round 2."
+}

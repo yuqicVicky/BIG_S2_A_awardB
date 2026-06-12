@@ -1,0 +1,55 @@
+{
+  "run_id": "20260612_161004",
+  "reviewed_at": "2026-06-12T20:15:48Z",
+  "mode": "schema_review",
+  "detected_structure": {
+    "has_time": true,
+    "has_group": true,
+    "has_panel": true,
+    "sub_period_pattern": null,
+    "temporal_overlap": false,
+    "class_imbalance": false,
+    "minority_class_rate": null,
+    "distribution_shift_columns": []
+  },
+  "chosen_strategy": "group_time_split",
+  "strategy_rationale": "Train and prediction periods are disjoint and chronological (train period_id range 2019-01..2025-05, prediction 2025-06..2025-12, 6 held-out monthly periods). The panel is structured as (period_id x jurisdiction x overdose_category). Holding out whole period_id blocks via GroupKFold on the time-block column mirrors the hidden evaluation: the hidden set never shares a period_id with training, and the evaluation metric (block_mae) is itself blocked on period_id. This dominates a plain time_based_holdout because GroupKFold over period_id guarantees every fold's validation rows come from periods entirely absent from that fold's training rows -- directly reproducing the train/val period disjointness -- while also yielding multiple folds (more stable OOF) instead of a single last-slice holdout.",
+  "holdout_parameters": {
+    "sub_period_feature": null,
+    "holdout_threshold": null,
+    "holdout_fraction": null,
+    "time_column": "period_id",
+    "group_column": "period_id",
+    "n_splits": 5,
+    "stratify_column": null,
+    "random_state": 42
+  },
+  "simulates_hidden_evaluation": "Each fold's validation rows are drawn from period_id values entirely excluded from that fold's training rows, reproducing the disjoint-period structure of train (2019-01..2025-05) vs hidden (2025-06..2025-12). block_mae is computed per period_id block in both OOF scoring and the hidden leaderboard.",
+  "leakage_risks": [
+    {
+      "risk_type": "target appearing in prediction schema",
+      "column": "rate_per_10000_ed_visits",
+      "severity": "low",
+      "action": "sample_submission.csv carries a placeholder target column for format only; prediction_file (val/covariates.csv) has no target -- not a leakage path, but feature code must never read the placeholder column from sample_submission."
+    },
+    {
+      "risk_type": "high-cardinality non-datetime ID in feature set",
+      "column": "jurisdiction",
+      "severity": "medium",
+      "action": "jurisdiction (51 levels) and overdose_category (8 levels) are valid grouping/feature keys for per-fold target aggregates, but any target-derived aggregate keyed on (jurisdiction, overdose_category) must be fit per training fold only, never on rows whose period_id falls in that fold's validation block."
+    },
+    {
+      "risk_type": "train-only numeric columns strongly correlated with target (auxiliary categories)",
+      "column": "overdose_category (non-scored categories: heroin, fentanyl, cocaine, methamphetamine, benzodiazepine)",
+      "severity": "medium",
+      "action": "These 5 unscored categories (corr 0.70-0.88 with scored categories, except heroin) exist in train for all period_id x jurisdiction combos but the prediction set only requires all_drugs/all_opioids/all_stimulants rows; using them as auxiliary signal (e.g. cross-category aggregates) is fine as long as aggregates are computed per fold on training-period data only and never leak validation-period target values."
+    },
+    {
+      "risk_type": "out-of-distribution period range",
+      "column": "period_id",
+      "severity": "low",
+      "action": "Hidden prediction periods (2025-06..2025-12) are entirely beyond the max training period_id (2025-05); GroupKFold on period_id cannot fully replicate true future extrapolation -- monitor for drift in covariates (unemployment_rate, gtrends_*) across the 2025 horizon."
+    }
+  ],
+  "validation_limitations": "GroupKFold over period_id holds out whole training periods but folds are drawn from within the 2019-01..2025-05 training span, not strictly the final periods -- it does not fully capture pure forward extrapolation to 2025-06..2025-12 (no training period exists beyond 2025-05, whereas validation folds here can include early/mid-range periods). Trend/seasonality extrapolation risk for the final 6-month horizon is therefore only partially represented by OOF error on these folds."
+}

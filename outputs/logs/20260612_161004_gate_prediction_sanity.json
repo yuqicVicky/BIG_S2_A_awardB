@@ -1,0 +1,17 @@
+{
+  "stage": "prediction_sanity",
+  "run_id": "20260612_161004",
+  "status": "pass",
+  "reasons": [],
+  "suggested_corrections": {},
+  "checked": {
+    "n_predictions": 918,
+    "task_type": "regression",
+    "metric": "block_mae",
+    "clip_fraction": 0.0,
+    "baseline_score": 1.2420692366653887,
+    "candidate_score": 0.8006771428984656,
+    "corrective_reruns": 0
+  },
+  "critic": "deterministic"
+}

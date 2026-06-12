@@ -1,0 +1,69 @@
+{
+  "run_id": "20260612_161004",
+  "reviewer": "report-reviewer",
+  "reviewed_at": "2026-06-12T21:45:00Z",
+  "report_path": "report.pdf",
+  "checks": [
+    {
+      "check": 1,
+      "name": "numbers_match_logs",
+      "verdict": "pass",
+      "location": "Sections 1, 3, 6, 7, 8.5-8.6",
+      "detail": "Row counts (31416/3927/357/918), missing rates (29.6%, 54.6%, 58.0%, 32.2%, 5.9% etc.) match data_profile.json exactly. Floor block_mae=0.800677, gbdt=0.7865, trees=0.808348, linear=1.188767, NNLS weights (0.007936/0.843493/0.144878/0.003693), and blend=0.784656087164158 all match 20260612_161004_ensemble_meta.json / promotion.json. All 21 model_selection.json scores in Section 6 table reproduce exactly. Round1->round2 delta (0.785078->0.784656) matches prediction_sanity/promotion."
+    },
+    {
+      "check": 2,
+      "name": "required_sections_present",
+      "verdict": "pass",
+      "location": "report.md headings",
+      "detail": "All 11 top-level sections present (## 1 through ## 11); Section 8 contains subsections 8.1-8.8 as required."
+    },
+    {
+      "check": 3,
+      "name": "causal_language_absent",
+      "verdict": "pass",
+      "location": "Section 10, 'Causal interpretation' (line ~397)",
+      "detail": "Only occurrence of 'causes' is within an explicit disclaimer ('do not imply that any covariate causes changes in rate_per_10000_ed_visits') -- a negation, not a causal assertion. No other banned causal verbs found in data-relationship sentences."
+    },
+    {
+      "check": 4,
+      "name": "report_describes_this_run",
+      "verdict": "pass",
+      "location": "Section 2 (Evaluation metric), Section 7 (Selection rationale)",
+      "detail": "Official selection metric block_mae (block=period_id) is named consistently and matches model_selection.json/ensemble_meta.json/holdout_strategy. No final_model.json exists for this specialist run and the report explicitly and correctly states this, substituting promotion.json/model_selection.json/analysis_review_2.json as the equivalent artifacts. Column/feature names (state_doh_release, gtrends_*, period_id__*, jurisdiction_category_target_mean etc.) all trace to data_profile.json / feature_spec.json for this run."
+    },
+    {
+      "check": 5,
+      "name": "limitations_coverage",
+      "verdict": "pass",
+      "location": "Section 10",
+      "detail": "All 6 data_profile.json.summary_warnings missingness entries (train_covariates.state_doh_release 29.6%, prediction.unemployment_rate 54.6%, prediction.labor_force 58.0%, prediction.precip_in 5.9%, prediction.state_doh_release 32.2%, sample_submission constant column) are addressed in Section 10 'Missing data' and Section 4 (pruning rationale). No critical_missing warning category exists in data_profile.json for this run (max_missing_rate=0.5798, handled via ablation prune + imputation_plan); coverage is complete."
+    },
+    {
+      "check": 6,
+      "name": "baseline_comparison_present",
+      "verdict": "pass",
+      "location": "Section 7, 'Did the candidate beat the baseline?'",
+      "detail": "Section 7 explicitly states the blend (0.7847-0.8007) beats the best non-trivial baseline (baseline_group_category_mean=1.2421) and all linear models, matching model_selection.json. used_baseline is not applicable (model_search.json/final_model.json absent in this specialist-mode run, correctly noted); baseline figures sourced from model_selection.json match exactly."
+    },
+    {
+      "check": 7,
+      "name": "overfitting_section_completeness",
+      "verdict": "pass",
+      "location": "Section 8.1-8.8",
+      "detail": "8.1 validation-strategy rationale sourced from validation_strategy.json (verbatim quote matches). 8.2 train-val gap explicitly 'null'/'not measured' with source (model_performance_review.json). 8.3 n_splits=5 sourced from holdout_parameters. 8.5 leakage audit result sourced from overfitting_leakage_audit.json + feature_audit_review.json (overall_verdict=pass for both, matches logs). 8.6 prediction sanity sourced from prediction_sanity.json (verdict=PASS, 8 checks). 8.7 selection rationale sourced from promotion.json + analysis_review_2.json equivalent quote. 8.8 repair status correctly references 20260612_161004_gate_supervisor.json (status=pass, suggested_corrections={}), no repair triggered. All 7 required elements present and each is explicitly sourced from a named log."
+    }
+  ],
+  "summary": {
+    "total_checks": 7,
+    "passed": 7,
+    "warned": 0,
+    "failed": 0
+  },
+  "required_revisions": [],
+  "optional_improvements": [
+    "Section 9 / Section 10 'Unresolved hardcoding findings' notes no post-audit log was found at report-writing time; if a hardcoding_audit_post.json becomes available before final delivery, the report should be updated to reflect resolution status of the 4 unacceptable findings (currently correctly flagged as unresolved per available logs)."
+  ],
+  "approved": true,
+  "next_action": "approve_report"
+}

@@ -1,0 +1,15 @@
+{
+  "role": "gbdt-specialist",
+  "killed": true,
+  "reason": "killed prematurely by an over-conservative static projection (1500s nominal target vs 700s slice) rather than the observed per-unit cost; actual trace showed only 21.3s elapsed with hist_gradient_boosting already scored (best_so_far=0.844) and progressing normally - run was very likely on track for the 700s allowance",
+  "projected_total_sec": 700,
+  "slice_sec": 700,
+  "recommended_budget": {
+    "seeds": 2,
+    "tune_iter": 12,
+    "inner_cv": 3,
+    "wall_clock_sec": 660
+  },
+  "budget_pressure": "high",
+  "restart_count": 0
+}

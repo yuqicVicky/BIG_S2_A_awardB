@@ -1,0 +1,22 @@
+{
+  "run_id": "20260612_161004",
+  "global_protocol": {
+    "rule": "All imputation statistics (median, mode, group medians, IterativeImputer parameters) are fit on the train split only (per-fold for CV), then applied via transform/fillna to validation/prediction data without re-fitting."
+  },
+  "per_column_risk": {
+    "period_id": "low",
+    "jurisdiction": "low",
+    "overdose_category": "low",
+    "rate_per_10000_ed_visits": "low",
+    "unemployment_rate": "low",
+    "labor_force": "low",
+    "temp_avg_f": "controlled_by_global_protocol",
+    "precip_in": "controlled_by_global_protocol",
+    "gtrends_overdose": "low",
+    "gtrends_fentanyl": "low",
+    "gtrends_naloxone": "low",
+    "gtrends_opioid": "low",
+    "gtrends_methamphetamine": "low",
+    "state_doh_release": "controlled_by_global_protocol"
+  }
+}

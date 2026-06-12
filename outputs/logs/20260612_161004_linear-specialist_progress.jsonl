@@ -1,0 +1,19 @@
+{"ts": 1781296800.427159, "event": "candidate_done", "elapsed_sec": 2.831, "role": "linear-specialist", "run_id": "20260612_161004", "model": "baseline_category_mean", "partial_cv": 2.185538693570959, "best_so_far": 2.185538693570959}
+{"ts": 1781296800.8418891, "event": "candidate_done", "elapsed_sec": 3.245, "role": "linear-specialist", "run_id": "20260612_161004", "model": "baseline_group_mean", "partial_cv": 5.209815705929383, "best_so_far": 2.185538693570959}
+{"ts": 1781296801.2675211, "event": "candidate_done", "elapsed_sec": 3.671, "role": "linear-specialist", "run_id": "20260612_161004", "model": "baseline_group_category_mean", "partial_cv": 1.2420692366653887, "best_so_far": 1.2420692366653887}
+{"ts": 1781296801.316363, "event": "candidate_done", "elapsed_sec": 3.72, "role": "linear-specialist", "run_id": "20260612_161004", "model": "dummy_mean", "partial_cv": 5.4282261802249865, "best_so_far": 1.2420692366653887}
+{"ts": 1781296802.883818, "event": "candidate_done", "elapsed_sec": 5.287, "role": "linear-specialist", "run_id": "20260612_161004", "model": "ridge", "partial_cv": 1.1931953698628464, "best_so_far": 1.1931953698628464}
+{"ts": 1781296833.538573, "event": "candidate_done", "elapsed_sec": 35.942, "role": "linear-specialist", "run_id": "20260612_161004", "model": "elastic_net", "partial_cv": 1.1962861522369157, "best_so_far": 1.1931953698628464}
+{"ts": 1781296833.974547, "event": "seed_done", "elapsed_sec": 36.378, "role": "linear-specialist", "run_id": "20260612_161004", "fold": 0}
+{"ts": 1781296834.4441972, "event": "seed_done", "elapsed_sec": 36.848, "role": "linear-specialist", "run_id": "20260612_161004", "fold": 1}
+{"ts": 1781296910.8033438, "event": "candidate_done", "elapsed_sec": 2.219, "role": "linear-specialist", "run_id": "20260612_161004", "model": "baseline_category_mean", "partial_cv": 2.185538693570959, "best_so_far": 2.185538693570959}
+{"ts": 1781296911.0850282, "event": "candidate_done", "elapsed_sec": 2.501, "role": "linear-specialist", "run_id": "20260612_161004", "model": "baseline_group_mean", "partial_cv": 5.209815705929383, "best_so_far": 2.185538693570959}
+{"ts": 1781296911.3716822, "event": "candidate_done", "elapsed_sec": 2.788, "role": "linear-specialist", "run_id": "20260612_161004", "model": "baseline_group_category_mean", "partial_cv": 1.2420692366653887, "best_so_far": 1.2420692366653887}
+{"ts": 1781296911.4083781, "event": "candidate_done", "elapsed_sec": 2.824, "role": "linear-specialist", "run_id": "20260612_161004", "model": "dummy_mean", "partial_cv": 5.4282261802249865, "best_so_far": 1.2420692366653887}
+{"ts": 1781296912.585369, "event": "candidate_done", "elapsed_sec": 4.001, "role": "linear-specialist", "run_id": "20260612_161004", "model": "ridge", "partial_cv": 1.1931953698628464, "best_so_far": 1.1931953698628464}
+{"ts": 1781296934.178189, "event": "candidate_done", "elapsed_sec": 25.594, "role": "linear-specialist", "run_id": "20260612_161004", "model": "elastic_net", "partial_cv": 1.1962861522369157, "best_so_far": 1.1931953698628464}
+{"ts": 1781296934.5003572, "event": "seed_done", "elapsed_sec": 25.916, "role": "linear-specialist", "run_id": "20260612_161004", "fold": 0}
+{"ts": 1781296934.790962, "event": "seed_done", "elapsed_sec": 26.207, "role": "linear-specialist", "run_id": "20260612_161004", "fold": 1}
+{"ts": 1781296940.835235, "event": "seed_done", "elapsed_sec": 32.251, "role": "linear-specialist", "run_id": "20260612_161004", "fold": 0}
+{"ts": 1781296946.709989, "event": "seed_done", "elapsed_sec": 38.126, "role": "linear-specialist", "run_id": "20260612_161004", "fold": 1}
+{"ts": 1781296946.8197372, "event": "final_done", "elapsed_sec": 38.236, "role": "linear-specialist", "run_id": "20260612_161004", "best_so_far": 1.1887669320604035}

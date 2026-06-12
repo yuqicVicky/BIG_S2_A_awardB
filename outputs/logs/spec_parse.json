@@ -1,0 +1,102 @@
+{
+  "run_id": "20260612_161004",
+  "parsed_at": "2026-06-12T16:10:04Z",
+  "source": "data/Data_Description.md",
+  "train_file": "data/train/dose_sys_train.csv",
+  "prediction_file": "data/val/covariates.csv",
+  "sample_submission_file": "data/sample_submission.csv",
+  "target_column": "rate_per_10000_ed_visits",
+  "row_id_column": "row_id",
+  "join_keys": ["period_id", "jurisdiction"],
+  "evaluation_metric": "block_mae",
+  "output_format": "continuous",
+  "task_type": "regression",
+  "confidence": 0.85,
+  "detected_structure": {
+    "time_columns": ["period_id"],
+    "group_columns": ["jurisdiction", "overdose_category"],
+    "block_columns": ["period_id"],
+    "panel_structure": true,
+    "join_keys": ["period_id", "jurisdiction"],
+    "split_pattern": {
+      "split_type": "chronological",
+      "cv_recommendation": "Time-series / group-time split: train periods (77 monthly period_ids, 2019-01 through 2025-06 minus the 6 prediction periods) and prediction periods (6 monthly period_ids in sample_submission, drawn from 2025-2026 range) are disjoint with no overlap. Use chronological holdout (e.g. last N periods of train as validation folds) grouped by jurisdiction/category, blocked on period_id (block_mae). val/covariates.csv contains one extra period_id (dsZhPyK4) not present in sample_submission.csv -- treat as buffer/context only, not a prediction target.",
+      "train_periods_n": 77,
+      "prediction_periods_n": 6,
+      "val_covariates_extra_period": "dsZhPyK4",
+      "sub_target_candidates": [],
+      "category_decomposition_note": "train/dose_sys_train.csv contains 8 overdose_category values (all_drugs, all_opioids, all_stimulants, heroin, fentanyl, cocaine, methamphetamine, benzodiazepine) per (period_id, jurisdiction) in long format -- not separate columns, so they are not 'sub_target_candidates' columns. Only all_drugs, all_opioids, all_stimulants are scored (per sample_submission). The other 5 categories are highly correlated (corr 0.70-0.88 with the 3 scoring categories, except heroin which is weakly correlated ~0.18 / -0.10) and may be used as leakage-safe auxiliary training signal/features (e.g. via cross-category aggregates fit per fold) but categories are nested and non-exclusive -- never sum across categories."
+    }
+  },
+  "file_schemas": {
+    "data/train/dose_sys_train.csv": {
+      "n_rows": 31416,
+      "n_cols": 4,
+      "columns": ["period_id", "jurisdiction", "overdose_category", "rate_per_10000_ed_visits"],
+      "dtypes": {
+        "period_id": "object",
+        "jurisdiction": "object",
+        "overdose_category": "object",
+        "rate_per_10000_ed_visits": "float64"
+      }
+    },
+    "data/train/covariates.csv": {
+      "n_rows": 3927,
+      "n_cols": 12,
+      "columns": ["period_id", "jurisdiction", "unemployment_rate", "labor_force", "temp_avg_f", "precip_in", "gtrends_overdose", "gtrends_fentanyl", "gtrends_naloxone", "gtrends_opioid", "gtrends_methamphetamine", "state_doh_release"],
+      "dtypes": {
+        "period_id": "object",
+        "jurisdiction": "object",
+        "unemployment_rate": "float64",
+        "labor_force": "float64",
+        "temp_avg_f": "float64",
+        "precip_in": "float64",
+        "gtrends_overdose": "float64",
+        "gtrends_fentanyl": "float64",
+        "gtrends_naloxone": "float64",
+        "gtrends_opioid": "float64",
+        "gtrends_methamphetamine": "float64",
+        "state_doh_release": "object"
+      }
+    },
+    "data/val/covariates.csv": {
+      "n_rows": 357,
+      "n_cols": 12,
+      "columns": ["period_id", "jurisdiction", "unemployment_rate", "labor_force", "temp_avg_f", "precip_in", "gtrends_overdose", "gtrends_fentanyl", "gtrends_naloxone", "gtrends_opioid", "gtrends_methamphetamine", "state_doh_release"],
+      "dtypes": {
+        "period_id": "object",
+        "jurisdiction": "object",
+        "unemployment_rate": "float64",
+        "labor_force": "float64",
+        "temp_avg_f": "float64",
+        "precip_in": "float64",
+        "gtrends_overdose": "float64",
+        "gtrends_fentanyl": "float64",
+        "gtrends_naloxone": "float64",
+        "gtrends_opioid": "float64",
+        "gtrends_methamphetamine": "float64",
+        "state_doh_release": "object"
+      }
+    },
+    "data/sample_submission.csv": {
+      "n_rows": 918,
+      "n_cols": 5,
+      "columns": ["row_id", "period_id", "jurisdiction", "overdose_category", "rate_per_10000_ed_visits"],
+      "dtypes": {
+        "row_id": "int64",
+        "period_id": "object",
+        "jurisdiction": "object",
+        "overdose_category": "object",
+        "rate_per_10000_ed_visits": "float64"
+      }
+    }
+  },
+  "sample_submission_validated": true,
+  "warnings": [
+    "evaluation_metric not explicitly named in Data_Description.md; inferred 'block_mae' (block=period_id) as the standard metric for this panel-regression task per orchestrator-supplied hint and standard practice for this benchmark series.",
+    "val/covariates.csv contains period_id 'dsZhPyK4' (2025-06-30) which does not appear in sample_submission.csv (6 periods only) -- it is extra context/buffer data, not a row to predict.",
+    "train/dose_sys_train.csv contains 8 overdose_category values but sample_submission.csv only requires 3 (all_drugs, all_opioids, all_stimulants); categories are nested/non-exclusive and must never be summed.",
+    "prediction_file set to data/val/covariates.csv (covariates-only, no target) since there is no separate 'prediction' file containing the target column; sample_submission.csv supplies the (row_id, period_id, jurisdiction, overdose_category) keys to predict."
+  ],
+  "errors": []
+}

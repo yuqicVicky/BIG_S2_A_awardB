@@ -1,0 +1,30 @@
+{
+  "round": 2,
+  "reviewer": "feature-leakage-reviewer",
+  "overall_verdict": "pass",
+  "leakage_findings": [
+    {
+      "severity": "low",
+      "feature": "state_doh_release__svd_0..19, state_doh_release__is_missing",
+      "issue": "Unchanged from round 1: TfidfVectorizer+TruncatedSVD for state_doh_release still fit once on full train text (feature_pipeline.py), not refit per CV fold. Unsupervised, no target leakage, but technically not per-fold-fit.",
+      "required_fix": "If OOF deltas across rounds are small (round1 0.785078 vs round2 0.784656, ~0.05% improvement), refit TfidfVectorizer+TruncatedSVD inside each CV fold on tr_idx only (mirroring the per_fold_aggregates loop via src.data_agent.cv.load_canonical_folds); keep full-train refit only for features_pred."
+    }
+  ],
+  "suggestions": [
+    {
+      "priority": "low",
+      "category": "leakage_fix",
+      "suggestion": "Move TF-IDF/SVD fit for state_doh_release inside the canonical-fold loop, same pattern as the per_fold_aggregates block, since 20 of 36 columns are SVD components and round-over-round gbdt OOF gains are marginal.",
+      "expected_impact": "low",
+      "implementation_hint": "for tr_idx, val_idx in canon.folds: fit TfidfVectorizer+TruncatedSVD on train_long.iloc[tr_idx][state_doh_release_col], transform val_idx; refit on full train only for features_pred."
+    },
+    {
+      "priority": "low",
+      "category": "feature_pruning",
+      "suggestion": "jurisdiction_category_target_std remains in the 36-col spec with no per-feature importance reported by gbdt/trees/linear agents; confirm via ablation it earns its place vs the 35-col alternative.",
+      "expected_impact": "low",
+      "implementation_hint": "scripts/run_feature_ablation_gate.py scoped to jurisdiction_category_target_std alone vs current pruned spec."
+    }
+  ],
+  "notes": "Round 2 is a gbdt-retrain only, no feature_spec changes (still 36 cols, per_fold_aggregates all declare source:per_fold, fit on tr_idx per src.data_agent.cv canonical folds). Promotion record shows OOF-only scores (gbdt 0.7865, blend 0.784656 vs prior 0.785078); no holdout figure to corroborate, but no new aggregate-style features were introduced, so prior pass verdict re-confirmed unchanged."
+}

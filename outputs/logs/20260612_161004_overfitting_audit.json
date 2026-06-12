@@ -1,0 +1,8 @@
+{
+  "run_id": "20260612_161004",
+  "selected_model": "stack(tuned(catboost)+catboost_log+lightgbm_log)",
+  "metric": "block_mae",
+  "primary_holdout_score": null,
+  "stability": {},
+  "assessment": "high_variance"
+}

@@ -1,0 +1,421 @@
+{
+  "run_id": "20260612_161004",
+  "audited_at": "2026-06-12T20:16:02.462341Z",
+  "phase": "pre",
+  "verdict": "fail",
+  "dynamic_suspicious_terms": [],
+  "findings": [
+    {
+      "file": "src/data_agent/audit.py",
+      "line": 48,
+      "term": "rate_per_10000_ed_visits",
+      "context": "\"rate_per_10000_ed_visits\",",
+      "classification": "risky",
+      "severity": "warn"
+    },
+    {
+      "file": "src/data_agent/audit.py",
+      "line": 49,
+      "term": "overdose_category",
+      "context": "\"overdose_category\",",
+      "classification": "risky",
+      "severity": "warn"
+    },
+    {
+      "file": "src/data_agent/audit.py",
+      "line": 50,
+      "term": "all_drugs",
+      "context": "\"all_drugs\",",
+      "classification": "risky",
+      "severity": "warn"
+    },
+    {
+      "file": "src/data_agent/audit.py",
+      "line": 51,
+      "term": "all_opioids",
+      "context": "\"all_opioids\",",
+      "classification": "risky",
+      "severity": "warn"
+    },
+    {
+      "file": "src/data_agent/audit.py",
+      "line": 52,
+      "term": "all_stimulants",
+      "context": "\"all_stimulants\",",
+      "classification": "risky",
+      "severity": "warn"
+    },
+    {
+      "file": "src/data_agent/audit.py",
+      "line": 56,
+      "term": "survived",
+      "context": "\"survived\",",
+      "classification": "risky",
+      "severity": "warn"
+    },
+    {
+      "file": "src/data_agent/audit.py",
+      "line": 57,
+      "term": "passengerid",
+      "context": "\"passengerid\",",
+      "classification": "risky",
+      "severity": "warn"
+    },
+    {
+      "file": "src/data_agent/audit.py",
+      "line": 58,
+      "term": "pclass",
+      "context": "\"pclass\",",
+      "classification": "risky",
+      "severity": "warn"
+    },
+    {
+      "file": "src/data_agent/audit.py",
+      "line": 59,
+      "term": "sibsp",
+      "context": "\"sibsp\",",
+      "classification": "risky",
+      "severity": "warn"
+    },
+    {
+      "file": "src/data_agent/audit.py",
+      "line": 60,
+      "term": "parch",
+      "context": "\"parch\",",
+      "classification": "risky",
+      "severity": "warn"
+    },
+    {
+      "file": "src/data_agent/audit.py",
+      "line": 61,
+      "term": "embarked",
+      "context": "\"embarked\",",
+      "classification": "risky",
+      "severity": "warn"
+    },
+    {
+      "file": "src/data_agent/audit.py",
+      "line": 62,
+      "term": "saleprice",
+      "context": "\"saleprice\",",
+      "classification": "risky",
+      "severity": "warn"
+    },
+    {
+      "file": "src/data_agent/audit.py",
+      "line": 63,
+      "term": "lotarea",
+      "context": "\"lotarea\",",
+      "classification": "risky",
+      "severity": "warn"
+    },
+    {
+      "file": "src/data_agent/audit.py",
+      "line": 64,
+      "term": "yearbuilt",
+      "context": "\"yearbuilt\",",
+      "classification": "risky",
+      "severity": "warn"
+    },
+    {
+      "file": "src/data_agent/audit.py",
+      "line": 65,
+      "term": "casual",
+      "context": "\"casual\",",
+      "classification": "risky",
+      "severity": "warn"
+    },
+    {
+      "file": "src/data_agent/audit.py",
+      "line": 66,
+      "term": "registered",
+      "context": "\"registered\",",
+      "classification": "risky",
+      "severity": "warn"
+    },
+    {
+      "file": "src/data_agent/audit.py",
+      "line": 70,
+      "term": "train.csv",
+      "context": "\"train.csv\",",
+      "classification": "risky",
+      "severity": "warn"
+    },
+    {
+      "file": "src/data_agent/audit.py",
+      "line": 71,
+      "term": "test.csv",
+      "context": "\"test.csv\",",
+      "classification": "risky",
+      "severity": "warn"
+    },
+    {
+      "file": "src/data_agent/audit.py",
+      "line": 72,
+      "term": "samplesubmission.csv",
+      "context": "\"samplesubmission.csv\",",
+      "classification": "risky",
+      "severity": "warn"
+    },
+    {
+      "file": "src/data_agent/audit.py",
+      "line": 73,
+      "term": "samplesubmission.csv",
+      "context": "\"sampleSubmission.csv\",",
+      "classification": "risky",
+      "severity": "warn"
+    },
+    {
+      "file": "src/data_agent/audit.py",
+      "line": 74,
+      "term": "val.csv",
+      "context": "\"val.csv\",",
+      "classification": "risky",
+      "severity": "warn"
+    },
+    {
+      "file": "src/data_agent/audit.py",
+      "line": 75,
+      "term": "train.parquet",
+      "context": "\"train.parquet\",",
+      "classification": "risky",
+      "severity": "warn"
+    },
+    {
+      "file": "src/data_agent/audit.py",
+      "line": 76,
+      "term": "test.parquet",
+      "context": "\"test.parquet\",",
+      "classification": "risky",
+      "severity": "warn"
+    },
+    {
+      "file": "src/data_agent/audit.py",
+      "line": 77,
+      "term": "submission.csv",
+      "context": "\"submission.csv\",",
+      "classification": "risky",
+      "severity": "warn"
+    },
+    {
+      "file": "src/data_agent/audit.py",
+      "line": 81,
+      "term": "overdose",
+      "context": "\"overdose\",",
+      "classification": "risky",
+      "severity": "warn"
+    },
+    {
+      "file": "src/data_agent/audit.py",
+      "line": 82,
+      "term": "opioid",
+      "context": "\"opioid\",",
+      "classification": "risky",
+      "severity": "warn"
+    },
+    {
+      "file": "src/data_agent/audit.py",
+      "line": 83,
+      "term": "stimulant",
+      "context": "\"stimulant\",",
+      "classification": "risky",
+      "severity": "warn"
+    },
+    {
+      "file": "src/data_agent/audit.py",
+      "line": 84,
+      "term": "titanic",
+      "context": "\"titanic\",",
+      "classification": "risky",
+      "severity": "warn"
+    },
+    {
+      "file": "src/data_agent/audit.py",
+      "line": 85,
+      "term": "shipwreck",
+      "context": "\"shipwreck\",",
+      "classification": "risky",
+      "severity": "warn"
+    },
+    {
+      "file": "src/data_agent/audit.py",
+      "line": 89,
+      "term": "918",
+      "context": "\"918\",",
+      "classification": "risky",
+      "severity": "warn"
+    },
+    {
+      "file": "src/data_agent/features.py",
+      "line": 707,
+      "term": "row_id",
+      "context": "_exclude(spec.row_id_column, \"row_id\")",
+      "classification": "risky",
+      "severity": "warn"
+    },
+    {
+      "file": "src/data_agent/modeling_group.py",
+      "line": 282,
+      "term": "submission.csv",
+      "context": "\"chosen_submission\": \"submission.csv\",",
+      "classification": "risky",
+      "severity": "warn"
+    },
+    {
+      "file": "src/data_agent/orchestrator.py",
+      "line": 329,
+      "term": "submission.csv",
+      "context": "_ck_sub.to_csv(repo_root / \"submission.csv\", index=False)",
+      "classification": "risky",
+      "severity": "warn"
+    },
+    {
+      "file": "src/data_agent/orchestrator.py",
+      "line": 414,
+      "term": "submission.csv",
+      "context": "_floor_sub.to_csv(repo_root / \"submission.csv\", index=False)",
+      "classification": "risky",
+      "severity": "warn"
+    },
+    {
+      "file": "src/data_agent/orchestrator.py",
+      "line": 546,
+      "term": "submission.csv",
+      "context": "submission_path = repo_root / \"submission.csv\"",
+      "classification": "risky",
+      "severity": "warn"
+    },
+    {
+      "file": "src/data_agent/runner.py",
+      "line": 82,
+      "term": "submission.csv",
+      "context": "submission_path = repo_root / \"submission.csv\"",
+      "classification": "risky",
+      "severity": "warn"
+    },
+    {
+      "file": "src/data_agent/runner.py",
+      "line": 329,
+      "term": "submission.csv",
+      "context": "for name in [\"submission.csv\", \"report.pdf\"]:",
+      "classification": "risky",
+      "severity": "warn"
+    },
+    {
+      "file": "src/data_agent/schema.py",
+      "line": 207,
+      "term": "row_id",
+      "context": "if \"row_id\" in columns or \"rowid\" in columns:",
+      "classification": "risky",
+      "severity": "warn"
+    },
+    {
+      "file": "src/data_agent/schema.py",
+      "line": 220,
+      "term": "row_id",
+      "context": "exact = _find_named_column(columns, [\"row_id\", \"rowid\", \"id\"])",
+      "classification": "acceptable",
+      "severity": "info"
+    },
+    {
+      "file": "src/data_agent/schema.py",
+      "line": 223,
+      "term": "row_id",
+      "context": "described = _description_column(description, [\"row_id\", \"row id\", \"identifier\"])",
+      "classification": "acceptable",
+      "severity": "info"
+    },
+    {
+      "file": "src/data_agent/skills/profile_data.py",
+      "line": 20,
+      "term": "survived",
+      "context": "_TARGET_TOKENS = {\"target\", \"label\", \"outcome\", \"y\", \"response\", \"churn\", \"survived\", \"result\", \"flag\", \"class\", \"status\"}",
+      "classification": "acceptable",
+      "severity": "info"
+    },
+    {
+      "file": "src/data_agent/task.py",
+      "line": 415,
+      "term": "survived",
+      "context": "for token in (\"yes\", \"true\", \"survived\", \"positive\", \"1\", \"y\"):",
+      "classification": "acceptable",
+      "severity": "info"
+    },
+    {
+      "file": "scripts/check_run.py",
+      "line": 163,
+      "term": "submission.csv",
+      "context": "(\"--\", \"deliverable: submission.csv\",  [(\"submission.csv\", \"root\")], \"all\", True, None),",
+      "classification": "acceptable",
+      "severity": "info"
+    },
+    {
+      "file": "outputs/scratch/20260612_161004/missingness_audit.py",
+      "line": 68,
+      "term": "jurisdiction",
+      "context": "if \"jurisdiction\" in df_merged.columns and col != \"jurisdiction\":",
+      "classification": "risky",
+      "severity": "warn"
+    },
+    {
+      "file": "outputs/scratch/20260612_161004/missingness_audit.py",
+      "line": 69,
+      "term": "jurisdiction",
+      "context": "rates_by_group = df_merged.groupby(\"jurisdiction\")[col].apply(lambda s: s.isna().mean())",
+      "classification": "risky",
+      "severity": "warn"
+    },
+    {
+      "file": "outputs/scratch/20260612_161004/missingness_audit.py",
+      "line": 72,
+      "term": "jurisdiction",
+      "context": "group_col_used = \"jurisdiction\"",
+      "classification": "unacceptable",
+      "severity": "error"
+    },
+    {
+      "file": "outputs/scratch/20260612_161004/missingness_audit.py",
+      "line": 145,
+      "term": "state_doh_release",
+      "context": "if \"state_doh_release\" in df_merged.columns:",
+      "classification": "risky",
+      "severity": "warn"
+    },
+    {
+      "file": "outputs/scratch/20260612_161004/missingness_audit.py",
+      "line": 146,
+      "term": "state_doh_release",
+      "context": "empty_text = (df_merged[\"state_doh_release\"].fillna(\"\") == \"\").mean()",
+      "classification": "unacceptable",
+      "severity": "error"
+    },
+    {
+      "file": "outputs/scratch/20260612_161004/missingness_audit.py",
+      "line": 147,
+      "term": "state_doh_release",
+      "context": "structural_flags[\"state_doh_release\"] = {",
+      "classification": "unacceptable",
+      "severity": "error"
+    },
+    {
+      "file": "outputs/scratch/20260612_161004/profile.py",
+      "line": 365,
+      "term": "state_doh_release",
+      "context": "state_doh_col = \"state_doh_release\"",
+      "classification": "unacceptable",
+      "severity": "error"
+    }
+  ],
+  "summary": {
+    "total_findings": 50,
+    "unacceptable": 4,
+    "risky": 41,
+    "acceptable": 5
+  },
+  "notes": [
+    "src/data_agent/audit.py static term catalogue entries (lines 47-90) are the audit tool's own search-term definitions used for detection, not hardcoded modeling logic; classified risky/acceptable accordingly.",
+    "submission.csv literals in orchestrator.py/runner.py/modeling_group.py are the standard repo-root deliverable filename mandated by CLAUDE.md, not dataset-specific; classified risky (low severity).",
+    "4 unacceptable findings are in outputs/scratch/20260612_161004/ (missingness_audit.py, profile.py): hardcoded dataset-specific column literals 'jurisdiction' and 'state_doh_release' via direct column access / variable assignment, instead of resolving from spec_parse.json file_schemas at runtime.",
+    "No occurrences of banned Award-A literals (rate_per_10000_ed_visits as data access, overdose_category as data access, all_drugs/all_opioids/all_stimulants as data access, magic number 918, fixed period-id maps, dev absolute paths) found in actual modeling/data-access code paths."
+  ]
+}

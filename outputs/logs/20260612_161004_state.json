@@ -1,0 +1,2187 @@
+{
+  "run_id": "20260612_161004",
+  "created_at": "2026-06-12T20:18:34.927996+00:00",
+  "user_request": {
+    "goal": "```",
+    "file_path": "/Users/shucheng/Downloads/BIG_S2_A_awardB-claude-award-b-general-agent-8/data",
+    "raw_message": null
+  },
+  "data_path": "/Users/shucheng/Downloads/BIG_S2_A_awardB-claude-award-b-general-agent-8/data",
+  "load_metadata": {
+    "n_rows": 31416,
+    "n_columns": 14,
+    "file_format": "csv",
+    "encoding": "utf-8",
+    "load_warnings": []
+  },
+  "data_profile": {
+    "data_type": "tabular",
+    "file_format": "csv",
+    "encoding": "utf-8",
+    "delimiter": ",",
+    "n_rows": 31416,
+    "n_columns": 14,
+    "columns": [
+      "period_id",
+      "jurisdiction",
+      "overdose_category",
+      "rate_per_10000_ed_visits",
+      "unemployment_rate",
+      "labor_force",
+      "temp_avg_f",
+      "precip_in",
+      "gtrends_overdose",
+      "gtrends_fentanyl",
+      "gtrends_naloxone",
+      "gtrends_opioid",
+      "gtrends_methamphetamine",
+      "state_doh_release"
+    ],
+    "dtypes": {
+      "period_id": "object",
+      "jurisdiction": "object",
+      "overdose_category": "object",
+      "rate_per_10000_ed_visits": "float64",
+      "unemployment_rate": "float64",
+      "labor_force": "float64",
+      "temp_avg_f": "float64",
+      "precip_in": "float64",
+      "gtrends_overdose": "float64",
+      "gtrends_fentanyl": "float64",
+      "gtrends_naloxone": "float64",
+      "gtrends_opioid": "float64",
+      "gtrends_methamphetamine": "float64",
+      "state_doh_release": "object"
+    },
+    "simplified_types": {
+      "period_id": "categorical",
+      "jurisdiction": "categorical",
+      "overdose_category": "categorical",
+      "rate_per_10000_ed_visits": "numeric",
+      "unemployment_rate": "numeric",
+      "labor_force": "numeric",
+      "temp_avg_f": "numeric",
+      "precip_in": "numeric",
+      "gtrends_overdose": "numeric",
+      "gtrends_fentanyl": "numeric",
+      "gtrends_naloxone": "numeric",
+      "gtrends_opioid": "numeric",
+      "gtrends_methamphetamine": "numeric",
+      "state_doh_release": "categorical"
+    },
+    "numeric_columns": {
+      "rate_per_10000_ed_visits": {
+        "min": 0.05,
+        "max": 79.99,
+        "mean": 6.352161637382226,
+        "std": 7.969806205115852,
+        "median": 3.21,
+        "p25": 1.68,
+        "p75": 7.5425,
+        "n_zeros": 0,
+        "n_negatives": 0
+      },
+      "unemployment_rate": {
+        "min": 1.7,
+        "max": 30.5,
+        "mean": 4.335523300229182,
+        "std": 2.2489194250125144,
+        "median": 3.8,
+        "p25": 3.1,
+        "p75": 4.7,
+        "n_zeros": 0,
+        "n_negatives": 0
+      },
+      "labor_force": {
+        "min": 285981.0,
+        "max": 19810355.0,
+        "mean": 3242854.6277056276,
+        "std": 3626268.042076202,
+        "median": 2085865.0,
+        "p25": 790761.0,
+        "p75": 3939859.0,
+        "n_zeros": 0,
+        "n_negatives": 0
+      },
+      "temp_avg_f": {
+        "min": -2.7,
+        "max": 87.9,
+        "mean": 53.128517316017316,
+        "std": 17.388194544206993,
+        "median": 54.1,
+        "p25": 39.7,
+        "p75": 67.725,
+        "n_zeros": 0,
+        "n_negatives": 8
+      },
+      "precip_in": {
+        "min": 0.0,
+        "max": 12.07,
+        "mean": 3.173344155844156,
+        "std": 2.0536224749749366,
+        "median": 2.97,
+        "p25": 1.49,
+        "p75": 4.45,
+        "n_zeros": 8,
+        "n_negatives": 0
+      },
+      "gtrends_overdose": {
+        "min": 31.35,
+        "max": 97.02,
+        "mean": 57.59096002037179,
+        "std": 9.621925763678924,
+        "median": 56.76,
+        "p25": 51.3,
+        "p75": 63.07,
+        "n_zeros": 0,
+        "n_negatives": 0
+      },
+      "gtrends_fentanyl": {
+        "min": 12.6,
+        "max": 108.22,
+        "mean": 51.79344283167813,
+        "std": 20.041277651240225,
+        "median": 55.93,
+        "p25": 34.65,
+        "p75": 66.55,
+        "n_zeros": 0,
+        "n_negatives": 0
+      },
+      "gtrends_naloxone": {
+        "min": 14.1,
+        "max": 102.2,
+        "mean": 46.95109498344793,
+        "std": 16.360251307568966,
+        "median": 47.43,
+        "p25": 33.62,
+        "p75": 59.14,
+        "n_zeros": 0,
+        "n_negatives": 0
+      },
+      "gtrends_opioid": {
+        "min": 36.67,
+        "max": 103.04,
+        "mean": 60.36804430863254,
+        "std": 9.664172226851598,
+        "median": 59.0,
+        "p25": 53.42,
+        "p75": 65.67,
+        "n_zeros": 0,
+        "n_negatives": 0
+      },
+      "gtrends_methamphetamine": {
+        "min": 20.17,
+        "max": 63.28,
+        "mean": 36.097575757575754,
+        "std": 6.330343458360129,
+        "median": 35.43,
+        "p25": 31.65,
+        "p75": 39.78,
+        "n_zeros": 0,
+        "n_negatives": 0
+      }
+    },
+    "categorical_columns": {
+      "period_id": {
+        "n_unique": 77,
+        "top_values": {
+          "jtUOZLP4": 408,
+          "fizSTkFs": 408,
+          "44RA6kMl": 408,
+          "eVeAG5UX": 408,
+          "uTjgI1Sv": 408
+        },
+        "mode": "jtUOZLP4"
+      },
+      "jurisdiction": {
+        "n_unique": 51,
+        "top_values": {
+          "AK": 616,
+          "PA": 616,
+          "ND": 616,
+          "NE": 616,
+          "NH": 616
+        },
+        "mode": "AK"
+      },
+      "overdose_category": {
+        "n_unique": 8,
+        "top_values": {
+          "all_drugs": 3927,
+          "all_opioids": 3927,
+          "all_stimulants": 3927,
+          "heroin": 3927,
+          "fentanyl": 3927
+        },
+        "mode": "all_drugs"
+      },
+      "state_doh_release": {
+        "n_unique": 2665,
+        "top_values": {
+          "Mississippi State Department of Health Authorizes Expanded Syringe Services Program Coverage\nThe Department has approved expansion of authorized syringe services programs to additional counties under Mississippi public health authority. Syringe services programs reduce transmission of HIV and hepatitis C, connect individuals to medication for opioid use disorder, and distribute naloxone and fentanyl test strips. Decades of peer-reviewed evidence and CDC guidance support syringe services programs as a core component of the public health response to drug-related harms.": 72,
+          "Michigan Department of Health and Human Services Authorizes Expanded Syringe Services Program Coverage\nThe Department has approved expansion of authorized syringe services programs to additional counties under Michigan public health authority. Syringe services programs reduce transmission of HIV and hepatitis C, connect individuals to medication for opioid use disorder, and distribute naloxone and fentanyl test strips. Decades of peer-reviewed evidence and CDC guidance support syringe services programs as a core component of the public health response to drug-related harms.": 40,
+          "Alaska Department of Health Authorizes Expanded Syringe Services Program Coverage\nThe Department has approved expansion of authorized syringe services programs to additional counties under Alaska public health authority. Syringe services programs reduce transmission of HIV and hepatitis C, connect individuals to medication for opioid use disorder, and distribute naloxone and fentanyl test strips. Decades of peer-reviewed evidence and CDC guidance support syringe services programs as a core component of the public health response to drug-related harms.": 40,
+          "Montana Department of Public Health and Human Services Authorizes Expanded Syringe Services Program Coverage\nThe Department has approved expansion of authorized syringe services programs to additional counties under Montana public health authority. Syringe services programs reduce transmission of HIV and hepatitis C, connect individuals to medication for opioid use disorder, and distribute naloxone and fentanyl test strips. Decades of peer-reviewed evidence and CDC guidance support syringe services programs as a core component of the public health response to drug-related harms.": 32,
+          "Washington State Department of Health Authorizes Expanded Syringe Services Program Coverage\nThe Department has approved expansion of authorized syringe services programs to additional counties under Washington public health authority. Syringe services programs reduce transmission of HIV and hepatitis C, connect individuals to medication for opioid use disorder, and distribute naloxone and fentanyl test strips. Decades of peer-reviewed evidence and CDC guidance support syringe services programs as a core component of the public health response to drug-related harms.": 24
+        },
+        "mode": "Mississippi State Department of Health Authorizes Expanded Syringe Services Program Coverage\nThe Department has approved expansion of authorized syringe services programs to additional counties under Mississippi public health authority. Syringe services programs reduce transmission of HIV and hepatitis C, connect individuals to medication for opioid use disorder, and distribute naloxone and fentanyl test strips. Decades of peer-reviewed evidence and CDC guidance support syringe services programs as a core component of the public health response to drug-related harms."
+      }
+    },
+    "datetime_columns": [],
+    "potential_id_columns": [
+      "period_id"
+    ],
+    "constant_columns": [],
+    "high_cardinality_columns": [],
+    "target_like_columns": [],
+    "leakage_like_columns": [],
+    "missing_summary": {
+      "period_id": {
+        "missing_count": 0,
+        "missing_rate": 0.0,
+        "severity": "complete"
+      },
+      "jurisdiction": {
+        "missing_count": 0,
+        "missing_rate": 0.0,
+        "severity": "complete"
+      },
+      "overdose_category": {
+        "missing_count": 0,
+        "missing_rate": 0.0,
+        "severity": "complete"
+      },
+      "rate_per_10000_ed_visits": {
+        "missing_count": 0,
+        "missing_rate": 0.0,
+        "severity": "complete"
+      },
+      "unemployment_rate": {
+        "missing_count": 0,
+        "missing_rate": 0.0,
+        "severity": "complete"
+      },
+      "labor_force": {
+        "missing_count": 0,
+        "missing_rate": 0.0,
+        "severity": "complete"
+      },
+      "temp_avg_f": {
+        "missing_count": 1848,
+        "missing_rate": 0.0588,
+        "severity": "moderate_missing"
+      },
+      "precip_in": {
+        "missing_count": 1848,
+        "missing_rate": 0.0588,
+        "severity": "moderate_missing"
+      },
+      "gtrends_overdose": {
+        "missing_count": 0,
+        "missing_rate": 0.0,
+        "severity": "complete"
+      },
+      "gtrends_fentanyl": {
+        "missing_count": 0,
+        "missing_rate": 0.0,
+        "severity": "complete"
+      },
+      "gtrends_naloxone": {
+        "missing_count": 0,
+        "missing_rate": 0.0,
+        "severity": "complete"
+      },
+      "gtrends_opioid": {
+        "missing_count": 0,
+        "missing_rate": 0.0,
+        "severity": "complete"
+      },
+      "gtrends_methamphetamine": {
+        "missing_count": 0,
+        "missing_rate": 0.0,
+        "severity": "complete"
+      },
+      "state_doh_release": {
+        "missing_count": 9296,
+        "missing_rate": 0.2959,
+        "severity": "high_missing"
+      }
+    },
+    "duplicate_count": 0,
+    "warnings": [
+      {
+        "type": "potential_id_column",
+        "column": "period_id",
+        "message": "All 77 values unique / id-like name. Exclude from features.",
+        "severity": "WARN"
+      },
+      {
+        "type": "high_missing",
+        "column": "state_doh_release",
+        "message": "29.6% of values are missing.",
+        "severity": "WARN"
+      }
+    ]
+  },
+  "task_spec": {
+    "task_type": "regression",
+    "target_variable": "rate_per_10000_ed_visits",
+    "target_type": "continuous",
+    "target_explicit": true,
+    "target_inferred": false,
+    "target_candidates": [],
+    "feature_candidates": [
+      "jurisdiction",
+      "overdose_category",
+      "unemployment_rate",
+      "labor_force",
+      "temp_avg_f",
+      "precip_in",
+      "gtrends_overdose",
+      "gtrends_fentanyl",
+      "gtrends_naloxone",
+      "gtrends_opioid",
+      "gtrends_methamphetamine",
+      "state_doh_release"
+    ],
+    "excluded_from_features": [
+      "period_id"
+    ],
+    "exclusion_reasons": {
+      "period_id": "potential_id_column"
+    },
+    "confidence": 0.95,
+    "recommended_metrics": [
+      "rmse",
+      "mae",
+      "r2"
+    ],
+    "class_imbalance_detected": false,
+    "majority_class_rate": null,
+    "unsupported_but_detected_task_types": [],
+    "warnings": [],
+    "rationale": "Resolved a supervised regression task on target 'rate_per_10000_ed_visits' (explicitly named); non-informative columns excluded via profile checks.",
+    "metric": "block_mae",
+    "greater_is_better": false,
+    "output_kind": "value",
+    "class_labels": null,
+    "positive_label": null,
+    "evidence": {
+      "task_source": "data",
+      "description_task": null,
+      "description_metric": null,
+      "description_output": null,
+      "data_task": "regression",
+      "n_unique_target": 3305,
+      "target_is_numeric": true,
+      "target_integer_like": false,
+      "sample_is_integer": true,
+      "sample_is_float": false
+    },
+    "row_id_column": "row_id"
+  },
+  "initial_plan": {
+    "plan_id": "plan_20260612_161004",
+    "task_type": "regression",
+    "target_variable": "rate_per_10000_ed_visits",
+    "created_at": "2026-06-12T20:18:35.543776+00:00",
+    "status": "draft",
+    "steps": [
+      {
+        "step_id": "validate_data",
+        "name": "Validate Loaded Data",
+        "goal": "Confirm the loaded DataFrame matches the profiled schema (shape, dtypes, column names).",
+        "inputs": [
+          "state.raw_data",
+          "state.data_profile"
+        ],
+        "outputs": [
+          "state.validation_result"
+        ],
+        "success_criteria": [
+          "DataFrame shape matches data_profile.n_rows and n_columns",
+          "All column names match data_profile.columns"
+        ],
+        "risks": [
+          "File re-read may differ from the profiled version"
+        ],
+        "required_skills": [
+          "data-loader",
+          "data-profiler"
+        ],
+        "responsible_agent": "python+claude"
+      },
+      {
+        "step_id": "eda_exploration",
+        "name": "Exploratory Data Analysis",
+        "goal": "Produce distribution summaries, correlation/association analysis, and a missing-value overview.",
+        "inputs": [
+          "state.raw_data",
+          "state.task"
+        ],
+        "outputs": [
+          "state.eda_results",
+          "state.artifacts.eda_plots"
+        ],
+        "success_criteria": [
+          "Distribution summary produced for numeric features",
+          "Missing-value summary recorded in state.eda_results"
+        ],
+        "risks": [
+          "High-cardinality columns may produce unusable plots"
+        ],
+        "required_skills": [
+          "eda-analyzer",
+          "plot-generator"
+        ],
+        "responsible_agent": "python+claude"
+      },
+      {
+        "step_id": "leakage_check",
+        "name": "Pre-Modeling Leakage Audit",
+        "goal": "Audit feature candidates and column names for leakage before any split or transformation.",
+        "inputs": [
+          "state.raw_data",
+          "state.task",
+          "state.plan.draft"
+        ],
+        "outputs": [
+          "state.leakage_audit"
+        ],
+        "success_criteria": [
+          "All potential ID columns confirmed excluded from feature_candidates",
+          "Leakage audit verdict is PASS"
+        ],
+        "risks": [
+          "An ID or encoded-target column may have been retained in features"
+        ],
+        "required_skills": [
+          "leakage-check"
+        ],
+        "responsible_agent": "claude"
+      },
+      {
+        "step_id": "preprocess_split_transform",
+        "name": "Split Data and Fit Transformers",
+        "goal": "Split into train/val/test with seed=42; fit imputer/encoder on X_train only.",
+        "inputs": [
+          "state.raw_data",
+          "state.task",
+          "state.leakage_audit"
+        ],
+        "outputs": [
+          "state.splits.X_train",
+          "state.splits.X_test",
+          "state.transformers"
+        ],
+        "success_criteria": [
+          "Split performed before any transformer is fitted",
+          "Transformer fit called only on X_train",
+          "Split seed recorded in state.split_metadata"
+        ],
+        "risks": [
+          "fit_transform on full data \u2192 leakage",
+          "Unset seed \u2192 non-reproducible splits"
+        ],
+        "required_skills": [
+          "data-splitter",
+          "leakage-check"
+        ],
+        "responsible_agent": "python+claude"
+      },
+      {
+        "step_id": "baseline_model",
+        "name": "Train Baseline DummyRegressor (mean)",
+        "goal": "Establish a performance floor with DummyRegressor (mean); record rmse, mae, r2 on validation.",
+        "inputs": [
+          "state.splits"
+        ],
+        "outputs": [
+          "state.models.baseline",
+          "state.artifacts.baseline_model"
+        ],
+        "success_criteria": [
+          "Baseline trained on X_train only",
+          "Baseline metrics (rmse, mae, r2) recorded with split 'val'"
+        ],
+        "risks": [
+          "Evaluating baseline on the test set instead of val"
+        ],
+        "required_skills": [
+          "tabular-modeling",
+          "model-evaluation"
+        ],
+        "responsible_agent": "python+claude"
+      },
+      {
+        "step_id": "model_candidate",
+        "name": "Train Candidate Model",
+        "goal": "Train task-conditioned candidate models and select the best on validation.",
+        "inputs": [
+          "state.splits",
+          "state.models.baseline"
+        ],
+        "outputs": [
+          "state.models.candidate",
+          "state.artifacts.candidate_model"
+        ],
+        "success_criteria": [
+          "Model selected on validation only (test untouched)",
+          "candidate val RMSE < baseline val RMSE"
+        ],
+        "risks": [
+          "Tuning may leak test data if not isolated"
+        ],
+        "required_skills": [
+          "tabular-modeling",
+          "leakage-check",
+          "model-evaluation"
+        ],
+        "responsible_agent": "python+claude"
+      },
+      {
+        "step_id": "evaluate_test",
+        "name": "Final Evaluation",
+        "goal": "Evaluate the selected model on held-out data; produce the required artifacts and a baseline comparison.",
+        "inputs": [
+          "state.models.candidate",
+          "state.models.baseline",
+          "state.splits"
+        ],
+        "outputs": [
+          "state.evaluation",
+          "state.artifacts.residual_plot",
+          "state.artifacts.pred_vs_actual"
+        ],
+        "success_criteria": [
+          "All metrics labeled with split 'test'",
+          "Candidate vs baseline comparison present"
+        ],
+        "risks": [
+          "Reporting val metrics as final"
+        ],
+        "required_skills": [
+          "model-evaluation",
+          "plot-generator"
+        ],
+        "responsible_agent": "python+claude"
+      },
+      {
+        "step_id": "interpret_results",
+        "name": "Interpret Drivers",
+        "goal": "Compute feature importance / key patterns; list caveats. No causal language.",
+        "inputs": [
+          "state.evaluation",
+          "state.task"
+        ],
+        "outputs": [
+          "state.interpretation",
+          "state.artifacts.feature_importance_plot"
+        ],
+        "success_criteria": [
+          "Feature importance computed and sorted",
+          "At least one caveat recorded"
+        ],
+        "risks": [
+          "Importance reflects associations, not causation"
+        ],
+        "required_skills": [
+          "plot-generator"
+        ],
+        "responsible_agent": "python+claude"
+      },
+      {
+        "step_id": "report_generate",
+        "name": "Generate Final Report",
+        "goal": "Write the structured report referencing real artifact paths and metric values.",
+        "inputs": [
+          "state.evaluation",
+          "state.interpretation",
+          "state.execution_log"
+        ],
+        "outputs": [
+          "state.report_draft",
+          "state.artifacts.report_md"
+        ],
+        "success_criteria": [
+          "All required sections present",
+          "Every metric includes its split label"
+        ],
+        "risks": [
+          "Metric values copied incorrectly from state"
+        ],
+        "required_skills": [
+          "report-writing"
+        ],
+        "responsible_agent": "claude"
+      },
+      {
+        "step_id": "report_review",
+        "name": "Independent Report Review",
+        "goal": "Audit the report against state; verify claims, metrics, and artifact references.",
+        "inputs": [
+          "state.report_draft",
+          "state.evaluation",
+          "state.leakage_audit",
+          "state.artifacts"
+        ],
+        "outputs": [
+          "state.report_review"
+        ],
+        "success_criteria": [
+          "Every metric in report matches state.evaluation",
+          "Review verdict is PASS"
+        ],
+        "risks": [
+          "Subtle causal framing may pass without careful reading"
+        ],
+        "required_skills": [
+          "report-review",
+          "model-evaluation",
+          "leakage-check"
+        ],
+        "responsible_agent": "claude"
+      }
+    ],
+    "plan_skill_summary": {
+      "all_skills_used": [
+        "data-loader",
+        "data-profiler",
+        "data-splitter",
+        "eda-analyzer",
+        "leakage-check",
+        "model-evaluation",
+        "plot-generator",
+        "report-review",
+        "report-writing",
+        "tabular-modeling"
+      ],
+      "steps_missing_required_skills": []
+    },
+    "plan_warnings": []
+  },
+  "optimized_plan": {
+    "plan_id": "plan_20260612_161004",
+    "task_type": "regression",
+    "target_variable": "rate_per_10000_ed_visits",
+    "created_at": "2026-06-12T20:18:35.543776+00:00",
+    "status": "approved",
+    "steps": [
+      {
+        "step_id": "validate_data",
+        "name": "Validate Loaded Data",
+        "goal": "Confirm the loaded DataFrame matches the profiled schema (shape, dtypes, column names).",
+        "inputs": [
+          "state.raw_data",
+          "state.data_profile"
+        ],
+        "outputs": [
+          "state.validation_result"
+        ],
+        "success_criteria": [
+          "DataFrame shape matches data_profile.n_rows and n_columns",
+          "All column names match data_profile.columns"
+        ],
+        "risks": [
+          "File re-read may differ from the profiled version"
+        ],
+        "required_skills": [
+          "data-loader",
+          "data-profiler"
+        ],
+        "responsible_agent": "python+claude"
+      },
+      {
+        "step_id": "eda_exploration",
+        "name": "Exploratory Data Analysis",
+        "goal": "Produce distribution summaries, correlation/association analysis, and a missing-value overview.",
+        "inputs": [
+          "state.raw_data",
+          "state.task"
+        ],
+        "outputs": [
+          "state.eda_results",
+          "state.artifacts.eda_plots"
+        ],
+        "success_criteria": [
+          "Distribution summary produced for numeric features",
+          "Missing-value summary recorded in state.eda_results"
+        ],
+        "risks": [
+          "High-cardinality columns may produce unusable plots"
+        ],
+        "required_skills": [
+          "eda-analyzer",
+          "plot-generator"
+        ],
+        "responsible_agent": "python+claude"
+      },
+      {
+        "step_id": "leakage_check",
+        "name": "Pre-Modeling Leakage Audit",
+        "goal": "Audit feature candidates and column names for leakage before any split or transformation.",
+        "inputs": [
+          "state.raw_data",
+          "state.task",
+          "state.plan.draft"
+        ],
+        "outputs": [
+          "state.leakage_audit"
+        ],
+        "success_criteria": [
+          "All potential ID columns confirmed excluded from feature_candidates",
+          "Leakage audit verdict is PASS"
+        ],
+        "risks": [
+          "An ID or encoded-target column may have been retained in features"
+        ],
+        "required_skills": [
+          "leakage-check"
+        ],
+        "responsible_agent": "claude"
+      },
+      {
+        "step_id": "preprocess_split_transform",
+        "name": "Split Data and Fit Transformers",
+        "goal": "Split into train/val/test with seed=42; fit imputer/encoder on X_train only.",
+        "inputs": [
+          "state.raw_data",
+          "state.task",
+          "state.leakage_audit"
+        ],
+        "outputs": [
+          "state.splits.X_train",
+          "state.splits.X_test",
+          "state.transformers"
+        ],
+        "success_criteria": [
+          "Split performed before any transformer is fitted",
+          "Transformer fit called only on X_train",
+          "Split seed recorded in state.split_metadata"
+        ],
+        "risks": [
+          "fit_transform on full data \u2192 leakage",
+          "Unset seed \u2192 non-reproducible splits"
+        ],
+        "required_skills": [
+          "data-splitter",
+          "leakage-check"
+        ],
+        "responsible_agent": "python+claude"
+      },
+      {
+        "step_id": "baseline_model",
+        "name": "Train Baseline DummyRegressor (mean)",
+        "goal": "Establish a performance floor with DummyRegressor (mean); record rmse, mae, r2 on validation.",
+        "inputs": [
+          "state.splits"
+        ],
+        "outputs": [
+          "state.models.baseline",
+          "state.artifacts.baseline_model"
+        ],
+        "success_criteria": [
+          "Baseline trained on X_train only",
+          "Baseline metrics (rmse, mae, r2) recorded with split 'val'"
+        ],
+        "risks": [
+          "Evaluating baseline on the test set instead of val"
+        ],
+        "required_skills": [
+          "tabular-modeling",
+          "model-evaluation"
+        ],
+        "responsible_agent": "python+claude"
+      },
+      {
+        "step_id": "model_candidate",
+        "name": "Train Candidate Model",
+        "goal": "Train task-conditioned candidate models and select the best on validation.",
+        "inputs": [
+          "state.splits",
+          "state.models.baseline"
+        ],
+        "outputs": [
+          "state.models.candidate",
+          "state.artifacts.candidate_model"
+        ],
+        "success_criteria": [
+          "Model selected on validation only (test untouched)",
+          "candidate val RMSE < baseline val RMSE"
+        ],
+        "risks": [
+          "Tuning may leak test data if not isolated"
+        ],
+        "required_skills": [
+          "tabular-modeling",
+          "leakage-check",
+          "model-evaluation"
+        ],
+        "responsible_agent": "python+claude"
+      },
+      {
+        "step_id": "evaluate_test",
+        "name": "Final Evaluation",
+        "goal": "Evaluate the selected model on held-out data; produce the required artifacts and a baseline comparison.",
+        "inputs": [
+          "state.models.candidate",
+          "state.models.baseline",
+          "state.splits"
+        ],
+        "outputs": [
+          "state.evaluation",
+          "state.artifacts.residual_plot",
+          "state.artifacts.pred_vs_actual"
+        ],
+        "success_criteria": [
+          "All metrics labeled with split 'test'",
+          "Candidate vs baseline comparison present"
+        ],
+        "risks": [
+          "Reporting val metrics as final"
+        ],
+        "required_skills": [
+          "model-evaluation",
+          "plot-generator"
+        ],
+        "responsible_agent": "python+claude"
+      },
+      {
+        "step_id": "interpret_results",
+        "name": "Interpret Drivers",
+        "goal": "Compute feature importance / key patterns; list caveats. No causal language.",
+        "inputs": [
+          "state.evaluation",
+          "state.task"
+        ],
+        "outputs": [
+          "state.interpretation",
+          "state.artifacts.feature_importance_plot"
+        ],
+        "success_criteria": [
+          "Feature importance computed and sorted",
+          "At least one caveat recorded"
+        ],
+        "risks": [
+          "Importance reflects associations, not causation"
+        ],
+        "required_skills": [
+          "plot-generator"
+        ],
+        "responsible_agent": "python+claude"
+      },
+      {
+        "step_id": "report_generate",
+        "name": "Generate Final Report",
+        "goal": "Write the structured report referencing real artifact paths and metric values.",
+        "inputs": [
+          "state.evaluation",
+          "state.interpretation",
+          "state.execution_log"
+        ],
+        "outputs": [
+          "state.report_draft",
+          "state.artifacts.report_md"
+        ],
+        "success_criteria": [
+          "All required sections present",
+          "Every metric includes its split label"
+        ],
+        "risks": [
+          "Metric values copied incorrectly from state"
+        ],
+        "required_skills": [
+          "report-writing"
+        ],
+        "responsible_agent": "claude"
+      },
+      {
+        "step_id": "report_review",
+        "name": "Independent Report Review",
+        "goal": "Audit the report against state; verify claims, metrics, and artifact references.",
+        "inputs": [
+          "state.report_draft",
+          "state.evaluation",
+          "state.leakage_audit",
+          "state.artifacts"
+        ],
+        "outputs": [
+          "state.report_review"
+        ],
+        "success_criteria": [
+          "Every metric in report matches state.evaluation",
+          "Review verdict is PASS"
+        ],
+        "risks": [
+          "Subtle causal framing may pass without careful reading"
+        ],
+        "required_skills": [
+          "report-review",
+          "model-evaluation",
+          "leakage-check"
+        ],
+        "responsible_agent": "claude"
+      }
+    ],
+    "plan_skill_summary": {
+      "all_skills_used": [
+        "data-loader",
+        "data-profiler",
+        "data-splitter",
+        "eda-analyzer",
+        "leakage-check",
+        "model-evaluation",
+        "plot-generator",
+        "report-review",
+        "report-writing",
+        "tabular-modeling"
+      ],
+      "steps_missing_required_skills": []
+    },
+    "plan_warnings": [],
+    "leakage_audit_at_critique": {
+      "invocation_point": "plan_critique",
+      "run_id": "plan_20260612_161004",
+      "checks_performed": [
+        1,
+        2,
+        3,
+        7
+      ],
+      "leakage_risk": "low",
+      "approved": true,
+      "suspected_columns": [],
+      "failed_checks": [],
+      "warned_checks": [],
+      "required_fixes": [],
+      "warnings": []
+    }
+  },
+  "execution_logs": {},
+  "inspection_logs": {},
+  "leakage_audit": {
+    "invocation_point": "leakage_check",
+    "run_id": "20260612_161004",
+    "checks_performed": [
+      1,
+      2,
+      3,
+      7,
+      8
+    ],
+    "leakage_risk": "low",
+    "approved": true,
+    "suspected_columns": [],
+    "failed_checks": [],
+    "warned_checks": [],
+    "required_fixes": [],
+    "warnings": []
+  },
+  "split_metadata": {
+    "type": "canonical_external",
+    "n_splits": 5,
+    "group_column": "period_id"
+  },
+  "transformer_record": null,
+  "model_results": {
+    "baseline": {
+      "model_name": "baseline_group_category_mean",
+      "val_metrics": {
+        "mae": 1.2420692366653887,
+        "block_mae": 1.2420692366653887,
+        "cv_mean": 1.2405002687956022,
+        "cv_std": 0.06002171203849086,
+        "cv_scores": [
+          1.2693,
+          1.3325,
+          1.2338,
+          1.1506,
+          1.2164
+        ]
+      },
+      "selection_score": 1.2420692366653887
+    },
+    "candidate": {
+      "model_name": "stack(tuned(catboost)+catboost_log+lightgbm_log)",
+      "val_metrics": {
+        "block_mae": 0.8006771428984656,
+        "weights": {
+          "tuned(catboost)": 0.215,
+          "catboost_log": 0.513,
+          "lightgbm_log": 0.272
+        }
+      },
+      "selection_score": 0.8006771428984656
+    },
+    "selected_model_name": "stack(tuned(catboost)+catboost_log+lightgbm_log)",
+    "metric_name": "block_mae",
+    "greater_is_better": false,
+    "all_scores": [
+      {
+        "name": "baseline_category_mean",
+        "status": "ok",
+        "score": 2.185538693570959,
+        "detail": {
+          "mae": 2.1855386935709586,
+          "block_mae": 2.185538693570959,
+          "cv_mean": 2.184021148152536,
+          "cv_std": 0.059062636284306365,
+          "cv_scores": [
+            2.2442,
+            2.2407,
+            2.2038,
+            2.0946,
+            2.1368
+          ]
+        }
+      },
+      {
+        "name": "baseline_group_mean",
+        "status": "ok",
+        "score": 5.209815705929383,
+        "detail": {
+          "mae": 5.209815705929383,
+          "block_mae": 5.209815705929383,
+          "cv_mean": 5.209216258161833,
+          "cv_std": 0.05796180408567692,
+          "cv_scores": [
+            5.1744,
+            5.2902,
+            5.1195,
+            5.2353,
+            5.2267
+          ]
+        }
+      },
+      {
+        "name": "baseline_group_category_mean",
+        "status": "ok",
+        "score": 1.2420692366653887,
+        "detail": {
+          "mae": 1.2420692366653887,
+          "block_mae": 1.2420692366653887,
+          "cv_mean": 1.2405002687956022,
+          "cv_std": 0.06002171203849086,
+          "cv_scores": [
+            1.2693,
+            1.3325,
+            1.2338,
+            1.1506,
+            1.2164
+          ]
+        }
+      },
+      {
+        "name": "dummy_mean",
+        "status": "ok",
+        "score": 5.4282261802249865,
+        "detail": {
+          "mae": 5.4282261802249865,
+          "block_mae": 5.4282261802249865,
+          "cv_mean": 5.427920577383441,
+          "cv_std": 0.05504395198748731,
+          "cv_scores": [
+            5.3811,
+            5.4982,
+            5.3479,
+            5.4533,
+            5.4591
+          ]
+        }
+      },
+      {
+        "name": "hist_gradient_boosting",
+        "status": "ok",
+        "score": 0.8598425083433444,
+        "detail": {
+          "mae": 0.8598425083433443,
+          "block_mae": 0.8598425083433444,
+          "cv_mean": 0.8600428947964154,
+          "cv_std": 0.01397294433341948,
+          "cv_scores": [
+            0.837,
+            0.8676,
+            0.8519,
+            0.8767,
+            0.867
+          ]
+        }
+      },
+      {
+        "name": "extra_trees",
+        "status": "ok",
+        "score": 0.8843005122800266,
+        "detail": {
+          "mae": 0.8843005122800266,
+          "block_mae": 0.8843005122800266,
+          "cv_mean": 0.8841866364211766,
+          "cv_std": 0.02338686701952931,
+          "cv_scores": [
+            0.8591,
+            0.9181,
+            0.8564,
+            0.8946,
+            0.8928
+          ]
+        }
+      },
+      {
+        "name": "random_forest",
+        "status": "ok",
+        "score": 0.8310102758697451,
+        "detail": {
+          "mae": 0.8310102758697451,
+          "block_mae": 0.8310102758697451,
+          "cv_mean": 0.831311201331556,
+          "cv_std": 0.024758197171416217,
+          "cv_scores": [
+            0.7899,
+            0.8496,
+            0.8156,
+            0.853,
+            0.8486
+          ]
+        }
+      },
+      {
+        "name": "ridge",
+        "status": "ok",
+        "score": 1.1998710147039753,
+        "detail": {
+          "mae": 1.1998710147039755,
+          "block_mae": 1.1998710147039753,
+          "cv_mean": 1.1989887539012567,
+          "cv_std": 0.04327935232280918,
+          "cv_scores": [
+            1.2049,
+            1.261,
+            1.1774,
+            1.1314,
+            1.2202
+          ]
+        }
+      },
+      {
+        "name": "elastic_net",
+        "status": "ok",
+        "score": 1.1986279268950186,
+        "detail": {
+          "mae": 1.1986279268950184,
+          "block_mae": 1.1986279268950186,
+          "cv_mean": 1.1977652839366688,
+          "cv_std": 0.042932891879962354,
+          "cv_scores": [
+            1.2024,
+            1.2596,
+            1.1756,
+            1.1315,
+            1.2198
+          ]
+        }
+      },
+      {
+        "name": "gradient_boosting",
+        "status": "ok",
+        "score": 0.9269476651570878,
+        "detail": {
+          "mae": 0.9269476651570878,
+          "block_mae": 0.9269476651570878,
+          "cv_mean": 0.9270509025389361,
+          "cv_std": 0.015601869799847384,
+          "cv_scores": [
+            0.9039,
+            0.9423,
+            0.922,
+            0.9466,
+            0.9206
+          ]
+        }
+      },
+      {
+        "name": "hgb_log",
+        "status": "ok",
+        "score": 0.8187644559753278,
+        "detail": {
+          "mae": 0.8187644559753278,
+          "block_mae": 0.8187644559753278,
+          "cv_mean": 0.8189151746228417,
+          "cv_std": 0.027750694004006513,
+          "cv_scores": [
+            0.7798,
+            0.8464,
+            0.7924,
+            0.8461,
+            0.8299
+          ]
+        }
+      },
+      {
+        "name": "hgb_sqrt",
+        "status": "ok",
+        "score": 0.8233526093882434,
+        "detail": {
+          "mae": 0.8233526093882434,
+          "block_mae": 0.8233526093882434,
+          "cv_mean": 0.8235547054760028,
+          "cv_std": 0.02108850959977276,
+          "cv_scores": [
+            0.7896,
+            0.842,
+            0.8109,
+            0.847,
+            0.8284
+          ]
+        }
+      },
+      {
+        "name": "lightgbm",
+        "status": "ok",
+        "score": 0.832840592809783,
+        "detail": {
+          "mae": 0.8328405928097828,
+          "block_mae": 0.832840592809783,
+          "cv_mean": 0.8330830344375537,
+          "cv_std": 0.01993206059831562,
+          "cv_scores": [
+            0.8027,
+            0.8448,
+            0.8205,
+            0.8606,
+            0.8368
+          ]
+        }
+      },
+      {
+        "name": "lightgbm_strong",
+        "status": "ok",
+        "score": 0.8346612919876356,
+        "detail": {
+          "mae": 0.8346612919876356,
+          "block_mae": 0.8346612919876356,
+          "cv_mean": 0.83491434720589,
+          "cv_std": 0.02194875003062145,
+          "cv_scores": [
+            0.8023,
+            0.8481,
+            0.8181,
+            0.8637,
+            0.8425
+          ]
+        }
+      },
+      {
+        "name": "lightgbm_sqrt",
+        "status": "ok",
+        "score": 0.8180879093164769,
+        "detail": {
+          "mae": 0.8180879093164769,
+          "block_mae": 0.8180879093164769,
+          "cv_mean": 0.8183293541558545,
+          "cv_std": 0.0209920496364279,
+          "cv_scores": [
+            0.7854,
+            0.8327,
+            0.8042,
+            0.844,
+            0.8254
+          ]
+        }
+      },
+      {
+        "name": "lightgbm_log",
+        "status": "ok",
+        "score": 0.8140068502980221,
+        "detail": {
+          "mae": 0.8140068502980221,
+          "block_mae": 0.8140068502980221,
+          "cv_mean": 0.8141264874490919,
+          "cv_std": 0.02344716164481862,
+          "cv_scores": [
+            0.7807,
+            0.8383,
+            0.7928,
+            0.8372,
+            0.8215
+          ]
+        }
+      },
+      {
+        "name": "xgboost",
+        "status": "ok",
+        "score": 0.8265900512655825,
+        "detail": {
+          "mae": 0.8265900512655826,
+          "block_mae": 0.8265900512655825,
+          "cv_mean": 0.8268851430792605,
+          "cv_std": 0.018374026415910672,
+          "cv_scores": [
+            0.8008,
+            0.8302,
+            0.8149,
+            0.8555,
+            0.8329
+          ]
+        }
+      },
+      {
+        "name": "catboost",
+        "status": "ok",
+        "score": 0.8159674245501225,
+        "detail": {
+          "mae": 0.8159674245501224,
+          "block_mae": 0.8159674245501225,
+          "cv_mean": 0.8162262967720354,
+          "cv_std": 0.018135327715582975,
+          "cv_scores": [
+            0.7862,
+            0.8263,
+            0.8045,
+            0.8334,
+            0.8307
+          ]
+        }
+      },
+      {
+        "name": "catboost_log",
+        "status": "ok",
+        "score": 0.8079582705534646,
+        "detail": {
+          "mae": 0.8079582705534646,
+          "block_mae": 0.8079582705534646,
+          "cv_mean": 0.8081434951345832,
+          "cv_std": 0.020567163794116508,
+          "cv_scores": [
+            0.777,
+            0.825,
+            0.79,
+            0.8264,
+            0.8223
+          ]
+        }
+      },
+      {
+        "name": "tuned(catboost)",
+        "status": "ok",
+        "score": 0.8071742432670834,
+        "detail": {
+          "block_mae": 0.8071742432670834,
+          "tuned_from": "catboost",
+          "params": {
+            "depth": 6,
+            "learning_rate": 0.05,
+            "l2_leaf_reg": 1.0,
+            "iterations": 2000
+          }
+        }
+      },
+      {
+        "name": "stack(tuned(catboost)+catboost_log+lightgbm_log)",
+        "status": "ok",
+        "score": 0.8006771428984656,
+        "detail": {
+          "block_mae": 0.8006771428984656,
+          "weights": {
+            "tuned(catboost)": 0.215,
+            "catboost_log": 0.513,
+            "lightgbm_log": 0.272
+          }
+        }
+      }
+    ],
+    "baseline_comparison": {
+      "metric": "block_mae",
+      "baseline": 1.2420692366653887,
+      "candidate": 0.8006771428984656,
+      "delta": -0.4413920937669231
+    },
+    "final_feature_columns": [
+      "jurisdiction",
+      "overdose_category",
+      "unemployment_rate",
+      "labor_force",
+      "temp_avg_f",
+      "precip_in",
+      "gtrends_overdose",
+      "gtrends_fentanyl",
+      "gtrends_naloxone",
+      "gtrends_opioid",
+      "gtrends_methamphetamine",
+      "state_doh_release"
+    ],
+    "modeling_group": {
+      "run_id": "20260612_161004",
+      "metric": "block_mae",
+      "greater_is_better": false,
+      "candidates": {
+        "floor": 0.8006771428984656
+      },
+      "choice": "floor",
+      "chosen_cv_score": 0.8006771428984656,
+      "chosen_submission": "submission.csv",
+      "specialists": {
+        "linear": {
+          "status": "skipped",
+          "reason": "budget exhausted",
+          "remaining_s": -42.7
+        },
+        "trees": {
+          "status": "skipped",
+          "reason": "budget exhausted",
+          "remaining_s": -42.7
+        },
+        "gbdt": {
+          "status": "skipped",
+          "reason": "budget exhausted",
+          "remaining_s": -42.7
+        }
+      }
+    }
+  },
+  "raw_modeling_results": {
+    "all_scores": [
+      {
+        "name": "baseline_category_mean",
+        "status": "ok",
+        "score": 2.185538693570959,
+        "detail": {
+          "mae": 2.1855386935709586,
+          "block_mae": 2.185538693570959,
+          "cv_mean": 2.184021148152536,
+          "cv_std": 0.059062636284306365,
+          "cv_scores": [
+            2.2442,
+            2.2407,
+            2.2038,
+            2.0946,
+            2.1368
+          ]
+        }
+      },
+      {
+        "name": "baseline_group_mean",
+        "status": "ok",
+        "score": 5.209815705929383,
+        "detail": {
+          "mae": 5.209815705929383,
+          "block_mae": 5.209815705929383,
+          "cv_mean": 5.209216258161833,
+          "cv_std": 0.05796180408567692,
+          "cv_scores": [
+            5.1744,
+            5.2902,
+            5.1195,
+            5.2353,
+            5.2267
+          ]
+        }
+      },
+      {
+        "name": "baseline_group_category_mean",
+        "status": "ok",
+        "score": 1.2420692366653887,
+        "detail": {
+          "mae": 1.2420692366653887,
+          "block_mae": 1.2420692366653887,
+          "cv_mean": 1.2405002687956022,
+          "cv_std": 0.06002171203849086,
+          "cv_scores": [
+            1.2693,
+            1.3325,
+            1.2338,
+            1.1506,
+            1.2164
+          ]
+        }
+      },
+      {
+        "name": "dummy_mean",
+        "status": "ok",
+        "score": 5.4282261802249865,
+        "detail": {
+          "mae": 5.4282261802249865,
+          "block_mae": 5.4282261802249865,
+          "cv_mean": 5.427920577383441,
+          "cv_std": 0.05504395198748731,
+          "cv_scores": [
+            5.3811,
+            5.4982,
+            5.3479,
+            5.4533,
+            5.4591
+          ]
+        }
+      },
+      {
+        "name": "hist_gradient_boosting",
+        "status": "ok",
+        "score": 0.8598425083433444,
+        "detail": {
+          "mae": 0.8598425083433443,
+          "block_mae": 0.8598425083433444,
+          "cv_mean": 0.8600428947964154,
+          "cv_std": 0.01397294433341948,
+          "cv_scores": [
+            0.837,
+            0.8676,
+            0.8519,
+            0.8767,
+            0.867
+          ]
+        }
+      },
+      {
+        "name": "extra_trees",
+        "status": "ok",
+        "score": 0.8843005122800266,
+        "detail": {
+          "mae": 0.8843005122800266,
+          "block_mae": 0.8843005122800266,
+          "cv_mean": 0.8841866364211766,
+          "cv_std": 0.02338686701952931,
+          "cv_scores": [
+            0.8591,
+            0.9181,
+            0.8564,
+            0.8946,
+            0.8928
+          ]
+        }
+      },
+      {
+        "name": "random_forest",
+        "status": "ok",
+        "score": 0.8310102758697451,
+        "detail": {
+          "mae": 0.8310102758697451,
+          "block_mae": 0.8310102758697451,
+          "cv_mean": 0.831311201331556,
+          "cv_std": 0.024758197171416217,
+          "cv_scores": [
+            0.7899,
+            0.8496,
+            0.8156,
+            0.853,
+            0.8486
+          ]
+        }
+      },
+      {
+        "name": "ridge",
+        "status": "ok",
+        "score": 1.1998710147039753,
+        "detail": {
+          "mae": 1.1998710147039755,
+          "block_mae": 1.1998710147039753,
+          "cv_mean": 1.1989887539012567,
+          "cv_std": 0.04327935232280918,
+          "cv_scores": [
+            1.2049,
+            1.261,
+            1.1774,
+            1.1314,
+            1.2202
+          ]
+        }
+      },
+      {
+        "name": "elastic_net",
+        "status": "ok",
+        "score": 1.1986279268950186,
+        "detail": {
+          "mae": 1.1986279268950184,
+          "block_mae": 1.1986279268950186,
+          "cv_mean": 1.1977652839366688,
+          "cv_std": 0.042932891879962354,
+          "cv_scores": [
+            1.2024,
+            1.2596,
+            1.1756,
+            1.1315,
+            1.2198
+          ]
+        }
+      },
+      {
+        "name": "gradient_boosting",
+        "status": "ok",
+        "score": 0.9269476651570878,
+        "detail": {
+          "mae": 0.9269476651570878,
+          "block_mae": 0.9269476651570878,
+          "cv_mean": 0.9270509025389361,
+          "cv_std": 0.015601869799847384,
+          "cv_scores": [
+            0.9039,
+            0.9423,
+            0.922,
+            0.9466,
+            0.9206
+          ]
+        }
+      },
+      {
+        "name": "hgb_log",
+        "status": "ok",
+        "score": 0.8187644559753278,
+        "detail": {
+          "mae": 0.8187644559753278,
+          "block_mae": 0.8187644559753278,
+          "cv_mean": 0.8189151746228417,
+          "cv_std": 0.027750694004006513,
+          "cv_scores": [
+            0.7798,
+            0.8464,
+            0.7924,
+            0.8461,
+            0.8299
+          ]
+        }
+      },
+      {
+        "name": "hgb_sqrt",
+        "status": "ok",
+        "score": 0.8233526093882434,
+        "detail": {
+          "mae": 0.8233526093882434,
+          "block_mae": 0.8233526093882434,
+          "cv_mean": 0.8235547054760028,
+          "cv_std": 0.02108850959977276,
+          "cv_scores": [
+            0.7896,
+            0.842,
+            0.8109,
+            0.847,
+            0.8284
+          ]
+        }
+      },
+      {
+        "name": "lightgbm",
+        "status": "ok",
+        "score": 0.832840592809783,
+        "detail": {
+          "mae": 0.8328405928097828,
+          "block_mae": 0.832840592809783,
+          "cv_mean": 0.8330830344375537,
+          "cv_std": 0.01993206059831562,
+          "cv_scores": [
+            0.8027,
+            0.8448,
+            0.8205,
+            0.8606,
+            0.8368
+          ]
+        }
+      },
+      {
+        "name": "lightgbm_strong",
+        "status": "ok",
+        "score": 0.8346612919876356,
+        "detail": {
+          "mae": 0.8346612919876356,
+          "block_mae": 0.8346612919876356,
+          "cv_mean": 0.83491434720589,
+          "cv_std": 0.02194875003062145,
+          "cv_scores": [
+            0.8023,
+            0.8481,
+            0.8181,
+            0.8637,
+            0.8425
+          ]
+        }
+      },
+      {
+        "name": "lightgbm_sqrt",
+        "status": "ok",
+        "score": 0.8180879093164769,
+        "detail": {
+          "mae": 0.8180879093164769,
+          "block_mae": 0.8180879093164769,
+          "cv_mean": 0.8183293541558545,
+          "cv_std": 0.0209920496364279,
+          "cv_scores": [
+            0.7854,
+            0.8327,
+            0.8042,
+            0.844,
+            0.8254
+          ]
+        }
+      },
+      {
+        "name": "lightgbm_log",
+        "status": "ok",
+        "score": 0.8140068502980221,
+        "detail": {
+          "mae": 0.8140068502980221,
+          "block_mae": 0.8140068502980221,
+          "cv_mean": 0.8141264874490919,
+          "cv_std": 0.02344716164481862,
+          "cv_scores": [
+            0.7807,
+            0.8383,
+            0.7928,
+            0.8372,
+            0.8215
+          ]
+        }
+      },
+      {
+        "name": "xgboost",
+        "status": "ok",
+        "score": 0.8265900512655825,
+        "detail": {
+          "mae": 0.8265900512655826,
+          "block_mae": 0.8265900512655825,
+          "cv_mean": 0.8268851430792605,
+          "cv_std": 0.018374026415910672,
+          "cv_scores": [
+            0.8008,
+            0.8302,
+            0.8149,
+            0.8555,
+            0.8329
+          ]
+        }
+      },
+      {
+        "name": "catboost",
+        "status": "ok",
+        "score": 0.8159674245501225,
+        "detail": {
+          "mae": 0.8159674245501224,
+          "block_mae": 0.8159674245501225,
+          "cv_mean": 0.8162262967720354,
+          "cv_std": 0.018135327715582975,
+          "cv_scores": [
+            0.7862,
+            0.8263,
+            0.8045,
+            0.8334,
+            0.8307
+          ]
+        }
+      },
+      {
+        "name": "catboost_log",
+        "status": "ok",
+        "score": 0.8079582705534646,
+        "detail": {
+          "mae": 0.8079582705534646,
+          "block_mae": 0.8079582705534646,
+          "cv_mean": 0.8081434951345832,
+          "cv_std": 0.020567163794116508,
+          "cv_scores": [
+            0.777,
+            0.825,
+            0.79,
+            0.8264,
+            0.8223
+          ]
+        }
+      },
+      {
+        "name": "tuned(catboost)",
+        "status": "ok",
+        "score": 0.8071742432670834,
+        "detail": {
+          "block_mae": 0.8071742432670834,
+          "tuned_from": "catboost",
+          "params": {
+            "depth": 6,
+            "learning_rate": 0.05,
+            "l2_leaf_reg": 1.0,
+            "iterations": 2000
+          }
+        }
+      },
+      {
+        "name": "stack(tuned(catboost)+catboost_log+lightgbm_log)",
+        "status": "ok",
+        "score": 0.8006771428984656,
+        "detail": {
+          "block_mae": 0.8006771428984656,
+          "weights": {
+            "tuned(catboost)": 0.215,
+            "catboost_log": 0.513,
+            "lightgbm_log": 0.272
+          }
+        }
+      }
+    ]
+  },
+  "evaluation": {
+    "task_type": "regression",
+    "split_used_for_final_evaluation": "test",
+    "class_imbalance_detected": false,
+    "majority_class_rate": null,
+    "worse_than_baseline": false,
+    "metrics_used": [
+      "rmse",
+      "mae",
+      "r2",
+      "mape"
+    ],
+    "selection_metric": "block_mae",
+    "selection_split": "val",
+    "selection_rationale": "Selected by block_mae on the internal holdout.",
+    "performance_table": [
+      {
+        "model": "baseline_group_category_mean (baseline)",
+        "split": "test",
+        "rmse": 2.0784298142039486,
+        "mae": 1.2420692366653887,
+        "r2": 0.9319874545743777,
+        "mape": 0.5895932467327704
+      },
+      {
+        "model": "stack(tuned(catboost)+catboost_log+lightgbm_log) (candidate)",
+        "split": "test",
+        "rmse": 1.5836278876875067,
+        "mae": 0.8006771428984655,
+        "r2": 0.960515687177601,
+        "mape": 0.14024655111004047
+      }
+    ],
+    "best_model": "stack(tuned(catboost)+catboost_log+lightgbm_log)",
+    "best_model_key": "candidate",
+    "delta_vs_baseline": {
+      "rmse": {
+        "baseline": 2.0784298142039486,
+        "candidate": 1.5836278876875067,
+        "delta": -0.49480192651644184,
+        "split": "test"
+      },
+      "mae": {
+        "baseline": 1.2420692366653887,
+        "candidate": 0.8006771428984655,
+        "delta": -0.44139209376692323,
+        "split": "test"
+      },
+      "r2": {
+        "baseline": 0.9319874545743777,
+        "candidate": 0.960515687177601,
+        "delta": 0.028528232603223347,
+        "split": "test"
+      }
+    },
+    "confusion_matrix": null,
+    "residual_summary": {
+      "split": "test",
+      "mean": -0.06492213170932717,
+      "std": 1.5822965599014336,
+      "min": -20.94492807733264,
+      "p5": -2.1612866436150124,
+      "p95": 1.886931262230405,
+      "max": 19.51306958258529
+    },
+    "approved": true,
+    "failed_checks": [],
+    "warned_checks": [],
+    "warnings": [],
+    "artifacts": {
+      "confusion_matrix_plot": null,
+      "roc_curve_plot": null,
+      "pr_curve_plot": null,
+      "residual_plot": "/Users/shucheng/Downloads/BIG_S2_A_awardB-claude-award-b-general-agent-8/outputs/artifacts/20260612_161004_residuals.png",
+      "pred_vs_actual_plot": "/Users/shucheng/Downloads/BIG_S2_A_awardB-claude-award-b-general-agent-8/outputs/artifacts/20260612_161004_pred_vs_actual.png"
+    }
+  },
+  "eda_results": {
+    "key_findings": [
+      "10 numeric and 4 categorical columns.",
+      "3 columns have missing values; highest is state_doh_release (29.6%)."
+    ],
+    "n_warnings": 2
+  },
+  "interpretation": {
+    "feature_importance": {
+      "unemployment_rate": 0.026970271684851166,
+      "labor_force": 0.04875380302997449,
+      "temp_avg_f": 0.03405424953761201,
+      "precip_in": 0.05921382119844145,
+      "gtrends_overdose": 0.2584434205744715,
+      "gtrends_fentanyl": 0.16172277797326032,
+      "gtrends_naloxone": 0.16289794106999075,
+      "gtrends_opioid": 0.18492114096411272,
+      "gtrends_methamphetamine": 0.22594598296655768
+    },
+    "top_features": [
+      "gtrends_overdose",
+      "gtrends_methamphetamine",
+      "gtrends_opioid",
+      "gtrends_naloxone",
+      "gtrends_fentanyl",
+      "precip_in",
+      "labor_force",
+      "temp_avg_f",
+      "unemployment_rate"
+    ],
+    "caveats": [
+      "Importance is associative (|correlation| for numeric features), not causal."
+    ]
+  },
+  "residual_analysis": {
+    "by_pred_quantile": [
+      {
+        "pred_quantile": "Q1 (low)",
+        "n": 7854,
+        "mean_residual": 0.0071,
+        "mean_abs_residual": 0.1414
+      },
+      {
+        "pred_quantile": "Q2",
+        "n": 7854,
+        "mean_residual": 0.0269,
+        "mean_abs_residual": 0.298
+      },
+      {
+        "pred_quantile": "Q3",
+        "n": 7854,
+        "mean_residual": 0.04,
+        "mean_abs_residual": 0.6325
+      },
+      {
+        "pred_quantile": "Q4 (high)",
+        "n": 7854,
+        "mean_residual": 0.1857,
+        "mean_abs_residual": 2.1308
+      }
+    ],
+    "by_true_quantile": [
+      {
+        "true_quantile": "Q1 (low)",
+        "n": 7917,
+        "mean_residual": -0.0754,
+        "mean_abs_residual": 0.1531
+      },
+      {
+        "true_quantile": "Q2",
+        "n": 7821,
+        "mean_residual": -0.0036,
+        "mean_abs_residual": 0.2993
+      },
+      {
+        "true_quantile": "Q3",
+        "n": 7824,
+        "mean_residual": -0.0406,
+        "mean_abs_residual": 0.6404
+      },
+      {
+        "true_quantile": "Q4 (high)",
+        "n": 7854,
+        "mean_residual": 0.3798,
+        "mean_abs_residual": 2.1124
+      }
+    ],
+    "heteroscedasticity_corr": 0.718,
+    "heteroscedasticity_note": "strong positive \u2014 errors grow with predicted values",
+    "high_value_bias": {
+      "n_high_value_rows": 7854,
+      "fraction_underpredicted": 0.5837,
+      "fraction_overpredicted": 0.4163,
+      "mean_residual_high_values": 0.3798,
+      "bias_direction": "systematic_underprediction",
+      "note": "model systematically underpredicts high values"
+    },
+    "high_value_underprediction": {
+      "n_high_value_rows": 7854,
+      "fraction_underpredicted": 0.5837,
+      "mean_residual_high_values": 0.3798,
+      "note": "model systematically underpredicts high values"
+    }
+  },
+  "data_pattern_report": {
+    "run_id": "20260612_161004",
+    "schema_comparison": {
+      "n_train_rows": 31416,
+      "n_predict_rows": 918,
+      "train_only_columns": [],
+      "predict_only_columns": [
+        "row_id"
+      ],
+      "shared_columns": [
+        "gtrends_fentanyl",
+        "gtrends_methamphetamine",
+        "gtrends_naloxone",
+        "gtrends_opioid",
+        "gtrends_overdose",
+        "jurisdiction",
+        "labor_force",
+        "overdose_category",
+        "period_id",
+        "precip_in",
+        "state_doh_release",
+        "temp_avg_f",
+        "unemployment_rate"
+      ],
+      "note": "0 column(s) only in training data (may include target components); 1 column(s) only in prediction data."
+    },
+    "time_coverage": {
+      "has_time": false
+    },
+    "target_distribution": {
+      "count": 31416,
+      "mean": 6.352161637382226,
+      "std": 7.969806205115852,
+      "min": 0.05,
+      "max": 79.99,
+      "skewness": 2.703188317034808,
+      "kurtosis": 9.79626746667563,
+      "zero_fraction": 0.0,
+      "near_zero_fraction": 0.0,
+      "quantiles": {
+        "p0": 0.05,
+        "p5": 0.21,
+        "p10": 1.03,
+        "p25": 1.68,
+        "p50": 3.21,
+        "p75": 7.5425,
+        "p90": 16.83,
+        "p95": 22.855,
+        "p100": 79.99
+      },
+      "is_non_negative": true,
+      "is_right_skewed": true,
+      "interpretation": "heavily right-skewed \u2014 log-transform of target may help"
+    },
+    "target_by_time_features": {},
+    "target_by_categorical": {
+      "overdose_category": {
+        "n_groups": 8,
+        "target_mean_range": 21.9313,
+        "target_mean_std_across_groups": 7.2888,
+        "is_predictive": true,
+        "top_groups": [
+          {
+            "group": "all_drugs",
+            "mean": 22.8204,
+            "count": 3927
+          },
+          {
+            "group": "all_opioids",
+            "mean": 10.3044,
+            "count": 3927
+          },
+          {
+            "group": "all_stimulants",
+            "mean": 5.2197,
+            "count": 3927
+          },
+          {
+            "group": "fentanyl",
+            "mean": 5.013,
+            "count": 3927
+          },
+          {
+            "group": "methamphetamine",
+            "mean": 2.4824,
+            "count": 3927
+          }
+        ]
+      }
+    },
+    "feature_target_correlations": {
+      "top_positive": [
+        {
+          "feature": "gtrends_overdose",
+          "pearson_r": 0.2584,
+          "abs_r": 0.2584
+        },
+        {
+          "feature": "gtrends_methamphetamine",
+          "pearson_r": 0.2259,
+          "abs_r": 0.2259
+        },
+        {
+          "feature": "gtrends_opioid",
+          "pearson_r": 0.1849,
+          "abs_r": 0.1849
+        },
+        {
+          "feature": "gtrends_naloxone",
+          "pearson_r": 0.1629,
+          "abs_r": 0.1629
+        },
+        {
+          "feature": "gtrends_fentanyl",
+          "pearson_r": 0.1617,
+          "abs_r": 0.1617
+        },
+        {
+          "feature": "precip_in",
+          "pearson_r": 0.0592,
+          "abs_r": 0.0592
+        },
+        {
+          "feature": "temp_avg_f",
+          "pearson_r": 0.0341,
+          "abs_r": 0.0341
+        },
+        {
+          "feature": "unemployment_rate",
+          "pearson_r": 0.027,
+          "abs_r": 0.027
+        }
+      ],
+      "top_negative": [
+        {
+          "feature": "labor_force",
+          "pearson_r": -0.0488,
+          "abs_r": 0.0488
+        }
+      ],
+      "n_features_computed": 9
+    },
+    "distribution_shift": {
+      "shifted_features": [
+        {
+          "feature": "gtrends_naloxone",
+          "train_mean": 46.9511,
+          "predict_mean": 64.2411,
+          "z_score": 1.0568,
+          "severity": "low"
+        }
+      ],
+      "n_features_with_shift": 1,
+      "has_notable_shift": false
+    },
+    "high_cardinality_risk": [],
+    "target_component_analysis": {
+      "components": [],
+      "note": "No train-only columns to analyze."
+    },
+    "cross_feature_target_patterns": {
+      "top_interactions": [],
+      "n_interactions_tested": 0,
+      "note": "Top interaction effects between time features and low-cardinality features. interaction_strength = max_level_time_range - min_level_time_range; level_spread = max_level_mean - min_level_mean."
+    },
+    "validation_implications": {
+      "recommended_strategy": "random_holdout",
+      "recommendations": [
+        "Target is right-skewed (skewness=2.70): consider log-transform; MAE on raw target will weight large values heavily."
+      ]
+    }
+  },
+  "report_draft": null,
+  "report_path": null,
+  "report_review": {
+    "verdict": "SKIPPED",
+    "approved": true
+  },
+  "artifacts": {
+    "residual_plot": "/Users/shucheng/Downloads/BIG_S2_A_awardB-claude-award-b-general-agent-8/outputs/artifacts/20260612_161004_residuals.png",
+    "pred_vs_actual_plot": "/Users/shucheng/Downloads/BIG_S2_A_awardB-claude-award-b-general-agent-8/outputs/artifacts/20260612_161004_pred_vs_actual.png",
+    "feature_importance_plot": "/Users/shucheng/Downloads/BIG_S2_A_awardB-claude-award-b-general-agent-8/outputs/artifacts/20260612_161004_feature_importance.png"
+  },
+  "summary": {
+    "run_id": "20260612_161004",
+    "task_type": "regression",
+    "selected_model": "stack(tuned(catboost)+catboost_log+lightgbm_log)",
+    "metric": "block_mae",
+    "output_kind": "value",
+    "submission_valid": true,
+    "report_review": "SKIPPED"
+  }
+}

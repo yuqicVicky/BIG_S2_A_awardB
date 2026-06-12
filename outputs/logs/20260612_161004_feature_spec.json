@@ -1,0 +1,174 @@
+{
+  "run_id": "20260612_161004",
+  "format": "parquet",
+  "features_train": "outputs/logs/20260612_161004_features_train.parquet",
+  "features_pred": "outputs/logs/20260612_161004_features_pred.parquet",
+  "feature_columns": [
+    "period_id__year",
+    "period_id__month",
+    "period_id__quarter",
+    "period_id__month_sin",
+    "period_id__month_cos",
+    "period_id__day",
+    "period_id__dayofweek",
+    "period_id__is_weekend",
+    "period_id__weekofyear",
+    "period_id__ordinal_rank",
+    "period_id__ordinal",
+    "state_doh_release__is_missing",
+    "state_doh_release__svd_0",
+    "state_doh_release__svd_1",
+    "state_doh_release__svd_2",
+    "state_doh_release__svd_3",
+    "state_doh_release__svd_4",
+    "state_doh_release__svd_5",
+    "state_doh_release__svd_6",
+    "state_doh_release__svd_7",
+    "state_doh_release__svd_8",
+    "state_doh_release__svd_9",
+    "state_doh_release__svd_10",
+    "state_doh_release__svd_11",
+    "state_doh_release__svd_12",
+    "state_doh_release__svd_13",
+    "state_doh_release__svd_14",
+    "state_doh_release__svd_15",
+    "state_doh_release__svd_16",
+    "state_doh_release__svd_17",
+    "state_doh_release__svd_18",
+    "state_doh_release__svd_19",
+    "jurisdiction_category_target_mean",
+    "jurisdiction_target_mean",
+    "category_target_mean",
+    "jurisdiction_category_target_std"
+  ],
+  "per_fold_aggregates": [
+    {
+      "name": "jurisdiction_category_target_mean",
+      "group_keys": [
+        "jurisdiction",
+        "overdose_category"
+      ],
+      "source": "per_fold"
+    },
+    {
+      "name": "jurisdiction_target_mean",
+      "group_keys": [
+        "jurisdiction"
+      ],
+      "source": "per_fold"
+    },
+    {
+      "name": "category_target_mean",
+      "group_keys": [
+        "overdose_category"
+      ],
+      "source": "per_fold"
+    },
+    {
+      "name": "jurisdiction_category_target_std",
+      "group_keys": [
+        "jurisdiction",
+        "overdose_category"
+      ],
+      "source": "per_fold"
+    }
+  ],
+  "datetime_derived": [
+    "period_id__year",
+    "period_id__month",
+    "period_id__quarter",
+    "period_id__month_sin",
+    "period_id__month_cos",
+    "period_id__day",
+    "period_id__dayofweek",
+    "period_id__is_weekend",
+    "period_id__weekofyear",
+    "period_id__ordinal_rank",
+    "period_id__ordinal"
+  ],
+  "text_svd": [
+    "state_doh_release__svd_0",
+    "state_doh_release__svd_1",
+    "state_doh_release__svd_2",
+    "state_doh_release__svd_3",
+    "state_doh_release__svd_4",
+    "state_doh_release__svd_5",
+    "state_doh_release__svd_6",
+    "state_doh_release__svd_7",
+    "state_doh_release__svd_8",
+    "state_doh_release__svd_9",
+    "state_doh_release__svd_10",
+    "state_doh_release__svd_11",
+    "state_doh_release__svd_12",
+    "state_doh_release__svd_13",
+    "state_doh_release__svd_14",
+    "state_doh_release__svd_15",
+    "state_doh_release__svd_16",
+    "state_doh_release__svd_17",
+    "state_doh_release__svd_18",
+    "state_doh_release__svd_19",
+    "state_doh_release__is_missing"
+  ],
+  "categorical_onehot": [
+    "overdose_category__is_all_drugs",
+    "overdose_category__is_all_opioids",
+    "overdose_category__is_all_stimulants",
+    "overdose_category__is_benzodiazepine",
+    "overdose_category__is_cocaine",
+    "overdose_category__is_fentanyl",
+    "overdose_category__is_heroin",
+    "overdose_category__is_methamphetamine"
+  ],
+  "interactions": [
+    "jurisdiction_x_period_ordinal_rank",
+    "overdose_category_all_drugs_x_gtrends_fentanyl",
+    "overdose_category_all_opioids_x_gtrends_fentanyl",
+    "overdose_category_all_stimulants_x_gtrends_fentanyl"
+  ],
+  "lag_experimental": [
+    "target_lag1_per_jurisdiction_category",
+    "target_lag2_per_jurisdiction_category",
+    "target_rolling_mean_3_per_jurisdiction_category",
+    "target_rolling_mean_6_per_jurisdiction_category",
+    "gtrends_fentanyl_lag1_per_jurisdiction",
+    "cross_category_auxiliary_lag1_signal"
+  ],
+  "target_transform": "log1p",
+  "join_keys_for_modeling": [
+    "period_id",
+    "jurisdiction",
+    "overdose_category"
+  ],
+  "row_id_column": "row_id",
+  "target_column": "rate_per_10000_ed_visits",
+  "notes": "Long-format panel: train rows = (period_id, jurisdiction, overdose_category) joined with covariates on (period_id, jurisdiction). Prediction frame expanded from data/val/covariates.csv (357 rows incl. buffer period dsZhPyK4) by filtering to the 6 sample_submission periods and cross-joining with the 3 scored overdose_category values, then aligned to sample_submission row order. Per-fold target/category aggregates (jurisdiction_category_target_mean, jurisdiction_target_mean, category_target_mean, jurisdiction_category_target_std) are fit on each fold's training rows only (src.data_agent.cv.load_canonical_folds) and refit on full train for the prediction matrix. temp_avg_f/precip_in imputed via jurisdiction-month training median; unemployment_rate/labor_force via jurisdiction last-known-value carry-forward fit on train. state_doh_release: TF-IDF(max_features=2000, 1-2gram, min_df=2)->TruncatedSVD fit on full train text, applied to prediction text, plus a structural-missing indicator. Lag/rolling/cross-category-aux features use only past periods (no future leakage) but are flagged experimental for the Step-6A' ablation gate per the plan.",
+  "ablation_pruned_columns": [
+    "cross_category_auxiliary_lag1_signal",
+    "gtrends_fentanyl",
+    "gtrends_fentanyl_lag1_per_jurisdiction",
+    "gtrends_methamphetamine",
+    "gtrends_naloxone",
+    "gtrends_opioid",
+    "gtrends_overdose",
+    "jurisdiction_x_period_ordinal_rank",
+    "labor_force",
+    "overdose_category__is_all_drugs",
+    "overdose_category__is_all_opioids",
+    "overdose_category__is_all_stimulants",
+    "overdose_category__is_benzodiazepine",
+    "overdose_category__is_cocaine",
+    "overdose_category__is_fentanyl",
+    "overdose_category__is_heroin",
+    "overdose_category__is_methamphetamine",
+    "overdose_category_all_drugs_x_gtrends_fentanyl",
+    "overdose_category_all_opioids_x_gtrends_fentanyl",
+    "overdose_category_all_stimulants_x_gtrends_fentanyl",
+    "precip_in",
+    "target_lag1_per_jurisdiction_category",
+    "target_lag2_per_jurisdiction_category",
+    "target_rolling_mean_3_per_jurisdiction_category",
+    "target_rolling_mean_6_per_jurisdiction_category",
+    "temp_avg_f",
+    "unemployment_rate"
+  ]
+}

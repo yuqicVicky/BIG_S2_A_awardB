@@ -1,0 +1,113 @@
+{
+  "run_id": "20260612_161004",
+  "planned_at": "2026-06-12T16:20:00Z",
+  "modeling_mode": "specialist",
+  "data_coverage": {
+    "available_sources": [
+      {"source": "data/train/dose_sys_train.csv", "column": "period_id", "dtype": "object", "usage": "key", "justification": "opaque period id; resolved to ordinal rank + cyclical date features, never a raw model feature"},
+      {"source": "data/train/dose_sys_train.csv", "column": "jurisdiction", "dtype": "object", "usage": "key", "justification": "group key (51 levels) used for joins, per-fold aggregates, target encoding"},
+      {"source": "data/train/dose_sys_train.csv", "column": "overdose_category", "dtype": "object", "usage": "key", "justification": "group key (8 levels); used for categorical encoding, lag/aggregate grouping, and to isolate the 3 scored vs 5 auxiliary categories"},
+      {"source": "data/train/dose_sys_train.csv", "column": "rate_per_10000_ed_visits", "dtype": "float64", "usage": "target", "justification": "regression label; recommend_log_transform=true (raw skew 2.70, log1p skew 0.50)"},
+      {"source": "data/train/covariates.csv", "column": "period_id", "dtype": "object", "usage": "key", "justification": "join key shared with dose_sys_train via (period_id, jurisdiction)"},
+      {"source": "data/train/covariates.csv", "column": "jurisdiction", "dtype": "object", "usage": "key", "justification": "join key shared with dose_sys_train"},
+      {"source": "data/train/covariates.csv", "column": "unemployment_rate", "dtype": "float64", "usage": "direct_feature", "justification": "numeric labor-market covariate, no missingness in train_covariates"},
+      {"source": "data/train/covariates.csv", "column": "labor_force", "dtype": "float64", "usage": "direct_feature", "justification": "numeric labor-market covariate; potential_id_columns flag is a high-cardinality artifact, not an identifier (51 jurisdictions x scale), kept as scaled numeric"},
+      {"source": "data/train/covariates.csv", "column": "temp_avg_f", "dtype": "float64", "usage": "direct_feature", "justification": "weather covariate; 5.9% missing in train, imputed via jurisdiction-month training median"},
+      {"source": "data/train/covariates.csv", "column": "precip_in", "dtype": "float64", "usage": "direct_feature", "justification": "weather covariate; 5.9% missing in train, imputed via jurisdiction-month training median"},
+      {"source": "data/train/covariates.csv", "column": "gtrends_overdose", "dtype": "float64", "usage": "direct_feature", "justification": "search-interest signal, no missingness, also used for lag/rolling per (jurisdiction)"},
+      {"source": "data/train/covariates.csv", "column": "gtrends_fentanyl", "dtype": "float64", "usage": "direct_feature", "justification": "search-interest signal, no missingness, also used for lag/rolling per (jurisdiction)"},
+      {"source": "data/train/covariates.csv", "column": "gtrends_naloxone", "dtype": "float64", "usage": "direct_feature", "justification": "search-interest signal, no missingness, also used for lag/rolling per (jurisdiction)"},
+      {"source": "data/train/covariates.csv", "column": "gtrends_opioid", "dtype": "float64", "usage": "direct_feature", "justification": "search-interest signal, no missingness, also used for lag/rolling per (jurisdiction)"},
+      {"source": "data/train/covariates.csv", "column": "gtrends_methamphetamine", "dtype": "float64", "usage": "direct_feature", "justification": "search-interest signal, no missingness, also used for lag/rolling per (jurisdiction)"},
+      {"source": "data/train/covariates.csv", "column": "state_doh_release", "dtype": "object", "usage": "text_svd", "justification": "free-text press release flagged in data_profile.text_like_columns; TF-IDF->SVD with a binary structural-missing indicator (29.6% missing in train = no DOH release that period)"},
+      {"source": "data/val/covariates.csv", "column": "period_id", "dtype": "object", "usage": "key", "justification": "prediction join key; includes extra buffer period dsZhPyK4 not in sample_submission, used only for lag/rolling context, never scored"},
+      {"source": "data/val/covariates.csv", "column": "jurisdiction", "dtype": "object", "usage": "key", "justification": "prediction join key"},
+      {"source": "data/val/covariates.csv", "column": "unemployment_rate", "dtype": "float64", "usage": "direct_feature", "justification": "same covariate as train; 54.6% missing in prediction imputed from train-fit jurisdiction-period medians/last-known-value carry-forward"},
+      {"source": "data/val/covariates.csv", "column": "labor_force", "dtype": "float64", "usage": "direct_feature", "justification": "same covariate as train; 58.0% missing in prediction imputed from train-fit jurisdiction last-known-value carry-forward"},
+      {"source": "data/val/covariates.csv", "column": "temp_avg_f", "dtype": "float64", "usage": "direct_feature", "justification": "same covariate as train; 2.0% missing imputed via jurisdiction-month training median"},
+      {"source": "data/val/covariates.csv", "column": "precip_in", "dtype": "float64", "usage": "direct_feature", "justification": "same covariate as train; 5.9% missing imputed via jurisdiction-month training median"},
+      {"source": "data/val/covariates.csv", "column": "gtrends_overdose", "dtype": "float64", "usage": "direct_feature", "justification": "same covariate as train, no missingness"},
+      {"source": "data/val/covariates.csv", "column": "gtrends_fentanyl", "dtype": "float64", "usage": "direct_feature", "justification": "same covariate as train, no missingness"},
+      {"source": "data/val/covariates.csv", "column": "gtrends_naloxone", "dtype": "float64", "usage": "direct_feature", "justification": "same covariate as train, no missingness"},
+      {"source": "data/val/covariates.csv", "column": "gtrends_opioid", "dtype": "float64", "usage": "direct_feature", "justification": "same covariate as train, no missingness"},
+      {"source": "data/val/covariates.csv", "column": "gtrends_methamphetamine", "dtype": "float64", "usage": "direct_feature", "justification": "same covariate as train, no missingness"},
+      {"source": "data/val/covariates.csv", "column": "state_doh_release", "dtype": "object", "usage": "text_svd", "justification": "same free-text column as train; TF-IDF/SVD transformer fit on full train text then applied; 32.2% missing -> structural-missing indicator"},
+      {"source": "data/sample_submission.csv", "column": "row_id", "dtype": "int64", "usage": "key", "justification": "row identifier for submission join; not a model feature"},
+      {"source": "data/sample_submission.csv", "column": "period_id", "dtype": "object", "usage": "key", "justification": "defines the 6 prediction periods (cross-joined with jurisdiction x scored overdose_category)"},
+      {"source": "data/sample_submission.csv", "column": "jurisdiction", "dtype": "object", "usage": "key", "justification": "defines the jurisdiction dimension of the prediction frame"},
+      {"source": "data/sample_submission.csv", "column": "overdose_category", "dtype": "object", "usage": "key", "justification": "defines which of the 8 categories are scored (all_drugs, all_opioids, all_stimulants only)"},
+      {"source": "data/sample_submission.csv", "column": "rate_per_10000_ed_visits", "dtype": "float64", "usage": "excluded", "justification": "placeholder constant column (all zero, n_unique=1) for submission format only; must never be read as a feature or target signal"}
+    ],
+    "uncovered_columns": [],
+    "text_columns_exploited": ["state_doh_release"],
+    "datetime_sources": ["period_id"],
+    "target_aggregate_keys": [
+      ["jurisdiction", "overdose_category"],
+      ["jurisdiction"],
+      ["overdose_category"]
+    ]
+  },
+  "feature_plan": {
+    "direct_numeric": [
+      "unemployment_rate", "labor_force", "temp_avg_f", "precip_in",
+      "gtrends_overdose", "gtrends_fentanyl", "gtrends_naloxone", "gtrends_opioid", "gtrends_methamphetamine"
+    ],
+    "categorical_encoding": [
+      {"column": "jurisdiction", "strategy": "target_enc_per_fold"},
+      {"column": "overdose_category", "strategy": "one_hot"}
+    ],
+    "datetime_derived": [
+      "period_id__year", "period_id__month", "period_id__month_sin", "period_id__month_cos",
+      "period_id__quarter", "period_id__ordinal_rank"
+    ],
+    "text_tfidf_svd": [
+      {"column": "state_doh_release", "svd_components": 20}
+    ],
+    "per_fold_target_aggregates": [
+      {"name": "jurisdiction_category_target_mean", "group_keys": ["jurisdiction", "overdose_category"]},
+      {"name": "jurisdiction_target_mean", "group_keys": ["jurisdiction"]},
+      {"name": "category_target_mean", "group_keys": ["overdose_category"]},
+      {"name": "jurisdiction_category_target_std", "group_keys": ["jurisdiction", "overdose_category"]}
+    ],
+    "interactions": [
+      "jurisdiction_x_period_ordinal_rank (captures jurisdiction-specific trend slope)",
+      "overdose_category_x_gtrends_fentanyl (category-specific search-interest sensitivity)"
+    ],
+    "lag_features": [
+      {"name": "target_lag1_per_jurisdiction_category", "group_keys": ["jurisdiction", "overdose_category"], "experimental": true},
+      {"name": "target_lag2_per_jurisdiction_category", "group_keys": ["jurisdiction", "overdose_category"], "experimental": true},
+      {"name": "target_rolling_mean_3_per_jurisdiction_category", "group_keys": ["jurisdiction", "overdose_category"], "experimental": true},
+      {"name": "target_rolling_mean_6_per_jurisdiction_category", "group_keys": ["jurisdiction", "overdose_category"], "experimental": true},
+      {"name": "gtrends_fentanyl_lag1_per_jurisdiction", "group_keys": ["jurisdiction"], "experimental": true},
+      {"name": "cross_category_auxiliary_lag1_signal", "group_keys": ["jurisdiction", "overdose_category"], "experimental": true}
+    ],
+    "imputation": {
+      "temp_avg_f": "jurisdiction_month_training_median",
+      "precip_in": "jurisdiction_month_training_median",
+      "unemployment_rate": "jurisdiction_training_last_known_value_carry_forward",
+      "labor_force": "jurisdiction_training_last_known_value_carry_forward",
+      "state_doh_release": "fill_empty_string_plus_structural_missing_indicator"
+    },
+    "exclude_columns": [
+      "rate_per_10000_ed_visits (from sample_submission.csv only, as placeholder)"
+    ],
+    "rationale": "Covers every covariate (direct numeric, gtrends, weather, labor), the panel keys (per-fold target encodings at jurisdiction/category/joint level), the opaque period_id via derived cyclical/ordinal date features, and the free-text DOH releases via TF-IDF-SVD plus a structural-missing flag. Cross-category auxiliary signal from the 5 unscored overdose_category rows is exposed as a separate lag/aux feature (never summed) to avoid double-counting. Lag/rolling target features and the cross-category lag are flagged experimental for the Step-6A' ablation gate since with only 77 periods they risk overfitting; all target-derived aggregates and encodings are fit per fold then refit on full train for the submission frame."
+  },
+  "completeness_constraints": {
+    "submission_frame_expansion": "data/val/covariates.csv has n_rows=357 (51 jurisdictions x 7 periods, including buffer period dsZhPyK4). The prediction frame must be filtered to the 6 sample_submission periods and cross-joined with the 3 scored overdose_category values (all_drugs, all_opioids, all_stimulants) to produce sample_submission.csv's 918 rows (51 jurisdictions x 6 periods x 3 categories); dsZhPyK4 rows are used only as lag/rolling context, never emitted.",
+    "full_train_refit": true,
+    "sub_target_decomposition": [],
+    "missing_value_handling_required": true,
+    "two_column_submission": true
+  },
+  "critique": {
+    "verdict": "PASS",
+    "checks_performed": [1, 2, 3, 4, 5, 6],
+    "blocking_issues": [],
+    "advisory_issues": [
+      "Lag/rolling target features (only 77 training periods, per-group panel can be sparse) and cross-category lag signal are marked experimental pending the Step-6A' ablation gate."
+    ],
+    "fixes_applied": []
+  },
+  "plan_warnings": []
+}

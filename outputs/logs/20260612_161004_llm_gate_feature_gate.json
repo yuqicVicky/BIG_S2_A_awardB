@@ -1,0 +1,10 @@
+{
+  "run_id": "20260612_161004",
+  "stage": "feature_gate",
+  "status": "pass",
+  "reasons": [
+    "ablation status=ok, single large unambiguous prune (other_features, delta -0.0419 >> margin 0.00848) confirmed",
+    "datetime_derived, per_fold_aggregates, text_svd kept -- 36 authored columns enter specialists",
+    "feature_spec.json already matches the confirmed prune set; no edits needed"
+  ]
+}

@@ -1,0 +1,49 @@
+/Users/shucheng/Downloads/BIG_S2_A_awardB-claude-award-b-general-agent-8/src/data_agent/features.py:269: UserWarning: Could not infer format, so each element will be parsed individually, falling back to `dateutil`. To ensure parsing is consistent and as-expected, please specify a format.
+  parsed = pd.to_datetime(sample, errors="coerce")
+/Users/shucheng/Downloads/BIG_S2_A_awardB-claude-award-b-general-agent-8/src/data_agent/features.py:269: UserWarning: Could not infer format, so each element will be parsed individually, falling back to `dateutil`. To ensure parsing is consistent and as-expected, please specify a format.
+  parsed = pd.to_datetime(sample, errors="coerce")
+/Users/shucheng/Downloads/BIG_S2_A_awardB-claude-award-b-general-agent-8/src/data_agent/features.py:269: UserWarning: Could not infer format, so each element will be parsed individually, falling back to `dateutil`. To ensure parsing is consistent and as-expected, please specify a format.
+  parsed = pd.to_datetime(sample, errors="coerce")
+/Users/shucheng/Downloads/BIG_S2_A_awardB-claude-award-b-general-agent-8/src/data_agent/features.py:269: UserWarning: Could not infer format, so each element will be parsed individually, falling back to `dateutil`. To ensure parsing is consistent and as-expected, please specify a format.
+  parsed = pd.to_datetime(sample, errors="coerce")
+/opt/anaconda3/lib/python3.13/site-packages/sklearn/utils/validation.py:2749: UserWarning: X does not have valid feature names, but LGBMRegressor was fitted with feature names
+  warnings.warn(
+/opt/anaconda3/lib/python3.13/site-packages/sklearn/utils/validation.py:2749: UserWarning: X does not have valid feature names, but LGBMRegressor was fitted with feature names
+  warnings.warn(
+/opt/anaconda3/lib/python3.13/site-packages/sklearn/utils/validation.py:2749: UserWarning: X does not have valid feature names, but LGBMRegressor was fitted with feature names
+  warnings.warn(
+/opt/anaconda3/lib/python3.13/site-packages/sklearn/utils/validation.py:2749: UserWarning: X does not have valid feature names, but LGBMRegressor was fitted with feature names
+  warnings.warn(
+/opt/anaconda3/lib/python3.13/site-packages/sklearn/utils/validation.py:2749: UserWarning: X does not have valid feature names, but LGBMRegressor was fitted with feature names
+  warnings.warn(
+/opt/anaconda3/lib/python3.13/site-packages/sklearn/utils/validation.py:2749: UserWarning: X does not have valid feature names, but LGBMRegressor was fitted with feature names
+  warnings.warn(
+/opt/anaconda3/lib/python3.13/site-packages/sklearn/utils/validation.py:2749: UserWarning: X does not have valid feature names, but LGBMRegressor was fitted with feature names
+  warnings.warn(
+/opt/anaconda3/lib/python3.13/site-packages/sklearn/utils/validation.py:2749: UserWarning: X does not have valid feature names, but LGBMRegressor was fitted with feature names
+  warnings.warn(
+/opt/anaconda3/lib/python3.13/site-packages/sklearn/utils/validation.py:2749: UserWarning: X does not have valid feature names, but LGBMRegressor was fitted with feature names
+  warnings.warn(
+/opt/anaconda3/lib/python3.13/site-packages/sklearn/utils/validation.py:2749: UserWarning: X does not have valid feature names, but LGBMRegressor was fitted with feature names
+  warnings.warn(
+/opt/anaconda3/lib/python3.13/site-packages/sklearn/utils/validation.py:2749: UserWarning: X does not have valid feature names, but LGBMRegressor was fitted with feature names
+  warnings.warn(
+/opt/anaconda3/lib/python3.13/site-packages/sklearn/utils/validation.py:2749: UserWarning: X does not have valid feature names, but LGBMRegressor was fitted with feature names
+  warnings.warn(
+/opt/anaconda3/lib/python3.13/site-packages/sklearn/utils/validation.py:2749: UserWarning: X does not have valid feature names, but LGBMRegressor was fitted with feature names
+  warnings.warn(
+/opt/anaconda3/lib/python3.13/site-packages/sklearn/utils/validation.py:2749: UserWarning: X does not have valid feature names, but LGBMRegressor was fitted with feature names
+  warnings.warn(
+/opt/anaconda3/lib/python3.13/site-packages/sklearn/utils/validation.py:2749: UserWarning: X does not have valid feature names, but LGBMRegressor was fitted with feature names
+  warnings.warn(
+/opt/anaconda3/lib/python3.13/site-packages/sklearn/utils/validation.py:2749: UserWarning: X does not have valid feature names, but LGBMRegressor was fitted with feature names
+  warnings.warn(
+/opt/anaconda3/lib/python3.13/site-packages/sklearn/utils/validation.py:2749: UserWarning: X does not have valid feature names, but LGBMRegressor was fitted with feature names
+  warnings.warn(
+/opt/anaconda3/lib/python3.13/site-packages/sklearn/utils/validation.py:2749: UserWarning: X does not have valid feature names, but LGBMRegressor was fitted with feature names
+  warnings.warn(
+/opt/anaconda3/lib/python3.13/site-packages/sklearn/utils/validation.py:2749: UserWarning: X does not have valid feature names, but LGBMRegressor was fitted with feature names
+  warnings.warn(
+/opt/anaconda3/lib/python3.13/site-packages/sklearn/utils/validation.py:2749: UserWarning: X does not have valid feature names, but LGBMRegressor was fitted with feature names
+  warnings.warn(
+{"role": "gbdt-specialist", "approach": "gbdt", "selected_model": "stack(catboost_log+tuned(catboost)+catboost)", "cv_metric": "block_mae", "cv_score": 0.7865003525268717, "lower_is_better": true, "candidate_submission": "/Users/shucheng/Downloads/BIG_S2_A_awardB-claude-award-b-general-agent-8/outputs/logs/20260612_161004_cand_gbdt.csv", "oof_path": "/Users/shucheng/Downloads/BIG_S2_A_awardB-claude-award-b-general-agent-8/outputs/logs/20260612_161004_oof_gbdt.csv", "canonical_folds": true, "authored_features_used": ["period_id__year", "period_id__month", "period_id__quarter", "period_id__month_sin", "period_id__month_cos", "period_id__day", "period_id__dayofweek", "period_id__is_weekend", "period_id__weekofyear", "period_id__ordinal_rank", "period_id__ordinal", "state_doh_release__is_missing", "state_doh_release__svd_0", "state_doh_release__svd_1", "state_doh_release__svd_2", "state_doh_release__svd_3", "state_doh_release__svd_4", "state_doh_release__svd_5", "state_doh_release__svd_6", "state_doh_release__svd_7", "state_doh_release__svd_8", "state_doh_release__svd_9", "state_doh_release__svd_10", "state_doh_release__svd_11", "state_doh_release__svd_12", "state_doh_release__svd_13", "state_doh_release__svd_14", "state_doh_release__svd_15", "state_doh_release__svd_16", "state_doh_release__svd_17", "state_doh_release__svd_18", "state_doh_release__svd_19", "jurisdiction_category_target_mean", "jurisdiction_target_mean", "category_target_mean", "jurisdiction_category_target_std"], "monotonic_applied": true}

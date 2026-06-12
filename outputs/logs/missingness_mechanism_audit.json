@@ -1,0 +1,24 @@
+{
+  "run_id": "20260612_161004",
+  "columns": {
+    "state_doh_release": {
+      "mechanism_label": "structural absence concern",
+      "target_signal": false,
+      "max_covariate_correlation": 0.138,
+      "group_dependent": true,
+      "note": "NaN = no DOH press release issued for that (jurisdiction, period); group-dependence by jurisdiction reflects differing state press-release frequency, not data-quality issue."
+    },
+    "temp_avg_f": {
+      "mechanism_label": "group-dependent missingness",
+      "target_signal": false,
+      "max_covariate_correlation": 0.1907,
+      "group_dependent": true
+    },
+    "precip_in": {
+      "mechanism_label": "group-dependent missingness",
+      "target_signal": false,
+      "max_covariate_correlation": 0.1907,
+      "group_dependent": true
+    }
+  }
+}

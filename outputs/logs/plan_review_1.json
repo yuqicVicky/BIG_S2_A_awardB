@@ -1,0 +1,38 @@
+{
+  "round": 1,
+  "reviewer": "plan-reviewer",
+  "overall_verdict": "pass",
+  "findings": [
+    {
+      "criterion": "Criterion A — Data coverage",
+      "verdict": "pass",
+      "location": "data_coverage.available_sources / uncovered_columns",
+      "finding": "All columns from dose_sys_train.csv (4), train/covariates.csv (12), val/covariates.csv (12), and sample_submission.csv (5) are mapped with usage + justification. uncovered_columns is empty. The single excluded column (rate_per_10000_ed_visits from sample_submission.csv) is justified as the constant placeholder column (n_unique=1, matches data_profile.sample_submission.constant_columns). state_doh_release (the only text_like_column) is exploited via TF-IDF/SVD with structural-missing indicators. period_id (the only datetime_like_column) is converted to year/month/sin/cos/quarter/ordinal features, never used raw.",
+      "required_fix": "none"
+    },
+    {
+      "criterion": "Criterion B — Feature reasonableness",
+      "verdict": "pass",
+      "location": "feature_plan (direct_numeric, categorical_encoding, datetime_derived, text_tfidf_svd, per_fold_target_aggregates, interactions, lag_features)",
+      "finding": "All applicable families are present: direct numeric covariates, target-encoded jurisdiction + one-hot overdose_category, cyclical/ordinal period_id features, TF-IDF/SVD text features, per-fold target aggregates at jurisdiction/category/joint level, two interaction terms, and lag/rolling target features. No target column or raw row_id/period_id string appears as a direct feature. All target-derived aggregates are stated as fit-per-fold with full-train refit for submission. The six speculative lag/rolling/cross-category features (sparse panel of 77 periods) are correctly flagged experimental for the Step-6A' ablation gate.",
+      "required_fix": "none"
+    },
+    {
+      "criterion": "Criterion B — Datetime granularity",
+      "verdict": "warn",
+      "location": "feature_plan.datetime_derived",
+      "finding": "datetime_derived omits weekofyear/day/dayofweek/is_weekend fields listed as defaults in the global datetime invariants, but period_id is monthly (month-end dates per Data_Description), making day-of-week/weekend features non-informative (constant or near-constant).",
+      "required_fix": "Optional: no action required given monthly granularity; if the programmer adds them defensively they will simply be near-constant and prunable by the ablation gate."
+    },
+    {
+      "criterion": "Criterion C — Completeness constraints",
+      "verdict": "pass",
+      "location": "completeness_constraints.submission_frame_expansion / full_train_refit / missing_value_handling_required / two_column_submission / sub_target_decomposition",
+      "finding": "submission_frame_expansion derives 918 = 51 jurisdictions x 6 periods x 3 scored categories, matching spec_parse.file_schemas['data/sample_submission.csv'].n_rows=918 (not a bare literal), and describes filtering val/covariates.csv's 357 rows (51x7, incl. buffer period dsZhPyK4) down to the 6 submission periods cross-joined with 3 scored categories. full_train_refit=true. missing_value_handling_required=true matches data_profile missingness in temp_avg_f/precip_in/state_doh_release/unemployment_rate/labor_force. two_column_submission=true. sub_target_decomposition=[] correctly echoes spec_parse.detected_structure.split_pattern.sub_target_candidates=[] (non-empty list not silently ignored, since it is empty).",
+      "required_fix": "none"
+    }
+  ],
+  "summary": "Plan is comprehensive and fold-safe: full column coverage with no uncovered columns, justified single exclusion (constant placeholder target column in sample_submission), text/datetime signals exploited, per-fold target aggregates with full-train refit, and speculative lag features correctly flagged experimental. submission_frame_expansion correctly derives 918=51x6x3 from spec_parse rather than a bare literal. Only a minor WARN on omitted sub-day datetime fields (immaterial for monthly data). No FAIL findings.",
+  "approved": true,
+  "next_action": "accept_plan"
+}

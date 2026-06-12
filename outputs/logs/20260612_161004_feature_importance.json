@@ -1,0 +1,34 @@
+{
+  "run_id": "20260612_161004",
+  "final_model_features": [
+    "jurisdiction",
+    "overdose_category",
+    "unemployment_rate",
+    "labor_force",
+    "temp_avg_f",
+    "precip_in",
+    "gtrends_overdose",
+    "gtrends_fentanyl",
+    "gtrends_naloxone",
+    "gtrends_opioid",
+    "gtrends_methamphetamine",
+    "state_doh_release"
+  ],
+  "feature_importance": {
+    "unemployment_rate": 0.026970271684851166,
+    "labor_force": 0.04875380302997449,
+    "temp_avg_f": 0.03405424953761201,
+    "precip_in": 0.05921382119844145,
+    "gtrends_overdose": 0.2584434205744715,
+    "gtrends_fentanyl": 0.16172277797326032,
+    "gtrends_naloxone": 0.16289794106999075,
+    "gtrends_opioid": 0.18492114096411272,
+    "gtrends_methamphetamine": 0.22594598296655768
+  },
+  "excluded_features": {
+    "period_id": "disjoint_block_key"
+  },
+  "invariant_check": {
+    "importance_subset_of_model": true
+  }
+}

@@ -1,0 +1,128 @@
+{
+  "run_id": "20260612_161004",
+  "reviewed_at": "2026-06-12T21:26:59.176067+00:00",
+  "review_pass": 2,
+  "final_gate": true,
+  "logs_present": {
+    "spec_parse.json": true,
+    "data_profile.json": true,
+    "analysis_plan.json": true,
+    "validation_strategy.json": true,
+    "model_search.json": false,
+    "final_model.json": false,
+    "submission_validation.json": true,
+    "feature_audit_review.json": true,
+    "overfitting_leakage_audit.json": true,
+    "hardcoding_audit_pre.json": true,
+    "hardcoding_audit_post.json": false,
+    "report_review.json": true,
+    "cv_folds.json": true,
+    "plan_review_1.json": true,
+    "plan_review_2.json": false,
+    "feature_spec.json": true,
+    "feature_gate.json": true,
+    "feature_ablation.json": true,
+    "model_selection.json": true,
+    "oof_floor.csv": true,
+    "oof_gbdt.csv": true,
+    "oof_trees.csv": true,
+    "oof_linear.csv": true,
+    "ensemble_meta.json": true,
+    "promotion.json": true,
+    "model_performance_review.json": true,
+    "analysis_review_1.json": true,
+    "analysis_review_2.json": true,
+    "analysis_review_3.json": false
+  },
+  "notes_on_missing": [
+    "model_search.json and final_model.json are absent by design: this run used modeling_mode='specialist' (gbdt/trees/linear specialists + ensemble-meta), not model-search-agent (general mode). report.pdf and report_review.json correctly document this substitution using promotion.json/ensemble_meta.json/model_selection.json as the equivalent artifacts (report_review.json check 4, verdict=pass)."
+  ],
+  "submission_status": {
+    "exists": true,
+    "columns_ok": true,
+    "row_count_ok": true,
+    "row_id_order_matches_sample": true,
+    "all_finite": true,
+    "no_duplicates": true,
+    "two_columns": true,
+    "validation_verdict": "PASS"
+  },
+  "prediction_sanity_status": {
+    "overall_verdict": "PASS",
+    "high_overfitting_risk": false,
+    "key_findings": [
+      "all 918 predictions finite: True",
+      "submission row_id order matches sample_submission: True",
+      "columns=['row_id', 'rate_per_10000_ed_visits'], n_rows=918 vs sample=918",
+      "unique values=918, std=8.6113",
+      "pred range [3.489,53.670] vs train range [0.050,79.990]",
+      "train mean/std=6.352/7.970, pred mean/std=12.574/8.611, mean_shift_in_train_std=0.781",
+      "floor block_mae=0.8007, chosen blend block_mae=0.7847, improvement=2.00%",
+      "round1 block_mae=0.785078, round2 block_mae=0.784656, delta=0.000422"
+    ]
+  },
+  "keep_best_gate": {
+    "ensemble_meta_chosen_cv_score": 0.784656087164158,
+    "current_submission_cv_score": 0.784656087164158,
+    "decision": "kept_current",
+    "rationale": "ensemble_meta choice and current submission.csv reflect the identical round-2 promoted blend (block_mae=0.784656087164158, NNLS weights floor=0.007936/gbdt=0.843493/trees=0.144878/linear=0.003693); promotion.json overwrote_submission=true already applied this in round 2. No strict improvement available beyond current submission; submission.csv left untouched.",
+    "submission_reverified": {
+      "row_id_present_in_order": true,
+      "two_columns": true,
+      "finite_values": true
+    }
+  },
+  "overfitting_protocol_status": {
+    "robust_selection_applied": true,
+    "validation_strategy_appropriate": true,
+    "validation_strategy_detail": "group_time_split (GroupKFold on period_id, 77 groups, 5 folds, block_mae) correctly mirrors the disjoint chronological train (2019-01..2025-05) vs prediction (2025-06..2025-12) period structure (spec_parse.json detected_structure.split_pattern). generalization-reviewer (analysis_review covering round2) confirms cv_strategy_validity=pass.",
+    "leakage_audit_verdict": "pass",
+    "train_val_gap_acceptable": true,
+    "train_val_gap_detail": "train_val_gap is null/unmeasured (no per-candidate train score logged), but generalization-reviewer assessed round-over-round CV delta (0.054%) and OOF-vs-floor improvement (2.0%) as both far below leakage/overfitting thresholds; overfit_risk='moderate' per model_performance_review but no HIGH-severity finding."
+  },
+  "report_status": {
+    "exists": true,
+    "review_approved": true
+  },
+  "cv_validation": {
+    "within_month_split_check": "not_applicable",
+    "detail": "Split structure is chronological monthly periods (train periods 2019-01..2025-05 vs prediction periods 2025-06..2025-12), fully disjoint -- not a within-month day-range split. group_time_split (GroupKFold on period_id) is the structurally correct CV strategy and was independently confirmed by validation-and-schema-guardian and generalization-reviewer.",
+    "issues": []
+  },
+  "issues": [
+    {
+      "severity": "MEDIUM",
+      "source_log": "hardcoding_audit_pre.json",
+      "description": "4 'unacceptable' findings in outputs/scratch/20260612_161004/missingness_audit.py and profile.py: hardcoded dataset-specific column literals 'jurisdiction' and 'state_doh_release' via direct column access instead of resolving from spec_parse.json file_schemas at runtime. No hardcoding_audit_post.json was produced to confirm resolution.",
+      "fixable": true
+    },
+    {
+      "severity": "LOW",
+      "source_log": "feature_audit_review.json (round2, feature-leakage-reviewer)",
+      "description": "state_doh_release TF-IDF+SVD (20 of 36 feature columns) is fit once on full train text, not refit per CV fold. Unsupervised, no target leakage; reviewer rates this low severity with marginal (~0.05%) round-over-round impact.",
+      "fixable": true
+    },
+    {
+      "severity": "LOW",
+      "source_log": "model_performance_review.json",
+      "description": "train_val_gap is null/unmeasured across both rounds (model_stability_by_split.json empty); overfit_risk classified 'moderate' as a result, though no HIGH-severity overfitting signal was found by generalization-reviewer.",
+      "fixable": true
+    }
+  ],
+  "repair_needed": false,
+  "model_rerun_required": false,
+  "critical_issues": [],
+  "overall_verdict": "PASS",
+  "delivery_recommendation": "deliver_with_warnings",
+  "next_action": "deliver",
+  "final_gate_checks": {
+    "submission_csv_exists": true,
+    "report_pdf_exists": true,
+    "submission_two_columns": true,
+    "predictions_finite": true,
+    "report_review_approved": true,
+    "prediction_sanity_not_fail": true,
+    "leakage_audit_no_critical": true,
+    "final_model_adjusted_robust_score_present": "N/A (specialist mode; ensemble_meta.json + promotion.json + model_selection.json serve the equivalent role and are present with chosen_cv_score=0.784656)"
+  }
+}

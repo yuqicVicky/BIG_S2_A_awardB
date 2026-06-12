@@ -1,0 +1,87 @@
+{
+  "run_id": "20260612_161004",
+  "columns": {
+    "period_id": {
+      "strategy": "no_imputation_needed",
+      "add_missing_indicator": false
+    },
+    "jurisdiction": {
+      "strategy": "no_imputation_needed",
+      "add_missing_indicator": false
+    },
+    "overdose_category": {
+      "strategy": "no_imputation_needed",
+      "add_missing_indicator": false
+    },
+    "rate_per_10000_ed_visits": {
+      "strategy": "no_imputation_needed",
+      "add_missing_indicator": false
+    },
+    "unemployment_rate": {
+      "strategy": "no_imputation_needed",
+      "add_missing_indicator": false
+    },
+    "labor_force": {
+      "strategy": "no_imputation_needed",
+      "add_missing_indicator": false
+    },
+    "temp_avg_f": {
+      "strategy": "groupwise_numeric_median_plus_indicator",
+      "add_missing_indicator": true,
+      "mi_upgrade_recommended": "False",
+      "mar_robustness_note": {
+        "likely_robust_per_collins2001": true
+      },
+      "group_col": "jurisdiction"
+    },
+    "precip_in": {
+      "strategy": "groupwise_numeric_median_plus_indicator",
+      "add_missing_indicator": true,
+      "mi_upgrade_recommended": "False",
+      "mar_robustness_note": {
+        "likely_robust_per_collins2001": true
+      },
+      "group_col": "jurisdiction"
+    },
+    "gtrends_overdose": {
+      "strategy": "no_imputation_needed",
+      "add_missing_indicator": false
+    },
+    "gtrends_fentanyl": {
+      "strategy": "no_imputation_needed",
+      "add_missing_indicator": false
+    },
+    "gtrends_naloxone": {
+      "strategy": "no_imputation_needed",
+      "add_missing_indicator": false
+    },
+    "gtrends_opioid": {
+      "strategy": "no_imputation_needed",
+      "add_missing_indicator": false
+    },
+    "gtrends_methamphetamine": {
+      "strategy": "no_imputation_needed",
+      "add_missing_indicator": false
+    },
+    "state_doh_release": {
+      "strategy": "structural_none_token_plus_indicator",
+      "add_missing_indicator": true,
+      "mi_upgrade_recommended": true,
+      "mar_robustness_note": {
+        "likely_robust_per_collins2001": false
+      },
+      "note": "NaN encodes 'no qualifying press release issued' (structural absence per Data_Description.md: 'missing text is the empty string'); fill with empty string '' (not literal 'NONE' token) before TF-IDF/SVD so empty docs vectorize to zero vectors. Add was_missing indicator as a binary 'no_release_this_period' feature."
+    }
+  },
+  "summary": {
+    "columns_needing_missing_indicator": [
+      "temp_avg_f",
+      "precip_in",
+      "state_doh_release"
+    ],
+    "columns_to_drop": [],
+    "columns_needing_mi_upgrade": [
+      "state_doh_release"
+    ]
+  }
+}
