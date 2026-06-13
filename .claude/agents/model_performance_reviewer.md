@@ -28,7 +28,7 @@ Write **only** the file for your current mode. Never edit model code, feature fi
 | `model_search.json` / `final_model.json` | `outputs/logs/` (general mode) |
 | `{run_id}_ensemble_meta.json` | `outputs/logs/` (specialist mode) |
 | `{run_id}_model_stability_by_split.json` | `outputs/logs/` — per-model `cv_mae_std` / `relative_stability` / `split_scores` (the generalization signal; use it to populate `train_val_gap`/stability instead of leaving it null) |
-| `{run_id}_profile.json` | `outputs/logs/` — the selected model's `residual_analysis` (`by_pred_quantile`, `high_value_bias`, `heteroscedasticity_corr`) for evidence-grounded fix suggestions |
+| `{run_id}_state.json` | `outputs/logs/` — the selected model's `residual_analysis` block (`by_pred_quantile`, `high_value_bias`, `heteroscedasticity_corr`, `high_value_underprediction`) for evidence-grounded fix suggestions |
 | `prediction_sanity.json` | `outputs/logs/` |
 | `submission.csv` | repo root (inspect predictions) |
 | `spec_parse.json`, `data_profile.json` | `outputs/logs/` |
@@ -47,9 +47,9 @@ Judge — using LLM judgment, not fixed rules:
   weights proportional to CV performance; which untried family could add diversity.
 - **Hyperparameters:** were the impactful knobs searched (learning rate, regularization,
   depth/leaves); any fixed/narrow ranges; early stopping in use.
-- **Residual evidence → concrete fixes.** Read the selected model's `residual_analysis` (from
-  `{run_id}_profile.json`, or the `residual_analysis` block in the run state) — `by_pred_quantile`,
-  `high_value_bias`, `heteroscedasticity_corr`. If the model systematically under/over-predicts a
+- **Residual evidence → concrete fixes.** Read the selected model's `residual_analysis` block from
+  `{run_id}_state.json` — `by_pred_quantile`, `high_value_bias`, `heteroscedasticity_corr`,
+  `high_value_underprediction`. If the model systematically under/over-predicts a
   region (e.g. high-value bias), emit a **concrete, programmer-actionable** suggestion:
   `target_transform` (log1p/sqrt) when the high tail is underfit, or a stratified/region feature
   for the biased segment. Tie the suggestion to the residual number, not a hunch.

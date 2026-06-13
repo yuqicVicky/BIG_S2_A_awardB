@@ -67,7 +67,9 @@ it is round-new) → act. One weak signal alone → keep the feature and let the
    single best-helping group (largest positive `delta`).
 4. **Finalize `{run_id}_feature_spec.json`**: rebuild it from `{run_id}_feature_spec_full.json`
    minus the final pruned columns (prune `feature_columns` **and** the matching entries in
-   `per_fold_aggregates` / `text_svd` / `datetime_derived` / `distribution_shift_interactions`).
+   whichever of these group lists are present: `per_fold_aggregates` / `text_svd` /
+   `image_features` / `datetime_derived` / `distribution_shift_interactions` — a spec may omit
+   any group, so null-check before pruning it).
    If your final prune set equals the script's, the file is already correct — leave it.
 5. Write `{run_id}_feature_gate.json` and the closed-loop gate file (below).
 
