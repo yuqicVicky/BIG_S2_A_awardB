@@ -49,6 +49,15 @@ Resolve every column name from `spec_parse.json` / `data_profile.json` — never
   `outputs/scratch/{run_id}/feature_pipeline.py`, confirm aggregates/encoders are fit
   **inside the canonical-fold loop** (using `{run_id}_cv_folds.json`), never `.fit` on the
   full train frame before splitting. A full-data fit of any target-derived feature → HIGH.
+- **Future-period leak in the per-fold TRAIN set (HIGH, time-series).** "Fit per fold" is not
+  enough — check **how the fold's train rows are selected**. If the pipeline builds the fold's
+  train as `~val_mask` / `fold_assignment != k` (instead of the canonical `train_idx` from
+  `cv.load_canonical_folds`), then under a **forward-expanding / time-based** CV the train set
+  includes **future** periods (later folds' validation blocks), so per-fold aggregates / trend /
+  imputation medians encode future information the model never trains on → HIGH-severity
+  forward-looking leakage that inflates OOF. Confirm each fold's train is the canonical
+  `train_idx` (or, equivalently, restricted to period ordinal `< the val block's earliest
+  period`). Grep the pipeline for `~val_mask` / `!= fold` train construction and flag it.
 - **Calibration corroboration:** if `abs(cv_score - holdout_score)` is large AND such
   features exist, state "CV scores are unreliable for model selection."
 - Flag row-id, join-key, near-unique ID, future/`next_*`/`post_*`/post-outcome columns

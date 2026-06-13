@@ -76,6 +76,19 @@ Write `outputs/scratch/{run_id}/feature_pipeline.py` that, resolving all names a
      fold's **train rows only**, filling the fold's val rows from it; fit the full-train version
      for the prediction matrix. **Never** fit a target-derived feature on the full train frame
      before splitting. Record each as `{name, group_keys, source: "per_fold"}`.
+     - **Use the canonical fold's `train_idx` — never `~val_mask`.** Take each fold's train rows
+       from `cv.load_canonical_folds(...).folds` (the `(train_idx, val_idx)` pairs). Do **NOT**
+       reconstruct train as `fold_assignment != k` / `~val_mask`: for a **forward-expanding /
+       time-based** CV that pulls **future** periods (later folds' validation blocks) into the
+       fold's train set, so every per-fold aggregate / trend / imputation median computed on it
+       encodes future information the model never trains on — forward-looking leakage that inflates
+       OOF and breaks keep-best. The canonical `train_idx` already excludes them (it rebuilds
+       forward-expanding train as "periods strictly before this fold's val block"). Equivalent
+       fallback if you must derive it yourself: restrict the fold's train to rows whose period
+       ordinal `< val block's earliest period ordinal`. (Plain k-fold ⇒ `train_idx` equals
+       `~val_mask`, so this is automatically correct there too.) This applies to **every**
+       per-fold fit — aggregates, target encoding, trend, TF-IDF/SVD, image SVD, and imputation
+       medians.
    - **Datetime features only:** scan every column (incl. row_id/join keys) for datetime
      parseability; emit derived `col__<field>` columns (year, month, sin/cos, day, dayofweek,
      is_weekend, quarter, weekofyear, ordinal; + hour fields when sub-day). **Never** add the
