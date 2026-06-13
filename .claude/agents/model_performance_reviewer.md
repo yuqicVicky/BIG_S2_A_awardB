@@ -27,6 +27,7 @@ Write **only** the file for your current mode. Never edit model code, feature fi
 |-------|--------|
 | `model_search.json` / `final_model.json` | `outputs/logs/` (general mode) |
 | `{run_id}_ensemble_meta.json` | `outputs/logs/` (specialist mode) |
+| `{run_id}_model_stability_by_split.json` | `outputs/logs/` — per-model `cv_mae_std` / `relative_stability` / `split_scores` (the generalization signal; use it to populate `train_val_gap`/stability instead of leaving it null) |
 | `prediction_sanity.json` | `outputs/logs/` |
 | `submission.csv` | repo root (inspect predictions) |
 | `spec_parse.json`, `data_profile.json` | `outputs/logs/` |
@@ -57,6 +58,7 @@ Write `outputs/logs/model_performance_review.json`:
   "baseline_cv_score": 0.198,
   "improvement_vs_baseline_pct": 28.3,
   "train_val_gap": 0.023,
+  "cv_relative_stability": 0.06,
   "overfit_risk": "low|moderate|high",
   "suggestions": [
     {
@@ -100,6 +102,13 @@ Read `prev_round_cv_score` from `analysis_review_{round-1}.json` (null in round 
 - **Override to `false`** if `feature_audit_review.json` or `overfitting_leakage_audit.json`
   reported any HIGH-severity leakage / CV-validity finding — leakage must be fixed before
   shipping (force at least one more round when `round < 3`).
+- **Loop-closure escalation — override to `false`** if a leakage / CV-validity finding **recurs**:
+  i.e. a `leakage_fix` (or feature-fold-safety) finding present in this round's
+  `feature_audit_review.json` / `overfitting_leakage_audit.json` was *also* raised in the prior
+  round's `analysis_review_{round-1}.json` suggestions. A finding surviving a round means the fix
+  was not applied or was ineffective — **escalate it to a required fix** (mark it
+  `"priority": "high"`, set `revert`/`continue_round`), even if its own severity is LOW. Do not let
+  the same leakage be acknowledged-but-deferred round after round.
 - Otherwise `false`.
 
 Write `outputs/logs/analysis_review_{round}.json`:

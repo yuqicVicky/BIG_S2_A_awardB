@@ -50,15 +50,23 @@ counts:
    `work_fraction` by judgment from how many non-modeling sub-steps remain (a smaller fraction
    when more bracketing work is still due).
 
-2. **Project from the live heartbeat.** From a role's first `tune_done`/`candidate_done` line,
-   take `elapsed_sec` as the realised per-unit cost and extrapolate the run's total from the
-   units still to come (remaining folds × seeds × the tuning multiplier implied by the budget).
-   Re-project on each new line — the estimate sharpens as the run proceeds.
+2. **Project ONLY from the live heartbeat — never from a static/nominal budget.** Compute the
+   realised per-unit cost from the heartbeat itself: `per_unit = elapsed_sec / units_done` where
+   `units_done` is the count of `candidate_done`/`tune_done` lines seen so far. Project the total
+   as `projected_total_sec = per_unit × total_units_expected` (estimate `total_units_expected`
+   from the lines already emitted, not from any budget constant). **Do NOT** use
+   `AWARDB_TIME_BUDGET_SEC`, the specialist's internal time budget, or any fixed "nominal target"
+   (e.g. 1500s/5400s) as the projection — those caused a prior round to kill healthy runs at
+   ~20-40s of a 700s slice. A run's own internal budget being larger than your slice is **not** a
+   kill reason; only the observed projection is. Re-project on every new line.
 
-3. **Decide, per role.** A run is *over budget* when its `projected_total_sec` exceeds its
-   allowance, **or** it has emitted no new heartbeat line for a stall window you derive from the
-   observed per-unit cost (a run is stalled when silence ≫ a normal step). Otherwise let it
-   finish — killing a run that would have landed in time only wastes its work.
+3. **Decide, per role.** A run is *over budget* only when its **observed-cost** `projected_total_sec`
+   exceeds its allowance, **or** it has emitted no new heartbeat line for a stall window you derive
+   from the observed per-unit cost (silence ≫ a normal step). **Anti-overkill guard — never kill a
+   run that is both early and progressing:** if `elapsed_sec` is a small fraction of the allowance
+   AND `best_so_far` is still improving across recent lines, let it run and re-project later. You
+   need at least one completed unit (a real `elapsed_sec`) before any projection — never kill on a
+   pre-first-heartbeat assumption. Killing a run that would have landed in time only wastes its work.
 
 4. **Kill cleanly.** For an over-budget role, end exactly that process by its unique signature:
    ```bash

@@ -54,6 +54,21 @@ Write the chosen prediction to `outputs/logs/{run_id}_meta_choice.csv` and a sum
  "chosen_submission": "outputs/logs/{run_id}_meta_choice.csv"}
 ```
 
+Also emit **`outputs/logs/{run_id}_model_stability_by_split.json`** so the
+model-performance-reviewer has a real generalization signal (its absence left
+`train_val_gap` null in a prior run). Aggregate each specialist's `cv_stability` from its
+`{run_id}_agent_<fam>.json` (`{split_scores, cv_mae_mean, cv_mae_std, relative_stability}`):
+```json
+{"run_id": "{run_id}",
+ "per_model": [
+   {"model": "gbdt", "cv_score": 0.0, "cv_mae_std": 0.0, "relative_stability": 0.0,
+    "split_scores": [0.0]}
+ ],
+ "chosen": "<the promoted choice>", "metric": "block_mae"}
+```
+A high `relative_stability` (cv_std/cv_mean) or wide `split_scores` spread flags an unstable /
+overfit-prone model. Read each `{run_id}_agent_*.json`; skip any missing `cv_stability` gracefully.
+
 ## Promote to submission.csv (keep-best + rollback) — you own this write
 You own the repo-root `submission.csv` promotion in specialist mode. **Provisional promotion
 (P6):** copy the current `submission.csv` to `{run_id}_prior_best.csv` first; then overwrite

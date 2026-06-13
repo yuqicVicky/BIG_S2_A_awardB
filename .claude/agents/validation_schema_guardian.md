@@ -54,17 +54,31 @@ you need to choose a CV strategy. Decide and record:
 | Priority | Condition | Strategy |
 |----------|-----------|----------|
 | 1 | `sub_period_pattern` detected AND direction is `train_lower` | `within_period_holdout`: hold out training rows where the sub-period feature is in the top fraction of its training range, mirroring the prediction set |
-| 2 | `has_panel` (group + time) | `group_time_split`: hold out the last time period per group |
-| 3 | `has_time` only AND no temporal overlap | `time_based_holdout`: sort by time; hold out the last fraction |
-| 4 | `has_time` only WITH overlap | `time_based_holdout`: still prefer temporal ordering |
-| 5 | `has_group` only | `group_split`: hold out a fraction of unseen groups |
-| 6 | `class_imbalance` | `stratified_kfold` |
-| 7 | default | `random_holdout` |
+| 2 | `has_panel` (group + time) AND `temporal_overlap == false` (prediction periods are strictly later than all training periods) AND the periods can be chronologically ordered | `forward_expanding_time`: expanding-window backtest — train strictly on past periods, validate on future blocks. **This matches a competition whose hidden test is later periods than all training**, unlike a GroupKFold over random periods which lets future periods train to predict the past (forward peeking → optimistic). |
+| 3 | `has_panel` (group + time), but periods overlap OR cannot be ordered chronologically | `group_time_split`: hold out whole periods per fold (GroupKFold over the time-block column) |
+| 4 | `has_time` only AND no temporal overlap | `time_based_holdout`: sort by time; hold out the last fraction |
+| 5 | `has_time` only WITH overlap | `time_based_holdout`: still prefer temporal ordering |
+| 6 | `has_group` only | `group_split`: hold out a fraction of unseen groups |
+| 7 | `class_imbalance` | `stratified_kfold` |
+| 8 | default | `random_holdout` |
+
+For `forward_expanding_time` you MUST supply a **chronological period order** so the engine can
+train-on-past / validate-on-future. Build `period_order` (a list of the time-block values sorted
+in real time order) from the data: if the time-block key is an opaque id, resolve its order from
+the **period→date table in `DATA_DESCRIPTION.md`** (parse the date↔id mapping and sort by date);
+if the key already parses as a date, sort by it directly. Set `horizon` = the number of distinct
+**prediction periods** (read from the prediction file / sample submission — never hardcode), and
+`n_folds` to a small backtest count (≈5, or fewer when history is short). The last fold's
+validation block is the final `horizon` periods — the closest analogue to the hidden test.
+**Fallback:** if the periods cannot be ordered (no date table and the id is non-temporal), drop to
+Priority 3 (`group_time_split`) and say so in `validation_limitations`.
 
 For `within_period_holdout`, pick the holdout threshold so the holdout's distance from training
 mirrors the hidden test's distance (e.g. train days 1–19, predict 20–31 → hold out the top ~20%
 of training days). **Always explain why the chosen strategy simulates the hidden evaluation
 better than the alternatives**, and note `distribution_shift_columns` as a limitation when present.
+Note for `forward_expanding_time`: OOF now covers only the held-out future blocks (the last
+≈`n_folds × horizon` periods), not all rows — this is expected and the faithful trade-off.
 
 ### Step 3 — Detect leakage risks (reasoning)
 
@@ -90,12 +104,13 @@ Fill every key from the data; values shown are placeholders, not literals to cop
     "class_imbalance": false, "minority_class_rate": null,
     "distribution_shift_columns": []
   },
-  "chosen_strategy": "within_period_holdout | group_time_split | time_based_holdout | group_split | stratified_kfold | random_holdout",
+  "chosen_strategy": "forward_expanding_time | within_period_holdout | group_time_split | time_based_holdout | group_split | stratified_kfold | random_holdout",
   "strategy_rationale": "why this strategy simulates the hidden evaluation",
   "holdout_parameters": {
     "sub_period_feature": null, "holdout_threshold": null, "holdout_fraction": null,
     "time_column": null, "group_column": null, "n_splits": null,
-    "stratify_column": null, "random_state": 42
+    "stratify_column": null, "random_state": 42,
+    "period_order": null, "horizon": null, "n_folds": null
   },
   "simulates_hidden_evaluation": "how the holdout mirrors the train→hidden gap",
   "leakage_risks": [ { "risk_type": "", "column": null, "severity": "low | medium | high", "action": "" } ],

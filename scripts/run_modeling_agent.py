@@ -163,6 +163,11 @@ def main() -> None:
          if s.get("name") == mr.selected_model_name and s.get("status") == "ok"),
         None,
     )
+    # Surface the selected model's cross-fold stability (already computed by the
+    # engine) so the model-performance-reviewer has a real generalization signal
+    # instead of a null train_val_gap. relative_stability = cv_std / cv_mean is a
+    # fold-to-fold variance proxy for overfitting/instability risk.
+    stability = (mr.holdout_strategy or {}).get("stability") or {}
     out = {
         "role": f"{args.approach}-specialist",
         "approach": args.approach,
@@ -170,6 +175,7 @@ def main() -> None:
         "cv_metric": mr.metric_name,
         "cv_score": cv_score,
         "lower_is_better": not mr.greater_is_better,
+        "cv_stability": stability,  # {split_scores, cv_mae_mean, cv_mae_std, relative_stability}
         "candidate_submission": str(cand_csv),
         "oof_path": str(oof_path) if oof_path else None,
         "canonical_folds": bool(folds),

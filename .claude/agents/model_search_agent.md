@@ -629,6 +629,11 @@ if sub_cands and "regression" in task_type:
 
 ## Step 8 — Write model_search.json and final_model.json
 
+Also write **`outputs/logs/{run_id}_model_stability_by_split.json`** (per-model
+`cv_score` + `cv_mae_std` + `relative_stability` + `split_scores` from each candidate's
+cross-fold detail) so the model-performance-reviewer has a real generalization signal rather than
+a null `train_val_gap`. Same schema as the specialist-mode file written by `ensemble-meta`.
+
 Write `outputs/logs/model_search.json`:
 
 ```json

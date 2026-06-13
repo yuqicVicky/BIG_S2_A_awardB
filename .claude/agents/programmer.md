@@ -73,7 +73,13 @@ Write `outputs/scratch/{run_id}/feature_pipeline.py` that, resolving all names a
      parseability; emit derived `col__<field>` columns (year, month, sin/cos, day, dayofweek,
      is_weekend, quarter, weekofyear, ordinal; + hour fields when sub-day). **Never** add the
      raw row_id / join-key / datetime string itself as a feature.
-   - **Free text:** TF-IDF→SVD for text columns flagged in the profile.
+   - **Free text:** TF-IDF→SVD for text columns flagged in the profile — **fit per fold inside the
+     canonical-fold loop**, mirroring the per-fold-aggregate pattern above. For each fold, fit
+     `TfidfVectorizer` + `TruncatedSVD` on that fold's **train rows only**, then transform its val
+     rows; fit a full-train version for the prediction matrix. Mark the resulting columns
+     `source: "per_fold"` in the spec. **Never** fit TF-IDF/SVD once on the full train frame before
+     the split — even though text is not target-derived, a full-train fit lets the val-fold text
+     shape the vocabulary/IDF/SVD basis (unsupervised leakage that makes OOF optimistic).
    - **Image sidecars (when `analysis_plan.feature_plan.image_features` is present):** implement the
      planned extraction. Guard the imports (`PIL`, `matplotlib`); if unavailable, log a `degraded`
      note and **omit** image features (the pipeline continues). Otherwise, resolving the colormap +

@@ -93,6 +93,21 @@ def build_canonical_folds(
         return assign, info
 
     # ── structured strategies (first realisable wins) ─────────────────────────
+    # Forward expanding-window time-series CV: train strictly on past periods,
+    # validate on future blocks — mirrors a competition whose test is later periods
+    # than all training (no forward peeking, unlike GroupKFold over random periods).
+    # Realised via an explicit per-row period rank + per-fold val rank boundaries
+    # stored in ``fold_spec`` so ``load_canonical_folds`` can rebuild each fold's
+    # train set as "all rows in periods strictly before this fold's val block".
+    if strategy == "forward_expanding_time":
+        out = _forward_expanding_folds(train_df, params, n)
+        if out is not None:
+            fa, fold_spec, info = out
+            desc.update(info)
+            desc["fold_spec"] = fold_spec
+            return _finalise(fa, desc)
+        # else: fall through — guardian's fallback (e.g. group_time_split / has_panel)
+
     if strategy in ("group_time_split", "group_split") or validation_strategy.get("detected_structure", {}).get("has_panel"):
         group_col = params.get("group_column") or params.get("time_column")
         if strategy == "group_split":
@@ -150,6 +165,61 @@ def _finalise(fold_assignment: np.ndarray, desc: dict) -> tuple[np.ndarray, np.n
     desc["n_folds"] = int(fold_assignment.max()) + 1 if fold_assignment.max() >= 0 else 0
     desc["n_scored_rows"] = int(scored.sum())
     return fold_assignment, scored, desc
+
+
+def _forward_expanding_folds(train_df: pd.DataFrame, params: dict, n: int):
+    """Build expanding-window forward folds. Returns ``(fold_assignment, fold_spec,
+    info)`` or ``None`` when it cannot be realised (caller then falls back).
+
+    ``fold_assignment[i]`` = the fold whose *validation* block contains row ``i``
+    (``-1`` = never validated, i.e. an early period used only for training). Each
+    fold's validation block is ``horizon`` consecutive periods; blocks are taken
+    non-overlapping from the most recent period backwards (so the last fold's val =
+    the final ``horizon`` periods, the closest analogue to the hidden test). The
+    fold's *training* set is reconstructed downstream as every row in a period
+    strictly earlier than its block — hence ``fold_spec`` carries the per-row
+    chronological ``period_rank`` and each fold's ``[val_lo, val_hi)`` rank range."""
+    time_col = params.get("time_column") or params.get("group_column")
+    period_order = params.get("period_order") or []
+    if not time_col or time_col not in train_df.columns or not period_order:
+        return None
+    horizon = int(params.get("horizon") or 0)
+    k = int(params.get("n_folds") or 5)
+    rank_of = {str(p): i for i, p in enumerate(period_order)}
+    col = train_df[time_col].astype(str)
+    present = [p for p in period_order if p in set(col.unique())]
+    n_periods = len(present)
+    if horizon < 1 or n_periods < horizon + 1:
+        return None  # not enough history to validate even one future block
+    # per-row chronological rank (index into period_order); rows whose period is
+    # absent from the order map are ineligible (rank -1 → never train/val).
+    period_rank = col.map(rank_of).fillna(-1).astype(int).to_numpy()
+    # present-period ranks, sorted, to lay out non-overlapping val blocks from the end
+    present_ranks = sorted(rank_of[p] for p in present)
+    hi_idx = len(present_ranks)
+    blocks: list[tuple[int, int]] = []  # (val_lo_rank, val_hi_rank) exclusive-hi
+    for _f in range(k):
+        lo_idx = hi_idx - horizon
+        if lo_idx < 1:  # need ≥1 earlier period to train on
+            break
+        val_lo = present_ranks[lo_idx]
+        val_hi = present_ranks[hi_idx - 1] + 1
+        blocks.append((val_lo, val_hi))
+        hi_idx = lo_idx
+    if not blocks:
+        return None
+    blocks.reverse()  # chronological: fold 0 = earliest val block
+    fa = np.full(n, -1, dtype=int)
+    fold_ranges = []
+    for f, (lo, hi) in enumerate(blocks):
+        fa[(period_rank >= lo) & (period_rank < hi)] = f
+        fold_ranges.append({"val_lo": int(lo), "val_hi": int(hi)})
+    fold_spec = {"type": "expanding", "period_rank": [int(x) for x in period_rank.tolist()],
+                 "folds": fold_ranges}
+    info = {"strategy": "forward_expanding_time", "time_column": time_col,
+            "group_column": time_col, "n_splits": len(blocks), "horizon": horizon,
+            "n_periods": n_periods, "realised_as": "forward_expanding_time"}
+    return fa, fold_spec, info
 
 
 def _within_period_mask(train_df: pd.DataFrame, params: dict, rs: int) -> np.ndarray | None:
@@ -236,6 +306,11 @@ def write_cv_folds_json(
         "group_column": description.get("group_column"),
         "description": description,
     }
+    # Forward/expanding CV needs explicit per-fold train semantics (train = periods
+    # strictly before each fold's val block), which the plain fa==f/fa!=f rebuild
+    # cannot express. Persist it top-level so load_canonical_folds can honour it.
+    if description.get("fold_spec"):
+        payload["fold_spec"] = description["fold_spec"]
     Path(path).write_text(json.dumps(payload, indent=2), encoding="utf-8")
 
 
@@ -256,11 +331,27 @@ def load_canonical_folds(path: str | Path, *, valid_mask: np.ndarray | None = No
         fa, scored = fa_full, scored_full
     k = int(data.get("n_folds") or (int(fa.max()) + 1 if len(fa) and fa.max() >= 0 else 0))
     folds: list[tuple[np.ndarray, np.ndarray]] = []
-    for f in range(max(k, 1)):
-        val_idx = np.flatnonzero(fa == f)
-        tr_idx = np.flatnonzero(fa != f)
-        if len(val_idx) >= 1 and len(tr_idx) >= 1:
-            folds.append((tr_idx, val_idx))
+    fold_spec = data.get("fold_spec") or {}
+    if fold_spec.get("type") == "expanding":
+        # Forward expanding window: each fold trains on rows whose period rank is
+        # strictly BEFORE its validation block (no forward peeking). Plain fa!=f
+        # would wrongly pull later folds' val periods into training, so rebuild
+        # train/val from the per-row period rank + per-fold [val_lo, val_hi).
+        pr_full = np.asarray(fold_spec.get("period_rank", []), dtype=int)
+        pr = pr_full[np.asarray(valid_mask, dtype=bool)] if valid_mask is not None else pr_full
+        if len(pr) == len(fa):
+            for fr in fold_spec.get("folds", []):
+                lo, hi = int(fr["val_lo"]), int(fr["val_hi"])
+                val_idx = np.flatnonzero((pr >= lo) & (pr < hi))
+                tr_idx = np.flatnonzero((pr >= 0) & (pr < lo))
+                if len(val_idx) >= 1 and len(tr_idx) >= 1:
+                    folds.append((tr_idx, val_idx))
+    if not folds:  # k-fold strategies (or expanding rebuild unavailable)
+        for f in range(max(k, 1)):
+            val_idx = np.flatnonzero(fa == f)
+            tr_idx = np.flatnonzero(fa != f)
+            if len(val_idx) >= 1 and len(tr_idx) >= 1:
+                folds.append((tr_idx, val_idx))
     return CanonicalFolds(
         folds=folds,
         scored_mask=scored,
@@ -301,12 +392,27 @@ def nnls_keep_best(
     best single candidate; otherwise the best single wins (never regresses).
     """
     y_true = np.asarray(y_true, dtype=float)
+    # A candidate is usable if its OOF aligns to y_true and has *some* finite rows.
+    # Forward/expanding CV scores only the held-out future blocks, so OOF is NaN
+    # elsewhere — we must NOT require all-finite (that would drop every candidate).
     usable = [c for c in candidates
               if c.get("oof") is not None and len(c["oof"]) == len(y_true)
-              and np.all(np.isfinite(np.asarray(c["oof"], dtype=float)))]
-    scores = {c["name"]: _score(y_true, np.asarray(c["oof"], dtype=float), metric_name, blocks) for c in usable}
-    if not scores:
+              and np.isfinite(np.asarray(c["oof"], dtype=float)).any()]
+    if not usable:
         return {"scores": {}, "choice": None, "chosen_test": None, "chosen_score": None}
+    # Score every candidate on the COMMON finite rows (intersection of all OOF finite
+    # masks) so best-single vs blend is apples-to-apples on the same row set. Under a
+    # shared canonical scored_mask these masks coincide; the intersection is the safe
+    # general rule.
+    oofs = {c["name"]: np.asarray(c["oof"], dtype=float) for c in usable}
+    common = np.isfinite(y_true)
+    for arr in oofs.values():
+        common &= np.isfinite(arr)
+    if int(common.sum()) < 5:
+        return {"scores": {}, "choice": None, "chosen_test": None, "chosen_score": None}
+    yc = y_true[common]
+    bc = (np.asarray(blocks)[common] if blocks is not None and len(blocks) == len(y_true) else None)
+    scores = {c["name"]: _score(yc, oofs[c["name"]][common], metric_name, bc) for c in usable}
     best_single = (max if greater_is_better else min)(scores, key=lambda n: scores[n])
     result = {
         "scores": {k: round(float(v), 6) for k, v in scores.items()},
@@ -316,6 +422,7 @@ def nnls_keep_best(
         "choice": best_single,
         "chosen_test": next(c["test"] for c in usable if c["name"] == best_single),
         "chosen_score": float(scores[best_single]),
+        "n_common_oof_rows": int(common.sum()),
     }
     if len(usable) < 2:
         return result
@@ -323,16 +430,15 @@ def nnls_keep_best(
         from scipy.optimize import nnls
     except Exception:
         return result
-    M = np.column_stack([np.asarray(c["oof"], dtype=float) for c in usable])
+    M = np.column_stack([oofs[c["name"]][common] for c in usable])
     try:
-        w, _ = nnls(M, y_true)
+        w, _ = nnls(M, yc)
     except Exception:
         return result
     if not np.isfinite(w).all() or w.sum() <= 0:
         return result
     w = w / w.sum()
-    blend_oof = M @ w
-    blend_score = _score(y_true, blend_oof, metric_name, blocks)
+    blend_score = _score(yc, M @ w, metric_name, bc)
     better = (blend_score > scores[best_single]) if greater_is_better else (blend_score < scores[best_single])
     result["blend_weights"] = {c["name"]: round(float(wi), 6) for c, wi in zip(usable, w)}
     result["blend_oof_score"] = float(blend_score)
