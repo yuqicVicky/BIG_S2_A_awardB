@@ -43,6 +43,13 @@ res = nnls_keep_best(cands, y_true, metric_name=ms.get("metric_name","block_mae"
                      greater_is_better=bool(ms.get("greater_is_better", False)))
 ```
 
+**Scoring-subset aware (automatic).** When `cv_folds.json.scoring_restricted` is true, each
+`_oof_*.csv` already has the **non-scoring** rows written as `NaN` (the floor and specialists
+applied the restricted `scored_mask`). `nnls_keep_best` blends over the **common finite rows**,
+so it scores on the submission's scoring categories only — no extra work here. The resulting
+`oof_cv_scores` are the **leaderboard-aligned** (higher) block_mae; do not treat that as a
+regression versus an all-category score from an earlier run.
+
 `nnls_keep_best` returns `{scores, best_single, blend_weights, choice, chosen_test,
 chosen_score}` — the blend only when it strictly beats the best single (never regresses).
 Write the chosen prediction to `outputs/logs/{run_id}_meta_choice.csv` and a summary

@@ -15,7 +15,9 @@ Only the top-level instance can dispatch, so all control-flow lives here. Keep t
 static domain policy lives in `.claude/policy/` (linked at the bottom) and each agent reads the
 policy it needs.
 
-Per dispatch: keep prompts ≤150 words, tell the agent "compact JSON only, no prose", skip EDA plots.
+Per dispatch: **always pass the canonical `run_id` explicitly in the prompt** (agents must use it
+for every `{run_id}_*` filename and `run_id` field — they must never invent a placeholder
+timestamp); keep prompts ≤150 words, tell the agent "compact JSON only, no prose", skip EDA plots.
 
 ---
 
@@ -28,7 +30,7 @@ that owns the artifact — the reviewer never fixes it itself.
 
 | Agent | Role | Judges / produces |
 |-------|------|-------------------|
-| `data-format-converter`, `data-profiler`, `task-inference-agent`, `analysis-planner`, `analysis-programmer`, `model-search-agent`, `modeling-specialist` (one parametrized agent, run once per `gbdt`/`trees`/`linear` family), `ensemble-meta`, `report-writer` | doer | produce analysis artifacts |
+| `data-format-converter`, `data-profiler`, `data-pattern-analyzer`, `task-inference-agent`, `analysis-planner`, `analysis-programmer`, `model-search-agent`, `modeling-specialist` (one parametrized agent, run once per `gbdt`/`trees`/`linear` family), `ensemble-meta`, `report-writer` | doer | produce analysis artifacts |
 | `validation-and-schema-guardian` | doer | picks CV strategy (3) + formats/validates submission (7) — never reviews another agent's work |
 | `plan-reviewer` | reviewer | the feature plan — data coverage, feature reasonableness, completeness constraints |
 | `feature-engineering-reviewer` | reviewer | the Step-6A′ ablation evidence — finalizes which authored feature groups enter the model (utility), complementary to the leakage axis |
@@ -101,9 +103,9 @@ and `DATA_DESCRIPTION.md`). The prose here gives the **control logic** only.
 
 **Step 2 — Task + profile.** Dispatch sequentially in dependency order: `task-inference-agent` first (task type, target, row_id, metric, file paths — `DATA_DESCRIPTION.md` is authority → `spec_parse.json`), **then** `data-profiler` (descriptive stats, missingness skill, target skewness + log-transform flag — it consumes `spec_parse.json` to resolve file roles). On failure of either: **repair-retry ≤2, then minimal fallback** (per *Failure handling*) — never halt. Minimal fallback: build `spec_parse.json` via `src/data_agent/schema.discover_schema()` + `task` detection, and `data_profile.json` via `features.build_feature_bundle().profile`; log `degraded` and continue.
 
-**Step 3 — Pre-run setup.** Dispatch `validation-and-schema-guardian` (schema-review → picks the CV strategy in `validation_strategy.json` **and** emits `{run_id}_cv_folds.json`, the single canonical fold assignment every Step-6 candidate scores OOF on) and `hardcoding-and-feature-auditor` (pre → scans `src/`+`scripts/`+`outputs/scratch/` for hardcoded terms). Advisory; on failure log & continue.
+**Step 3 — Pre-run setup.** Dispatch `validation-and-schema-guardian` (schema-review → picks the CV strategy in `validation_strategy.json` **and** emits `{run_id}_cv_folds.json`, the single canonical fold assignment every Step-6 candidate scores OOF on) and `hardcoding-and-feature-auditor` (pre → scans `src/`+`scripts/`+`outputs/scratch/` for hardcoded terms). Advisory; on failure log & continue. **Step 3c — Data-pattern / feature-influence.** After the guardian (so the resolved `holdout_parameters.period_order` is available), dispatch `data-pattern-analyzer` → `{run_id}_feature_influence.json` (time-series shape + series length, target autocorrelation, per-feature influence ranking, planner prioritization). Advisory; on failure it writes a degraded report and the planner proceeds.
 
-**Step 4 — Feature plan.** Dispatch `analysis-planner` → `analysis_plan.json` (`modeling_mode` + `data_coverage` + `feature_plan` + `completeness_constraints` — a feature-engineering contract, **not** model architecture; the model pool is fixed in code and CV is owned by the guardian). Its self-critique is a draft, **not** an approval. On failure: **repair-retry ≤2, then minimal fallback** — never halt. Minimal fallback: synthesize a default `analysis_plan.json` from `spec_parse.json` + `data_profile.json` (`modeling_mode="general"`, `feature_plan` = profile-driven defaults, `data_coverage` mapping every `file_schemas` column, `completeness_constraints` from `spec_parse`); log `degraded` and continue to Step 5.
+**Step 4 — Feature plan.** Dispatch `analysis-planner` → `analysis_plan.json` (`modeling_mode` + `data_coverage` + `feature_plan` + `completeness_constraints` — a feature-engineering contract, **not** model architecture; the model pool is fixed in code and CV is owned by the guardian). The planner also reads `{run_id}_feature_influence.json` when present to **prioritize** high-influence features and size lag/rolling windows to the series length (coverage completeness is unchanged). Its self-critique is a draft, **not** an approval. On failure: **repair-retry ≤2, then minimal fallback** — never halt. Minimal fallback: synthesize a default `analysis_plan.json` from `spec_parse.json` + `data_profile.json` (`modeling_mode="general"`, `feature_plan` = profile-driven defaults, `data_coverage` mapping every `file_schemas` column, `completeness_constraints` from `spec_parse`); log `degraded` and continue to Step 5.
 
 **Step 5 — Feature-plan + completeness gate (≤2 rounds).** Each round dispatch `plan-reviewer` (judges data coverage, feature reasonableness, completeness); follow its `next_action`:
 - `accept_plan` → go to Step 6.
@@ -162,7 +164,8 @@ It produces `submission.csv` + `report.pdf` via the in-process pipeline; then re
 | 2b | `data-profiler` | data CSVs, `spec_parse.json` | `data_profile.json`, `missingness_profile.json`, `imputation_plan.json` |
 | 3a | `validation-and-schema-guardian` (schema-review) | `spec_parse.json`, `data_profile.json` | `validation_strategy.json`, `{run_id}_cv_folds.json` |
 | 3b | `hardcoding-and-feature-auditor` (pre) | repo `src/`+`scripts/`, `DATA_DESCRIPTION.md`, headers | `hardcoding_audit_pre.json` |
-| 4 | `analysis-planner` | `spec_parse.json`, `data_profile.json`, `validation_strategy.json` | `analysis_plan.json` (`modeling_mode` + `data_coverage` + `feature_plan` + `completeness_constraints`) |
+| 3c | `data-pattern-analyzer` | `spec_parse.json`, `data_profile.json`, `validation_strategy.json`, data CSVs | `{run_id}_feature_influence.json` (time-series shape + series length, target autocorrelation, feature-influence ranking, planner prioritization) |
+| 4 | `analysis-planner` | `spec_parse.json`, `data_profile.json`, `validation_strategy.json`, `{run_id}_feature_influence.json` (optional) | `analysis_plan.json` (`modeling_mode` + `data_coverage` + `feature_plan` + `completeness_constraints`) |
 | 5 | `plan-reviewer` ↔ `analysis-planner` | `analysis_plan.json`, `spec_parse.json`, `data_profile.json` | `plan_review_{1,2}.json` |
 | 6A | `analysis-programmer` (features) | `analysis_plan.json`, `spec_parse.json`, `data_profile.json`, `{run_id}_cv_folds.json` (+ `analysis_review_{r-1}.json` round>1) | floor (round 1): `{run_id}_profile/state/submission_check.json`, `{run_id}_model_selection.json`, `{run_id}_oof_floor.csv`, `submission.csv`; features: `{run_id}_features_train/pred.parquet`, `{run_id}_feature_spec.json`, `outputs/scratch/{run_id}/feature_pipeline.py` |
 | 6A′ | `run_feature_ablation_gate.py` (script) → `feature-engineering-reviewer` | `{run_id}_feature_spec.json`, `{run_id}_cv_folds.json`, `data/` (+ prior `{run_id}_feature_spec_full.json` round>1) | `{run_id}_feature_ablation.json`, `{run_id}_feature_spec_full.json` (original backup), pruned `{run_id}_feature_spec.json`, `{run_id}_feature_gate.json`, `{run_id}_llm_gate_feature_gate.json` |

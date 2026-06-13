@@ -51,7 +51,107 @@ class CanonicalFolds:
 
 # ── building (single CV owner: validation-and-schema-guardian, Step 3) ─────────
 
+def compute_scoring_row_mask(
+    train_df: pd.DataFrame, scoring_subset: dict | None
+) -> np.ndarray | None:
+    """Boolean mask over FULL train rows selecting the rows that the submission
+    actually scores. ``scoring_subset`` is ``spec_parse.json.scoring_subset``
+    (written by task-inference): ``{column, scoring_values, ...}`` where the
+    submission's category set is a strict subset of the train target's. Returns
+    ``None`` (a no-op, not all-True) when there is no restriction — e.g. the
+    submission covers every category, the column is absent, or a non-panel task —
+    so callers stay byte-for-byte backward-compatible. Dataset-agnostic: column and
+    values are read from the spec, never hardcoded."""
+    if not scoring_subset:
+        return None
+    col = scoring_subset.get("column")
+    vals = scoring_subset.get("scoring_values")
+    if not col or col not in train_df.columns or not vals:
+        return None
+    keep = {str(v) for v in vals}
+    return train_df[col].astype(str).isin(keep).to_numpy()
+
+
+def derive_scoring_subset(
+    train_df: pd.DataFrame,
+    sample_submission: pd.DataFrame | None,
+    *,
+    target_column: str | None,
+    row_id_column: str | None,
+    join_keys: list[str] | None = None,
+) -> dict | None:
+    """Deterministic, LLM-independent detection of the submission's scoring subset —
+    the safety net for when ``spec_parse.json.scoring_subset`` is missing (the
+    task-inference agent forgot/mis-wrote it). For each categorical column shared by
+    ``sample_submission`` and the train target frame (excluding the target, row_id and
+    join keys), test whether the submission's distinct value set is a **strict proper
+    subset** of the train value set; if so it is a scoring-restriction column. Returns
+    the same dict shape task-inference writes (``{column, scoring_values,
+    train_only_values, n_train_rows_scored}``) or ``None`` when no column qualifies
+    (submission covers every value → no restriction, backward-compatible).
+
+    The strict-subset test naturally rejects a time/period key (future values are
+    disjoint, not a subset) and a group key with an equal set; excluding ``join_keys``
+    is belt-and-suspenders for within-period datasets where time values repeat. When
+    several columns qualify, the strongest restriction (most train-only values) wins.
+    Dataset-agnostic: no category name is hardcoded."""
+    if sample_submission is None or train_df is None:
+        return None
+    excl = {c for c in (target_column, row_id_column) if c}
+    excl |= set(join_keys or [])
+    best: dict | None = None
+    for c in sample_submission.columns:
+        if c in excl or c not in train_df.columns:
+            continue
+        sv = set(sample_submission[c].dropna().astype(str).unique())
+        tv = set(train_df[c].dropna().astype(str).unique())
+        if sv and sv < tv:  # strict proper subset
+            cand = {
+                "column": c,
+                "scoring_values": sorted(sv),
+                "train_only_values": sorted(tv - sv),
+                "n_train_rows_scored": int(train_df[c].astype(str).isin(sv).sum()),
+            }
+            if best is None or len(cand["train_only_values"]) > len(best["train_only_values"]):
+                best = cand
+    return best
+
+
 def build_canonical_folds(
+    train_df: pd.DataFrame,
+    *,
+    validation_strategy: dict,
+    target: pd.Series | None = None,
+    random_state: int = 42,
+    scoring_row_mask: np.ndarray | None = None,
+) -> tuple[np.ndarray, np.ndarray, dict]:
+    """Public CV-fold builder. Delegates to the strategy realiser, then — when the
+    submission scores only a subset of the target categories (``scoring_row_mask``
+    from :func:`compute_scoring_row_mask`) — restricts ``scored_rows`` to those rows
+    so OOF block_mae is leaderboard-aligned. Training/validation splits are
+    UNCHANGED: train-only sub-categories still train and still produce OOF (needed
+    for lag features); they simply stop counting toward the metric. When
+    ``scoring_row_mask is None`` the result is identical to the unrestricted build.
+    Returns ``(fold_assignment, scored_rows, description)``."""
+    fa, scored, desc = _build_canonical_folds_impl(
+        train_df, validation_strategy=validation_strategy,
+        target=target, random_state=random_state)
+    if scoring_row_mask is not None:
+        srm = np.asarray(scoring_row_mask, dtype=bool)
+        if len(srm) == len(scored):
+            scored = scored & srm
+            desc["scoring_restricted"] = True
+            desc["n_scored_rows"] = int(scored.sum())
+        else:  # length mismatch → cannot safely restrict; leave unrestricted
+            desc["scoring_restricted"] = False
+            desc["scoring_restrict_error"] = (
+                f"mask length {len(srm)} != n_rows {len(scored)}")
+    else:
+        desc["scoring_restricted"] = False
+    return fa, scored, desc
+
+
+def _build_canonical_folds_impl(
     train_df: pd.DataFrame,
     *,
     validation_strategy: dict,
@@ -304,6 +404,7 @@ def write_cv_folds_json(
         "fold_assignment": [int(x) for x in np.asarray(fold_assignment).tolist()],
         "scored_rows": [bool(x) for x in np.asarray(scored_rows).tolist()],
         "group_column": description.get("group_column"),
+        "scoring_restricted": bool(description.get("scoring_restricted", False)),
         "description": description,
     }
     # Forward/expanding CV needs explicit per-fold train semantics (train = periods

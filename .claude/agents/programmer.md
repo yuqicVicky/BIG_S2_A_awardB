@@ -37,6 +37,13 @@ before inference). Your emitted `{run_id}_feature_spec.json` should be traceable
 feature groups — the Step-6A′ ablation gate then validates which groups actually earn their place.
 Experimental `lag_features` flagged in the plan are expected to be ablation-tested, not assumed good.
 
+When you need the set of categories the submission actually scores (e.g. to build the prediction
+frame), read it from `spec_parse.json.scoring_subset` (`column` + `scoring_values`) when present —
+that is the single source of truth the guardian also uses to restrict OOF scoring. Fall back to
+deriving it from the sample-submission rows only if the field is absent/null. Never hardcode the
+category names. Train-only categories still feed lag/aggregate features; they are just absent from
+the submission rows.
+
 ---
 
 ## Step A1 — Seed the deterministic floor (round 1 only)

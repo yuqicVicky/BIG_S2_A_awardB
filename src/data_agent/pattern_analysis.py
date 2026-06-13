@@ -24,8 +24,18 @@ def run_pattern_analysis(
     *,
     repo_root: Path,
     run_id: str,
+    period_rank: dict[str, int] | None = None,
+    group_keys: list[str] | None = None,
+    out_name: str | None = None,
 ) -> dict[str, Any]:
-    """Compute deep data patterns; write {run_id}_data_pattern_report.json."""
+    """Compute deep data patterns; write the pattern report.
+
+    ``period_rank`` (token→ordinal) lets time detection work when the period
+    column is an opaque token that cannot date-parse (resolved upstream from the
+    description's date table); ``None`` falls back to date-parsing. ``group_keys``
+    are the panel keys (e.g. jurisdiction × category) used for series-length and
+    autocorrelation diagnostics. ``out_name`` overrides the output filename
+    (default ``{run_id}_data_pattern_report.json``)."""
     train_df: pd.DataFrame = bundle.train_df
     predict_df: pd.DataFrame = bundle.predict_df
     target_col: str = schema.target_column
@@ -34,6 +44,10 @@ def run_pattern_analysis(
     feature_cols: list[str] = bundle.feature_columns
     numeric_cols: list[str] = bundle.numeric_columns
     categorical_cols: list[str] = bundle.categorical_columns
+    # Panel group keys for time-series diagnostics: prefer explicit group_keys,
+    # else the raw (non-derived) categorical columns present in train.
+    if group_keys is None:
+        group_keys = [c for c in categorical_cols if "__" not in c and c in train_df.columns]
 
     report: dict[str, Any] = {"run_id": run_id}
 
@@ -56,7 +70,8 @@ def run_pattern_analysis(
     }
 
     # ── 2. Time coverage ─────────────────────────────────────────────────────
-    time_coverage = _analyze_time_coverage(train_df, predict_df, time_col, row_id_col)
+    time_coverage = _analyze_time_coverage(
+        train_df, predict_df, time_col, row_id_col, period_rank=period_rank)
     report["time_coverage"] = time_coverage
 
     # ── 3. Target distribution ───────────────────────────────────────────────
@@ -110,10 +125,18 @@ def run_pattern_analysis(
         report["distribution_shift"],
     )
 
+    # ── 12. Time-series shape (series length) + target autocorrelation ───────
+    ts_time_col = time_col or row_id_col
+    report["is_timeseries"] = bool(time_coverage.get("has_time"))
+    report["time_series_shape"] = _time_series_shape(
+        train_df, ts_time_col, group_keys, period_rank)
+    report["target_autocorrelation"] = _target_autocorrelation(
+        train_df, target_col, group_keys, ts_time_col, period_rank)
+
     # ── Write ────────────────────────────────────────────────────────────────
     logs_dir = repo_root / "outputs" / "logs"
     logs_dir.mkdir(parents=True, exist_ok=True)
-    out_path = logs_dir / f"{run_id}_data_pattern_report.json"
+    out_path = logs_dir / (out_name or f"{run_id}_data_pattern_report.json")
     out_path.write_text(
         json.dumps(report, indent=2, default=_json_default), encoding="utf-8"
     )
@@ -142,10 +165,34 @@ def _analyze_time_coverage(
     predict_df: pd.DataFrame,
     time_col: str | None,
     row_id_col: str | None,
+    period_rank: dict[str, int] | None = None,
 ) -> dict[str, Any]:
     result: dict[str, Any] = {"has_time": False}
     col = time_col or row_id_col
     if not col:
+        return result
+    # Opaque-token path: when the period column cannot date-parse but an upstream
+    # token→ordinal map is supplied, recognise the chronological structure via the
+    # ordinal (fixes the false `has_time=False` on hashed period ids).
+    if period_rank and col in train_df.columns:
+        result["ordinal_source"] = "period_rank"
+        result["temporal_column"] = col
+        tr = train_df[col].astype(str).map(period_rank).dropna()
+        if len(tr):
+            result["has_time"] = True
+            result["train_min_rank"] = int(tr.min())
+            result["train_max_rank"] = int(tr.max())
+            result["train_n_unique_periods"] = int(tr.nunique())
+        if col in predict_df.columns:
+            pr = predict_df[col].astype(str).map(period_rank).dropna()
+            if len(pr):
+                result["predict_min_rank"] = int(pr.min())
+                result["predict_max_rank"] = int(pr.max())
+                result["predict_n_unique_periods"] = int(pr.nunique())
+                if len(tr):
+                    result["temporal_overlap"] = not (
+                        tr.max() < pr.min() or pr.max() < tr.min())
+                    result["predict_after_train"] = bool(pr.min() > tr.max())
         return result
     for frame_name, df in [("train", train_df), ("predict", predict_df)]:
         if col not in df.columns:
@@ -624,6 +671,110 @@ def _validation_implications(
         "recommended_strategy": chosen_strategy,
         "recommendations": recommendations,
     }
+
+
+# ── time-series shape + autocorrelation (planner-facing) ──────────────────────
+
+def _period_ordinal(df: pd.DataFrame, time_col: str,
+                    period_rank: dict[str, int] | None) -> pd.Series | None:
+    """Per-row period ordinal: from ``period_rank`` (opaque tokens) when given,
+    else a dense rank of the date-parsed column. ``None`` when unavailable."""
+    if not time_col or time_col not in df.columns:
+        return None
+    if period_rank:
+        o = df[time_col].astype(str).map(period_rank)
+        return o if o.notna().mean() >= 0.5 else None
+    parsed = _parse_dt(df[time_col])
+    if parsed.notna().mean() >= 0.6:
+        return parsed.rank(method="dense")
+    return None
+
+
+def _time_series_shape(
+    train_df: pd.DataFrame,
+    time_col: str | None,
+    group_keys: list[str] | None,
+    period_rank: dict[str, int] | None,
+) -> dict[str, Any]:
+    """Series-length diagnostics so the planner can size lags/rolling windows to
+    the data: total periods, rows per period, and per-group series length."""
+    if not time_col or time_col not in train_df.columns:
+        return {"available": False}
+    out: dict[str, Any] = {"available": True}
+    n_periods = int(train_df[time_col].nunique(dropna=True))
+    out["n_periods"] = n_periods
+    out["rows_per_period"] = round(len(train_df) / max(n_periods, 1), 2)
+    gk = [g for g in (group_keys or []) if g in train_df.columns]
+    if gk:
+        try:
+            sizes = train_df.groupby(gk)[time_col].nunique()
+            out["group_keys"] = gk
+            out["per_group_series_length"] = {
+                "min": int(sizes.min()),
+                "median": float(sizes.median()),
+                "max": int(sizes.max()),
+                "n_groups": int(len(sizes)),
+            }
+        except Exception:
+            pass
+    return out
+
+
+def _target_autocorrelation(
+    train_df: pd.DataFrame,
+    target_col: str,
+    group_keys: list[str] | None,
+    time_col: str | None,
+    period_rank: dict[str, int] | None,
+    lags: tuple[int, ...] = (1, 3, 6, 12),
+) -> dict[str, Any]:
+    """Within-group, period-ordered target autocorrelation at representative lags,
+    averaged across panel groups. Tells the planner WHICH lag features carry signal
+    and how to size rolling windows. Advisory only — never a model feature."""
+    if target_col not in train_df.columns or not time_col or time_col not in train_df.columns:
+        return {"available": False}
+    gk = [g for g in (group_keys or []) if g in train_df.columns]
+    if not gk:
+        return {"available": False}
+    ordi = _period_ordinal(train_df, time_col, period_rank)
+    if ordi is None:
+        return {"available": False}
+    df = train_df[gk].copy()
+    df["_ord"] = ordi.to_numpy()
+    df["_t"] = pd.to_numeric(train_df[target_col], errors="coerce").to_numpy()
+    df = df.dropna(subset=["_ord", "_t"])
+    if len(df) < 20:
+        return {"available": False}
+    # Pre-build each group's period-ordered, gap-filled target series once, so a
+    # lag respects real period spacing (NaN at missing periods) and Series.autocorr
+    # computes corr(s, s.shift(lag)) correctly.
+    series_by_group: list[pd.Series] = []
+    for _, g in df.groupby(gk):
+        s = g.sort_values("_ord").drop_duplicates("_ord").set_index("_ord")["_t"]
+        if len(s) < 4 or s.std(skipna=True) == 0:
+            continue
+        lo, hi = int(s.index.min()), int(s.index.max())
+        series_by_group.append(s.reindex(range(lo, hi + 1)))
+    acf: dict[str, float] = {}
+    for lag in lags:
+        rs: list[float] = []
+        for s in series_by_group:
+            if s.notna().sum() <= lag + 2:
+                continue
+            r = s.autocorr(lag)  # corr(s, s.shift(lag)), NaN-aware
+            if r is not None and np.isfinite(r):
+                rs.append(float(r))
+        if rs:
+            acf[f"lag{lag}"] = round(float(np.mean(rs)), 4)
+    if not acf:
+        return {"available": False}
+    strongest = sorted(acf.items(), key=lambda kv: abs(kv[1]), reverse=True)
+    out: dict[str, Any] = {"available": True, "method": "within_group_pearson",
+                           "n_groups_used": int(df.groupby(gk).ngroups)}
+    out.update(acf)
+    # lags whose mean ACF is materially positive (signal worth a lag feature)
+    out["strongest_lags"] = [int(k.replace("lag", "")) for k, v in strongest if v >= 0.2]
+    return out
 
 
 # ── helpers ───────────────────────────────────────────────────────────────────

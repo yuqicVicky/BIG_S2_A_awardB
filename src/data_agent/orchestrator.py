@@ -181,12 +181,31 @@ def _run_award_b(repo_root, run_id, logs_dir, artifacts_dir, goal, random_state)
         print(f"[gate:schema] FAIL: {_schema_v.reasons}")
     state.persist(logs_dir)
 
-    # Stage 1b — data pattern analysis (deep EDA)
+    # Stage 1b — data pattern analysis (deep EDA). Reuse the Step-3c
+    # data-pattern-analyzer artifact ({run_id}_feature_influence.json — a superset of
+    # this report, with the opaque-period time fix + series-length/autocorrelation)
+    # when present, so the floor and the planner-facing analysis never diverge; else
+    # compute it here as before.
     try:
-        pattern_report = run_pattern_analysis(
-            schema, bundle, repo_root=repo_root, run_id=run_id
-        )
-        state.data_pattern_report = pattern_report
+        _fi_path = logs_dir / f"{run_id}_feature_influence.json"
+        _fi = None
+        if _fi_path.exists():
+            try:
+                _cand = json.loads(_fi_path.read_text(encoding="utf-8"))
+                # only reuse the FULL report (the engine's sections are present);
+                # a degraded/minimal Step-3c artifact lacks them, so recompute instead
+                # of shipping an impoverished pattern section in the report.
+                if isinstance(_cand, dict) and "schema_comparison" in _cand:
+                    _fi = _cand
+            except Exception:
+                _fi = None
+        if _fi is not None:
+            state.data_pattern_report = _fi
+            print("[orchestrator] reusing Step-3c feature_influence report")
+        else:
+            state.data_pattern_report = run_pattern_analysis(
+                schema, bundle, repo_root=repo_root, run_id=run_id
+            )
     except Exception as _pa_exc:
         print(f"[orchestrator] data pattern analysis failed ({_pa_exc}); continuing")
         state.data_pattern_report = None
@@ -342,13 +361,43 @@ def _run_award_b(repo_root, run_id, logs_dir, artifacts_dir, goal, random_state)
     _canon_folds = None
     _scored_mask = None
     try:
-        from .cv import build_canonical_folds, load_canonical_folds, write_cv_folds_json
+        from .cv import (build_canonical_folds, load_canonical_folds,
+                         write_cv_folds_json, compute_scoring_row_mask,
+                         derive_scoring_subset)
         _vs_path = logs_dir / "validation_strategy.json"
         if bundle.task.task_type == REGRESSION and _vs_path.exists():
             _vstrat = json.loads(_vs_path.read_text(encoding="utf-8"))
+            # Submission may score only a SUBSET of the target categories
+            # (spec_parse.json.scoring_subset). Restrict OOF scoring to those rows
+            # so block_mae is leaderboard-aligned; None ⇒ no restriction.
+            _spec_path = logs_dir / "spec_parse.json"
+            _spec = {}
+            if _spec_path.exists():
+                try:
+                    _spec = json.loads(_spec_path.read_text(encoding="utf-8"))
+                except Exception:
+                    _spec = {}
+            _scoring_subset = _spec.get("scoring_subset")
+            # Deterministic safety net: if task-inference did not record the subset,
+            # derive it from train_df vs sample_submission directly (LLM-independent)
+            # so the leaderboard alignment never silently reverts to diluted scoring.
+            if not _scoring_subset:
+                _scoring_subset = derive_scoring_subset(
+                    bundle.train_df, getattr(bundle, "sample_submission", None),
+                    target_column=schema.target_column,
+                    row_id_column=schema.row_id_column,
+                    join_keys=_spec.get("join_keys"))
+                if _scoring_subset:
+                    print(f"[cv] WARN scoring_subset auto-derived (spec_parse lacked it): "
+                          f"{_scoring_subset['column']} -> {_scoring_subset['scoring_values']}")
+            _srm = compute_scoring_row_mask(bundle.train_df, _scoring_subset)
             _fa, _scored, _desc = build_canonical_folds(
                 bundle.train_df, validation_strategy=_vstrat,
-                target=bundle.target, random_state=random_state)
+                target=bundle.target, random_state=random_state,
+                scoring_row_mask=_srm)
+            if _srm is not None:
+                print(f"[cv] scoring restricted to submission subset: "
+                      f"{int(np.asarray(_srm).sum())}/{len(_srm)} train rows in scope")
             write_cv_folds_json(logs_dir / f"{run_id}_cv_folds.json", run_id=run_id,
                                 fold_assignment=_fa, scored_rows=_scored, description=_desc)
             _valid_mask = pd.to_numeric(bundle.target, errors="coerce").notna().to_numpy()

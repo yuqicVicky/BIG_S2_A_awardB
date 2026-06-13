@@ -75,6 +75,10 @@ Every claim must be traceable to a log file from this run.
   strategy named in `model_search.json`
 - Group/time column used; how the holdout simulates the hidden evaluation
 - Leakage risks and validation limitations recorded in the logs
+- **Scoring subset:** if `{run_id}_cv_folds.json.scoring_restricted` is true, state that OOF
+  block_mae is computed over the submission's scoring categories only
+  (`spec_parse.json.scoring_subset.scoring_values`) so the CV is leaderboard-aligned; note that
+  train-only categories train and produce OOF for lag features but do not count toward the metric.
 
 #### Section 6 — Candidate Models
 Populate from `model_search.json`. Include all baselines and all candidates; mark the selected model.

@@ -125,11 +125,20 @@ You own the one fold assignment every Step-6 candidate scores OOF on. After writ
 do **not** hand-roll folds (use `src/data_agent/cv.build_canonical_folds`, which honors the
 strategy you just chose):
 
+When `spec_parse.json.scoring_subset` is non-null, the submission scores only a **subset** of the
+target categories. Pass `scoring_row_mask=compute_scoring_row_mask(train, scoring_subset)` so
+`scored_rows` is restricted to the scored categories and OOF block_mae is **leaderboard-aligned**
+(train-only categories still train and produce OOF for lag features but do not count toward the
+metric). `None` ⇒ no restriction (identical to before). If the field is **absent** (task-inference
+skipped it), fall back to the deterministic `derive_scoring_subset(...)` so the alignment never
+silently reverts to diluted scoring — it never depends on the LLM remembering.
+
 ```bash
 python - <<'PY'
 import json, sys; sys.path.insert(0, ".")
 import pandas as pd
-from src.data_agent.cv import build_canonical_folds, write_cv_folds_json
+from src.data_agent.cv import (build_canonical_folds, write_cv_folds_json,
+                               compute_scoring_row_mask, derive_scoring_subset)
 spec = json.load(open("outputs/logs/spec_parse.json"))
 vs   = json.load(open("outputs/logs/validation_strategy.json"))
 run_id = spec.get("run_id") or vs.get("run_id")
@@ -137,12 +146,25 @@ tf = spec["train_file"]
 train = pd.read_csv(tf) if str(tf).endswith(".csv") else pd.read_excel(tf)
 tgt = spec.get("target_column")
 target = pd.to_numeric(train[tgt], errors="coerce") if tgt in train.columns else None
-fa, scored, desc = build_canonical_folds(train, validation_strategy=vs, target=target, random_state=42)
+# scoring subset: prefer the spec field, else derive deterministically from the data
+ss = spec.get("scoring_subset")
+if not ss:
+    ssf = spec.get("sample_submission_file")
+    sub = (pd.read_csv(ssf) if str(ssf).endswith(".csv") else pd.read_excel(ssf)) if ssf else None
+    ss = derive_scoring_subset(train, sub, target_column=tgt,
+                               row_id_column=spec.get("row_id_column"),
+                               join_keys=spec.get("join_keys"))
+    if ss:
+        print(f"[guardian] scoring_subset auto-derived: {ss['column']} -> {ss['scoring_values']}")
+srm = compute_scoring_row_mask(train, ss)  # None ⇒ no restriction
+fa, scored, desc = build_canonical_folds(train, validation_strategy=vs, target=target,
+                                         random_state=42, scoring_row_mask=srm)
 write_cv_folds_json(f"outputs/logs/{run_id}_cv_folds.json", run_id=run_id,
                     fold_assignment=fa, scored_rows=scored, description=desc)
 print(json.dumps({"cv_folds": f"outputs/logs/{run_id}_cv_folds.json",
                   "strategy": desc.get("strategy"), "n_folds": desc.get("n_folds"),
-                  "n_scored": desc.get("n_scored_rows")}))
+                  "n_scored": desc.get("n_scored_rows"),
+                  "scoring_restricted": desc.get("scoring_restricted")}))
 PY
 ```
 

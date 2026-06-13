@@ -21,6 +21,7 @@ The **training** package (`train/`) contains the labeled data you train on.
 The **validation** package (`val/`) contains covariates only — the target is hidden.
 Predict `rate_per_10000_ed_visits` for every row in `sample_submission.csv`.
 
+评分只对all_drugs / all_opioids / all_stimulants三个大类算mae
 ---
 
 ## Files

@@ -177,24 +177,34 @@ def _metric_score(y_true: np.ndarray, y_pred: np.ndarray, metric_name: str,
     return float(np.mean(err))  # mae (and block_mae fallback when no usable block)
 
 
-def _aligned_blocks(bundle, schema, n_oof: int) -> np.ndarray | None:
-    """Block labels aligned to the floor's full-coverage OOF rows, for block_mae
-    scoring of the blend. ``None`` when unavailable or misaligned."""
+def _aligned_blocks(bundle, schema, n_oof: int, scored_mask=None) -> np.ndarray | None:
+    """Block labels aligned to the floor's OOF rows, for block_mae scoring of the
+    blend. ``None`` when unavailable or misaligned. When OOF scoring is restricted to
+    the submission's scoring subset (``scored_mask``), the OOF pair length is the
+    restricted count, so the block vector must be subselected to the SAME rows —
+    otherwise the length guard fails and ``_metric_score`` silently falls back to
+    plain MAE, making the blend keep-best decision inconsistent with the per-model
+    block_mae scores."""
     bc = getattr(schema, "block_column", None)
     if not bc:
         return None
     try:
         y_full = pd.to_numeric(bundle.target, errors="coerce")
         tdf = bundle.train_df.loc[y_full.notna()].reset_index(drop=True)
-        if bc in tdf.columns and len(tdf) == n_oof:
-            return tdf[bc].astype(str).to_numpy()
+        if bc not in tdf.columns:
+            return None
+        blk = tdf[bc].astype(str).to_numpy()
+        if scored_mask is not None and len(scored_mask) == len(blk):
+            blk = blk[np.asarray(scored_mask, dtype=bool)]
+        if len(blk) == n_oof:
+            return blk
     except Exception:
         return None
     return None
 
 
 def _try_blend(floor_modeling, cand_modelings, *, bundle, schema, description,
-               metric_name, greater, best_score, run_id, logs_dir):
+               metric_name, greater, best_score, run_id, logs_dir, scored_mask=None):
     """Convex (NNLS, sum-to-one) blend of the floor + specialist OOF predictions,
     scored on the official metric. Returns ``(blended_modeling, name, cv, weights)``
     only when the blend STRICTLY beats ``best_score``; otherwise ``None`` (the caller
@@ -228,7 +238,7 @@ def _try_blend(floor_modeling, cand_modelings, *, bundle, schema, description,
     if not np.isfinite(w).all() or w.sum() <= 0:
         return None
     w = w / w.sum()
-    blocks = _aligned_blocks(bundle, schema, len(fy))
+    blocks = _aligned_blocks(bundle, schema, len(fy), scored_mask=scored_mask)
     blend_cv = _metric_score(fy, M_oof @ w, metric_name, blocks)
     if not _is_better(blend_cv, best_score, greater):
         return None  # blend doesn't strictly help → keep the incumbent
@@ -374,7 +384,8 @@ def run_modeling_group(
         blended = _try_blend(
             floor_modeling, ok_candidates, bundle=bundle, schema=schema,
             description=description, metric_name=floor_mr.metric_name,
-            greater=greater, best_score=best_score, run_id=run_id, logs_dir=logs_dir)
+            greater=greater, best_score=best_score, run_id=run_id, logs_dir=logs_dir,
+            scored_mask=scored_mask)
     except Exception as exc:
         blended = None
         meta.setdefault("blend", {})["error"] = f"{type(exc).__name__}: {exc}"

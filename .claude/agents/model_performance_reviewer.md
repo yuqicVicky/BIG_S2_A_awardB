@@ -43,6 +43,11 @@ Write **only** the file for your current mode. Never edit model code, feature fi
 Judge — using LLM judgment, not fixed rules:
 - **Score gap:** best CV score + producing family; train↔val gap and overfitting; improvement
   vs baseline and vs the previous round; plateau / diminishing returns.
+  - **Scoring-subset alignment is not a regression.** If `cv_folds.json.scoring_restricted` is
+    true, block_mae is computed over the submission's scoring categories only (a smaller, harder
+    population), so the absolute CV is **higher** than an all-category score by design and
+    leaderboard-aligned. Do not flag this higher number as a regression; compare across rounds
+    on the same restricted metric.
 - **Ensemble & diversity:** are families diverse; is a simpler model competitive; are blend
   weights proportional to CV performance; which untried family could add diversity.
 - **Hyperparameters:** were the impactful knobs searched (learning rate, regularization,

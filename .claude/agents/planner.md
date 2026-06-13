@@ -30,12 +30,15 @@ You produce `analysis_plan.json` with four blocks: `modeling_mode`, `data_covera
 | Input | Source |
 |-------|--------|
 | `spec_parse.json` | `outputs/logs/spec_parse.json` — target, row_id, join keys, metric, `file_schemas` (every file's every column), `file_sidecars` (non-tabular modalities, e.g. images), `detected_structure.split_pattern`, `sub_target_candidates` |
-| `data_profile.json` | `outputs/logs/data_profile.json` — per-column dtype/missingness, `text_like_columns`, datetime-parseable columns, target distribution |
+| `data_profile.json` | `outputs/logs/data_profile.json` — per-column dtype/missingness, `text_like_columns`, datetime-parseable columns, target distribution, and **`split_structure`** — read `split_structure.type` (is this time-series / chronological) and `split_structure.train_period_range.n_periods` (the **series length**) to ground lag/rolling-window sizing even when the Step-3c influence file is absent |
 | `validation_strategy.json` | `outputs/logs/validation_strategy.json` — the chosen CV strategy (authoritative; do not re-design CV) |
+| `{run_id}_feature_influence.json` | `outputs/logs/{run_id}_feature_influence.json` — **optional** time-series + influence signal from the data-pattern-analyzer (Step 3c): `is_timeseries`, `time_series_shape.n_periods` (series length), `target_autocorrelation.strongest_lags`, `feature_influence.ranked` (per-feature \|corr\|), and `recommendations_for_planner`. Proceed without it if absent. |
 
-Read all three completely before writing. `spec_parse.json.file_schemas` and
+Read all three core inputs completely before writing. `spec_parse.json.file_schemas` and
 `detected_structure` / `sub_target_candidates` are the **authoritative source** for the
-coverage map and completeness constraints.
+coverage map and completeness constraints. When `{run_id}_feature_influence.json` is present, use
+it to **prioritize** features (see Part 2) — it is advisory for prioritization only and never
+changes the coverage-completeness requirement (every column is still mapped).
 
 ---
 
@@ -100,6 +103,21 @@ applicable family, each **fold-safe**:
   ablation gate can validate them before they reach the model.
 - `imputation` — `{column: strategy}` using training statistics only (e.g. high-missingness
   covariates imputed from training group medians).
+
+**Use `{run_id}_feature_influence.json` to PRIORITIZE (when present).** It does not change coverage
+(every column is still mapped) — it tells you *what to emphasize* and *how to size lags*:
+- **Time-series sizing.** Read `is_timeseries` and `time_series_shape.n_periods` (the series
+  length). Size `lag_features` / rolling windows to it: lags up to roughly `n_periods/4` are safe;
+  prefer the lags in `target_autocorrelation.strongest_lags` (and `recommendations_for_planner.
+  lag_features.suggested_lags`) — these carry measured signal. Mark a lag **experimental** when the
+  shortest `per_group_series_length.min` cannot support it (≈ < 3× the lag) or when
+  `recommendations_for_planner.lag_features.experimental` is true. With no influence file, keep
+  today's "few periods ⇒ experimental" heuristic.
+- **Influence-driven emphasis.** Build `per_fold_target_aggregates` and `interactions` first on the
+  highest-|corr| features in `feature_influence.ranked` / `recommendations_for_planner`
+  (`prioritize_target_aggregates_on`, `prioritize_interactions`, `high_influence_direct_features`).
+  Still cover every family for completeness — just order/justify by measured influence rather than a
+  guess. The signal is **advisory** (correlations never become features; aggregates stay per-fold).
 - `image_features` — **when `spec_parse.json.file_sidecars` has an image modality** (see the
   Image-modality method below). Prescribe `{source_sidecar, join_keys, method, summary_stats,
   optional_svd, missing_fill}`.
@@ -195,6 +213,10 @@ Before writing, verify and fix:
 ---
 
 ## Output — write `outputs/logs/analysis_plan.json`
+
+Resolve `run_id` from the **prompt** the orchestrator gives you, or the `AWARDB_RUN_ID`
+environment variable. **Never** copy a stale/placeholder `run_id` from `spec_parse.json` and never
+fabricate a `..._000000` timestamp — use the canonical run_id so the field is auditable.
 
 ```json
 {

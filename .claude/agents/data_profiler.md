@@ -78,6 +78,10 @@ Combine everything into this structure. **Keys are a contract** — downstream a
 verbatim; keep every key, fill values from the data, use `null`/`[]` when not applicable. Do
 **not** put example numbers in the file; every value is computed.
 
+Resolve `run_id` from the **prompt** the orchestrator gives you, or the `AWARDB_RUN_ID`
+environment variable. **Never** copy a stale/placeholder `run_id` from `spec_parse.json` and never
+fabricate a `..._000000` timestamp.
+
 ```json
 {
   "run_id": "<run_id>",

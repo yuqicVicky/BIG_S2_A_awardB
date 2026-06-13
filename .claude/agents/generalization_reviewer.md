@@ -34,6 +34,12 @@ and the data structure (panel/time → blocked GroupKFold; imbalanced → strati
 holdout kept separate? Does it simulate the hidden-evaluation gap?
 
 **CV↔holdout calibration** (HIGH-severity when triggered):
+- **Scoring-subset alignment.** When `cv_folds.json.scoring_restricted` is true, OOF block_mae
+  is computed over the submission's scoring categories only — the CV is **intentionally higher**
+  and leaderboard-aligned. A CV that is well above an all-category baseline is then **expected,
+  not** a calibration failure or leakage signal. Judge calibration and round-over-round trend on
+  this restricted metric. (Absent the restriction, an all-category CV that looks far better than
+  the leaderboard is itself the red flag — recommend enabling `scoring_subset`.)
 - `cv_score` improved round-over-round but `holdout_score` worsened → CV leakage likely.
 - `holdout_score` improved but `cv_score` worsened → CV measurement inconsistent.
 - `abs(cv_score - holdout_score) > 0.08` → CV and holdout disagree by >8%; check the holdout

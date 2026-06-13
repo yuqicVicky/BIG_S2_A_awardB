@@ -141,10 +141,54 @@ appear in the planner's `data_coverage` (used for feature extraction or justifie
 
 ---
 
+## Step 4d — Scoring subset (which target categories the leaderboard actually scores)
+
+When the target is one long column indexed by a **category column** (e.g. an `overdose_category`
+/ `segment` / `class` column that is also a group key), the submission may score only a **subset**
+of the categories present in training. If CV then averages error over **all** training
+categories, the reported metric is diluted and **does not predict the leaderboard** (the metric
+is computed over a different, easier population than the one being scored).
+
+Author Python that, for **each categorical column present in BOTH the `sample_submission_file`
+and the `train_file`**, compares the distinct value sets **read directly from the files**
+(`set(sub[col].dropna().unique())` vs `set(train[col].dropna().unique())` — **not** profiler
+`top_values`, which is top-N truncated). The column whose **submission value-set is a strict,
+proper subset** of the train value-set is the **scoring-restriction column**. Record:
+
+```json
+"scoring_subset": {
+  "column": "<the restriction column>",
+  "scoring_values": ["<sorted distinct submission values>"],
+  "train_only_values": ["<sorted train-minus-submission values>"],
+  "n_train_rows_scored": <count of train rows whose value ∈ scoring_values>
+}
+```
+
+Set `scoring_subset: null` when no column qualifies — the submission covers every value, there is
+no shared categorical column, or the task is non-panel. Resolve the column and values **at
+runtime from the files**; never hardcode a category name. This field is consumed by the
+validation-and-schema-guardian and the floor to restrict OOF scoring to the scored rows
+(train-only categories still train and produce OOF for lag features but do not count toward the
+metric).
+
+---
+
 ## Step 5 — Validate submission schema
 
 Confirm the sample submission (if present) has exactly `[row_id_column, target_column]` and a
 row for every prediction row. If absent, add a `WARN` (do not halt).
+
+---
+
+## Resolve `run_id` (never fabricate one)
+
+Resolve `run_id` from the **prompt** the orchestrator gives you, or the `AWARDB_RUN_ID`
+environment variable (`os.environ.get("AWARDB_RUN_ID")`). Use that exact value for both the
+`run_id` field in `spec_parse.json` **and** the `{run_id}_llm_gate_task_inference.json` filename —
+so the orchestrator and `supervisor-gatekeeper` (which look up `{run_id}_llm_gate_*.json`) actually
+find your verdict. **Never** default to a placeholder timestamp (e.g. `..._000000`): a wrong
+`run_id` orphans your gate file and can misdirect the CV-folds filename. If no run_id is available
+from either source, write a `FAIL` entry in `errors` rather than inventing one.
 
 ---
 
@@ -174,6 +218,7 @@ row for every prediction row. If absent, add a `WARN` (do not halt).
     "split_pattern": { "split_type": "unknown", "cv_recommendation": "<computed>", "sub_target_candidates": [] }
   },
   "file_schemas": { "<file_path>": { "n_rows": 0, "n_cols": 0, "columns": [], "dtypes": {} } },
+  "scoring_subset": null,
   "file_sidecars": [
     { "path_train": "<dir or null>", "path_pred": "<dir or null>",
       "modality": "image | other", "format": "<ext>",
