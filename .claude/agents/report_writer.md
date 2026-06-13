@@ -23,8 +23,9 @@ independent `report-reviewer` agent audits it in the next step. Do not write
 | `data_profile.json` | `outputs/logs/data_profile.json` |
 | `analysis_plan.json` | `outputs/logs/analysis_plan.json` |
 | `validation_strategy.json` | `outputs/logs/validation_strategy.json` (if available) |
-| `model_search.json` | `outputs/logs/model_search.json` |
-| `final_model.json` | `outputs/logs/final_model.json` |
+| `{run_id}_feature_influence.json` | `outputs/logs/` — time-series shape (series length), target autocorrelation, per-feature influence ranking (Step-3c; if available) |
+| `model_search.json` / `final_model.json` | `outputs/logs/` — **general modeling_mode only** |
+| `{run_id}_ensemble_meta.json` / `{run_id}_model_stability_by_split.json` / `{run_id}_agent_{gbdt,trees,linear}.json` | `outputs/logs/` — **specialist modeling_mode** (the candidate scores, NNLS blend weights, per-split stability, and per-family selected model live here, NOT in model_search.json). Read `analysis_plan.json.modeling_mode` to know which set exists. |
 | `submission_validation.json` | `outputs/logs/submission_validation.json` (if available) |
 | `model_performance_review.json` | `outputs/logs/model_performance_review.json` (Step-6 performance reviewer; if available) |
 | `feature_audit_review.json` | `outputs/logs/feature_audit_review.json` (Step-6 feature-leakage reviewer) |
@@ -41,6 +42,34 @@ metric, or column name that does not appear in a log file from this run.**
 ls -lh outputs/logs/
 ls -lh outputs/artifacts/ 2>/dev/null || echo "no artifacts dir"
 ```
+
+---
+
+## Writing style & formatting (read before composing)
+
+The report should read like a concise analyst's memo, not a filled-in checklist. Optimize for a
+reader who skims headings first, then reads the parts that matter.
+
+**Prose & flow**
+- Write in **flowing paragraphs**, not fragment bullets. Each section opens with a 1–2 sentence
+  topic statement (what this section establishes), then develops it. Connect ideas with
+  transitions ("Because the target is right-skewed, …", "Given this temporal structure, …").
+- Lead with the conclusion, then support it. State the headline number once, plainly, early.
+- Reserve bullet lists for genuinely enumerable items (column inventories, candidate tables,
+  limitation lists). Prose for reasoning and findings.
+- Keep it tight: no padding, no restating the same metric in three sections, no meta-commentary
+  ("In this section we will…"). Active voice, present tense for findings.
+
+**Formatting & layout**
+- Open with a compact **title block**: report title, `run_id`, task type, target, primary metric,
+  and a one-line **TL;DR** (best score + the single biggest caveat). This is the reader's anchor.
+- Use a consistent heading hierarchy (`##` for sections, `###` for subsections). Number sections.
+- Put tabular data in **Markdown tables** (column inventory, candidate models, per-split scores),
+  not prose. **Bold** the key numbers (best metric, % over baseline) and the selected model row.
+- Round numbers sensibly (4 sig figs for scores, 1 decimal for percentages). Use a short
+  "callout" line for the headline result, e.g. `> **Result:** block-MAE 0.879 (33% over baseline).`
+- Prefer one strong sentence over three weak ones; a section that has nothing to report says so in
+  one line and moves on.
 
 ---
 
@@ -68,6 +97,11 @@ Every claim must be traceable to a log file from this run.
 - Columns excluded and why (target, row_id, constant, ID columns)
 - Imputation strategy; encoding strategy
 - Datetime-like columns detected and time features generated (`feature_audit_review.json`)
+- **Data-pattern findings** (`{run_id}_feature_influence.json`, if present): in one short paragraph,
+  note whether the data is a time series and its length (`time_series_shape.n_periods`), the target
+  autocorrelation (`target_autocorrelation.strongest_lags`) that motivated the lag features, and the
+  most influential covariates (`feature_influence.ranked`, top few by \|corr\|). Frame this as what
+  *guided* the feature plan — using the "associated with / predictive of" language below.
 - State explicitly: "All transformations were fitted on the training split only."
 
 #### Section 5 — Validation Strategy
@@ -81,19 +115,33 @@ Every claim must be traceable to a log file from this run.
   train-only categories train and produce OOF for lag features but do not count toward the metric.
 
 #### Section 6 — Candidate Models
-Populate from `model_search.json`. Include all baselines and all candidates; mark the selected model.
-```
-| Model | Val Score | Train Score | Train-Val Gap | Adj. Robust Score | Complexity | Notes |
-|-------|-----------|-------------|---------------|-------------------|------------|-------|
-```
-If `adjusted_robust_score` is absent, omit those columns and note classic selection was used.
+Open with one sentence on how many candidates were evaluated and what won. Then a table — mark the
+selected/blended row in **bold**.
+- **general mode:** populate from `model_search.json` (all baselines + candidates).
+  ```
+  | Model | Val Score | Train Score | Train-Val Gap | Adj. Robust Score | Complexity | Notes |
+  |-------|-----------|-------------|---------------|-------------------|------------|-------|
+  ```
+  If `adjusted_robust_score` is absent, omit those columns and note classic selection was used.
+- **specialist mode** (no `model_search.json`): build the table from
+  `{run_id}_ensemble_meta.json` (`oof_cv_scores`, `nnls_weights`, chosen blend) and
+  `{run_id}_model_stability_by_split.json` (per-model `split_scores`, `relative_stability`), e.g.:
+  ```
+  | Model | OOF block-MAE | Per-split stability | Blend weight | Notes |
+  |-------|---------------|---------------------|--------------|-------|
+  ```
+  State plainly when every specialist underperformed the deterministic floor and the blend is what
+  improved on it (read the floor score from `{run_id}_model_selection.json`).
 
 #### Section 7 — Selected Model and Predictions
-- Selected model (`final_model.json`), validation score on the primary metric
-- Train-val gap and relative gap; selection rationale; whether an ensemble was used
-- Whether the candidate beat the baseline; if not, state: "No candidate outperformed the
-  baseline. The best baseline was selected."
-- Submission validation result (`submission_validation.json`): columns_ok, row_count_ok, all_finite
+Write this as a short narrative: what was selected, its score, and why it was trusted.
+- Selected model + validation score on the primary metric — `final_model.json` (general) or
+  `{run_id}_promotion.json` + `{run_id}_ensemble_meta.json` (specialist: the promoted blend, its
+  `chosen_cv_score`, and the NNLS weights).
+- Selection rationale; whether an ensemble/blend was used and which models it combined.
+- Whether any candidate beat the deterministic floor/baseline; if not, say so plainly: the floor
+  was retained and the blend only refined it.
+- Submission validation (`submission_validation.json`): columns_ok, row_count_ok, all_finite.
 
 #### Section 8 — Overfitting and Generalization Controls (REQUIRED)
 Populate each subsection from the logs; when a source log is absent, write the explicit
