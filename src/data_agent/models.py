@@ -509,7 +509,7 @@ def _candidate_family(name: str) -> str:
         return "baseline"
     if any(t in n for t in ("lightgbm", "xgboost", "catboost", "hist_gradient", "gradient_boosting")) or n.startswith("hgb"):
         return "gbdt"
-    if n in ("ridge", "elastic_net") or "linear" in n or "logistic" in n:
+    if n.startswith("ridge") or n.startswith("elastic") or "linear" in n or "logistic" in n:
         return "linear"
     if "random_forest" in n or "extra_trees" in n:
         return "trees"
@@ -1503,6 +1503,28 @@ def _build_candidates(bundle: FeatureBundle, train_df: pd.DataFrame, random_stat
                 lambda: LogTargetRegressor(Pipeline([
                     ("preprocess", _make_preprocessor_fresh(scale=False)),
                     ("model", HistGradientBoostingRegressor(random_state=rs, max_iter=150, learning_rate=0.05)),
+                ])),
+            )
+        )
+        # Skew-driven log target must reach EVERY family, not just GBDT — otherwise
+        # the trees/linear specialists train on the raw skewed target and lose to the
+        # floor's lightgbm_log purely on the transform. Give the trees and linear
+        # families their own log-target variants so each specialist can pick it.
+        candidates.append(
+            (
+                "extra_trees_log",
+                lambda: LogTargetRegressor(Pipeline([
+                    ("preprocess", _make_preprocessor_fresh(scale=False)),
+                    ("model", ExtraTreesRegressor(n_estimators=200, random_state=rs, n_jobs=_n_jobs(), min_samples_leaf=2, max_features="sqrt")),
+                ])),
+            )
+        )
+        candidates.append(
+            (
+                "ridge_log",
+                lambda: LogTargetRegressor(Pipeline([
+                    ("preprocess", _make_preprocessor_fresh(scale=True)),
+                    ("model", Ridge(alpha=1.0)),
                 ])),
             )
         )

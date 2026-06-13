@@ -120,7 +120,16 @@ Read `prev_round_cv_score` from `analysis_review_{round-1}.json` (null in round 
   round's `analysis_review_{round-1}.json` suggestions. A finding surviving a round means the fix
   was not applied or was ineffective — **escalate it to a required fix** (mark it
   `"priority": "high"`, set `revert`/`continue_round`), even if its own severity is LOW. Do not let
-  the same leakage be acknowledged-but-deferred round after round.
+  the same leakage be acknowledged-but-deferred round after round. **Exception:** do not force a
+  round purely to chase a finding whose *only* lever is more specialist tuning when (a) below the
+  specialist-futility condition holds and (b) the finding has no feature-actionable fix — another
+  round would burn ~1h for no expected gain. Escalate it as a documented limitation instead.
+- **Efficiency — `approved_for_final: true` on specialist futility.** If **every** specialist
+  family underperformed the deterministic floor in this round (all `oof_cv` worse than the floor)
+  **and** the kept blend improved the floor by `< 0.5%` of baseline, then deepening the same fixed
+  pool another round is not expected to help — set `approved_for_final: true` (stop) unless a HIGH
+  leakage finding or a concrete **feature-actionable** suggestion remains. Record the reason so the
+  orchestrator can skip the next round's expensive specialist trainings.
 - Otherwise `false`.
 
 Write `outputs/logs/analysis_review_{round}.json`:
@@ -155,6 +164,14 @@ read from `{run_id}_promotion.json.promoted_choice`) when `feature_audit_review.
 **promoted** winner. The orchestrator then restores `{run_id}_prior_best.csv` and the keep-best
 owner excludes the blacklisted candidate from its NNLS pool next round. Leave both falsy/null
 when the promoted winner is clean.
+
+**Drop a dead-weight family (efficiency, no rollback).** Separately from the leakage rollback, if a
+specialist family received **NNLS weight 0** in the blend (`{run_id}_ensemble_meta.json.nnls_weights`)
+**and** its `oof_cv` is far worse than the floor (e.g. > 25% worse), name it in `blacklist_candidate`
+with `revert_promotion: false` and a `notes` reason like `"linear: weight 0 + 37% worse than floor —
+skip next round"`. The orchestrator then does not launch that family's training next round, saving its
+slice without any accuracy cost (it was contributing nothing). This is a pure time saving — never
+blacklist a family that carried positive blend weight.
 
 **Actionability gate (so a round is never wasted repeating the last one).** The programmer only
 implements **feature-actionable** suggestions (`feature_engineering` / `feature_pruning` /
