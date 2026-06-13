@@ -54,6 +54,17 @@ For each, state **PASS / WARN / FAIL** with specific findings.
 - **Leakage / fold-safety (FAIL conditions):** the target column appears among features; row_id /
   join-key / raw datetime string used as a raw feature; any target-derived aggregate not marked
   fit-per-fold; `future_*`/`post_*`/`next_*` columns in the feature set.
+- **Contemporaneous (same-period) leakage on time-series (FAIL).** A `per-fold` label is *not*
+  sufficient on a time-ordered panel. Identify the time/period column from
+  `spec_parse.detected_structure` (`time_columns` / `split_pattern`) or the profile's
+  datetime/period column. Then for every `per_fold_target_aggregate` / `interaction` / lag whose
+  `group_keys` **include that time/period column** (e.g. `[jurisdiction, period_id]`): it averages
+  **the same period's** other rows, which is contemporaneous information unavailable at prediction
+  time — leaky even when fit per fold. Require it be **strictly lagged** (computed only from periods
+  *before* the row's period, e.g. a `lag1_`/prior-period form) → **FAIL** until renamed/redefined.
+  (An aggregate whose group_keys are purely non-temporal, e.g. `[jurisdiction]` or
+  `[jurisdiction, overdose_category]`, is fine — it pools across that group's own past+present rows
+  within the fold-train split, not a same-period peek.)
 - **Overfit guard:** experimental lag/rolling/interaction features on few periods must be flagged
   `experimental` (so the Step-6A′ ablation gate validates them) — an unflagged speculative feature
   asserted as beneficial → **WARN**.
