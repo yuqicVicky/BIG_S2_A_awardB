@@ -70,6 +70,16 @@ Do **not** run `scripts/award_a_reference/`.
 Write `outputs/scratch/{run_id}/feature_pipeline.py` that, resolving all names at runtime:
 
 1. Loads train + prediction per `spec_parse.json`.
+
+   **CRITICAL — period rank mapping for lag/rolling features in the prediction frame:**
+   The period column contains opaque IDs. Build `PERIOD_RANK` from
+   `validation_strategy.holdout_parameters.full_period_order` (which covers ALL periods including
+   val/prediction periods, parsed from `DATA_DESCRIPTION.md` by the guardian). If
+   `full_period_order` is absent, fall back to `period_order` (training only) and extend it with
+   val period IDs in the order they appear in the sample_submission/val covariate file, assigned
+   ranks starting at `len(period_order)`. **Never leave val period IDs out of PERIOD_RANK** — if
+   they map to -1, every lag/rolling feature in the prediction frame will be 100% NaN, causing
+   degenerate predictions (this was confirmed to cause leaderboard MAE 5× worse than CV).
 2. Builds the features the plan calls for, **leakage-safe**:
    - **Per-fold aggregates / target encodings:** load `{run_id}_cv_folds.json`
      (`cv.load_canonical_folds`) and, for each fold, compute the group/target statistic on that

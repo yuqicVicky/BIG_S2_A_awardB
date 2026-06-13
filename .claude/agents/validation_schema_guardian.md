@@ -73,6 +73,15 @@ validation block is the final `horizon` periods — the closest analogue to the 
 **Fallback:** if the periods cannot be ordered (no date table and the id is non-temporal), drop to
 Priority 3 (`group_time_split`) and say so in `validation_limitations`.
 
+**CRITICAL — `full_period_order`**: In addition to `period_order` (training periods only), you
+MUST also populate `full_period_order` in `holdout_parameters`. This field lists **ALL** period
+IDs in chronological order including validation/prediction periods, parsed from `DATA_DESCRIPTION.md`
+(the period→date table covers every period, not just training ones). Feature engineering uses
+`full_period_order` to assign correct integer ranks to prediction-frame period IDs so that lag
+lookups do not silently return NaN. Without this, all lag/rolling features in the prediction
+frame will be NaN, making predictions degenerate. `period_order` stays as training-only (used by
+CV fold construction); `full_period_order` is the superset used by the feature pipeline.
+
 For `within_period_holdout`, pick the holdout threshold so the holdout's distance from training
 mirrors the hidden test's distance (e.g. train days 1–19, predict 20–31 → hold out the top ~20%
 of training days). **Always explain why the chosen strategy simulates the hidden evaluation
@@ -110,7 +119,8 @@ Fill every key from the data; values shown are placeholders, not literals to cop
     "sub_period_feature": null, "holdout_threshold": null, "holdout_fraction": null,
     "time_column": null, "group_column": null, "n_splits": null,
     "stratify_column": null, "random_state": 42,
-    "period_order": null, "horizon": null, "n_folds": null
+    "period_order": null, "horizon": null, "n_folds": null,
+    "full_period_order": null
   },
   "simulates_hidden_evaluation": "how the holdout mirrors the train→hidden gap",
   "leakage_risks": [ { "risk_type": "", "column": null, "severity": "low | medium | high", "action": "" } ],

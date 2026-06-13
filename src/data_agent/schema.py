@@ -388,6 +388,35 @@ def _mentioned_files(description: str) -> set[str]:
     return names
 
 
+def parse_period_date_map(data_dir: Path) -> dict[str, str]:
+    """Parse the period_id → date string mapping from DATA_DESCRIPTION.md.
+
+    Returns an OrderedDict-like plain dict sorted chronologically (earliest first),
+    covering ALL periods (training + validation).  Keys are period_id strings;
+    values are ISO date strings (e.g. '2019-01-31').
+
+    Falls back to an empty dict if the mapping table is absent or unparseable.
+    """
+    desc_path = Path(data_dir) / "DATA_DESCRIPTION.md"
+    if not desc_path.exists():
+        return {}
+    text = desc_path.read_text(encoding="utf-8", errors="replace")
+    # Match markdown table rows: | date | period_id |  (or reversed order)
+    # The table in DATA_DESCRIPTION.md looks like:
+    #   | `2019-01-31` | `uTjgI1Sv` |
+    date_pid: list[tuple[str, str]] = []
+    for m in re.finditer(
+        r"\|\s*`?(\d{4}-\d{2}-\d{2})`?\s*\|\s*`?([A-Za-z0-9]{6,12})`?\s*\|",
+        text,
+    ):
+        date_pid.append((m.group(1), m.group(2)))
+    if not date_pid:
+        return {}
+    # Sort by date to guarantee chronological order
+    date_pid.sort(key=lambda x: x[0])
+    return {pid: date for date, pid in date_pid}
+
+
 def _description_columns(description: str) -> list[str]:
     found: list[str] = []
     for match in re.finditer(r"`([^`]+)`", description):
