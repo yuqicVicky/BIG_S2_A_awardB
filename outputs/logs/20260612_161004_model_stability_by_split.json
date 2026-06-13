@@ -1,7 +1,0 @@
-{
-  "run_id": "20260612_161004",
-  "selected_model": "stack(tuned(catboost)+catboost_log+lightgbm_log)",
-  "primary_split_type": "canonical_external",
-  "stability": {},
-  "n_splits_evaluated": 0
-}

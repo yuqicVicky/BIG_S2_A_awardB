@@ -1,5 +1,0 @@
-{
-  "type": "canonical_external",
-  "n_splits": 5,
-  "group_column": "period_id"
-}
