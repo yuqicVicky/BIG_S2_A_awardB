@@ -147,6 +147,18 @@ Apply only feature/leakage/target-transform/cv-validity suggestions to your scri
 ensemble suggestions are for `model-search-agent` / `ensemble-meta`, not you). Skip
 `do_not_repeat` items. The `src/data_agent/` modules stay **frozen** as the floor.
 
+**Also mine the evidence directly — do not just wait for suggestions.** A round that rebuilds the
+identical feature set wastes itself. In rounds > 1, read the prior round's evidence and make the
+feature set **measurably different**:
+- `{run_id}_feature_ablation.json` — for any group with `decision == "prune"` (its removal
+  improved OOF), **do not regenerate that group** (e.g. a regressing lag group); a kept group with
+  a near-zero delta is dead weight you may drop or simplify.
+- `{run_id}_feature_importance.json` — on the highest-importance features, add **new** fold-safe
+  constructions the prior round lacked (interactions / ratios / binning of the named top features).
+New constructions are leakage-safe and will be validated by the Step-6A′ ablation gate — so it is
+safe to propose them; the gate prunes any that do not earn their place. The net effect is that
+round N+1's `feature_spec.feature_columns` genuinely differs from round N's.
+
 ---
 
 ## Repair mode

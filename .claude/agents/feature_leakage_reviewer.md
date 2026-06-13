@@ -23,6 +23,8 @@ round. You judge the round's **features**; you never produce them. Write **only*
 | `outputs/scratch/{run_id}/feature_pipeline.py` | the **authored feature code** — read it to audit fold-safety + hardcoding directly |
 | `analysis_plan.json` | `outputs/logs/` (`feature_plan`: excluded/derived columns) |
 | `model_search.json` / `final_model.json` | `outputs/logs/` (feature importances, CV vs holdout); **specialist mode:** `{run_id}_ensemble_meta.json` + `{run_id}_agent_*.json` instead |
+| `{run_id}_feature_importance.json` | `outputs/logs/` — per-feature \|correlation\| importance (which signals are strong vs near-dead) |
+| `{run_id}_feature_ablation.json` | `outputs/logs/` — per **feature group** OOF delta + keep/prune decision from the Step-6A′ ablation gate (which groups help vs are harmful/dead) |
 | `spec_parse.json` | `outputs/logs/` (target, row_id, join keys, official metric) |
 | `round` | passed in the prompt |
 
@@ -55,6 +57,26 @@ Resolve every column name from `spec_parse.json` / `data_profile.json` — never
 **Hardcoding in the feature set**
 - Dataset-specific column names hardcoded in feature logic (direct `df["term"]`, `== "term"`),
   rather than resolved from `spec_parse.json` → flag per the project anti-hardcoding rules.
+
+**Evidence-grounded improvement suggestions (make the loop productive)**
+
+A round that proposes nothing concrete makes the next round repeat this one. **Ground every
+improvement suggestion in the evidence files**, naming actual columns — never a vague "add more
+features":
+- **Dead features → prune.** From `{run_id}_feature_importance.json`, features whose importance
+  sits near the bottom of the observed distribution (decide the cutoff from the spread, do not
+  hardcode) AND that are not per-fold target aggregates → a `feature_pruning` suggestion naming
+  the columns.
+- **Harmful / dead groups → don't rebuild; replace.** From `{run_id}_feature_ablation.json`, any
+  group with `decision == "prune"` (removal improved OOF) is harmful — suggest the programmer
+  **not regenerate it** and, where sensible, propose a concrete alternative construction. A group
+  kept with a near-zero delta is dead weight worth simplifying.
+- **Strong features → build on them.** From the top of `{run_id}_feature_importance.json`, propose
+  `feature_engineering`: specific interactions / ratios / binning on the named top features (e.g.
+  `top_a × top_b`, `top_a / top_b`), so the next round's feature set genuinely differs.
+- Every suggestion carries `category` (a programmer-actionable one: `feature_engineering` /
+  `feature_pruning` / `leakage_fix` / `target_transform`), `expected_impact`, and an
+  `implementation_hint` naming the exact columns/construction.
 
 **Image-sidecar features (the `image_features` group, when present)**
 - These are a **static per-key observation — NOT target-derived**, so they are *not* a per-fold

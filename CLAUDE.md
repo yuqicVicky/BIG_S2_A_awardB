@@ -118,10 +118,14 @@ and `DATA_DESCRIPTION.md`). The prose here gives the **control logic** only.
     ```
     AWARDB_HEARTBEAT_PATH=outputs/logs/{run_id}_<fam>-specialist_progress.jsonl \
       bash -c 'if [ "$(uname)" = "Linux" ]; then ulimit -v <mem_kb>; fi; \
-        python scripts/run_modeling_agent.py --approach <fam> \
+        python scripts/run_modeling_agent.py --approach <fam> --round {r} \
         --run-id {run_id} --cv-folds outputs/logs/{run_id}_cv_folds.json \
         --feature-spec outputs/logs/{run_id}_feature_spec.json'
     ```
+    Pass `--round {r}` so the search **deepens each round** (rounds 2-3 raise tuning iterations +
+    seed-averaging within the fixed pool) — this gives the improvement loop a real model-side lever
+    instead of repeating round 1's identical search. An explicit `AWARDB_TUNE_ITER`/`AWARDB_SEEDS`
+    env still overrides the per-round default.
     `ulimit -v` is a **Linux-only** virtual-memory hard cap — on macOS it limits the virtual address space which Python exhausts at startup, causing immediate SIGKILL (exit 144). The `uname` guard applies the cap only on Linux; on macOS the OS kernel handles memory pressure. Derive `<mem_kb>` from available RAM (e.g. a fraction of total / number of parallel roles) — never a fixed literal. **In the same batch**, concurrently dispatch `modeling-watchdog` (prompt: `run_id`, `round`, `rounds_left`, `remaining_wall_clock_sec`, `roles="gbdt trees linear"`). It tails the shared heartbeats **while the runs are live**, projects each run's total from its per-unit cost, and `pkill`s any projected to overrun its time slice, writing `{run_id}_<fam>-specialist_watchdog.json` + a `budget_pressure` signal. For each role it killed, **relaunch once** in the background with that file's `recommended_budget`. After all roles emit `final_done` (or are killed), dispatch `ensemble-meta` (common-OOF NNLS over floor + surviving specialists, **promotes `submission.csv` keep-best**). If `scripts/run_modeling_agent.py` is absent or `pkill` is unavailable, fall back to plain parallel Task dispatch of `modeling-specialist` (one instance per family, `family` passed in the prompt; no watchdog) — the floor is the safety net.
   - The mode owner also writes `prediction_sanity.json`, `{run_id}_promotion.json`, and `{run_id}_prior_best.csv`.
 - **C.** Dispatch the **three reviewers in parallel** (one batch, 3 Task calls): `model-performance-reviewer` (review mode), `feature-leakage-reviewer` (reads `{run_id}_feature_spec.json` + `feature_pipeline.py`), `generalization-reviewer`. Each writes only its own report.

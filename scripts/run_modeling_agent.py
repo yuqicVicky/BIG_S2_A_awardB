@@ -90,10 +90,28 @@ def main() -> None:
     ap.add_argument("--repo", default=".")
     ap.add_argument("--cv-folds", default=None, help="path to {run_id}_cv_folds.json (canonical shared folds)")
     ap.add_argument("--feature-spec", default=None, help="path to {run_id}_feature_spec.json (authored features)")
+    ap.add_argument("--round", type=int, default=1,
+                    help="improvement round (1+); rounds >1 deepen the fixed-pool search "
+                         "(more tuning iterations + seed-averaging) so a later round can beat an "
+                         "earlier one instead of repeating the identical search")
     args = ap.parse_args()
 
     repo = Path(args.repo).resolve()
     sys.path.insert(0, str(repo))
+
+    # Escalate search depth with the round. The model POOL is fixed, but a deeper
+    # randomized hyperparameter search + more seed-averaging genuinely lowers CV — so
+    # round 1 searches fast/broad and rounds 2-3 search harder, giving the improvement
+    # loop a real model-side lever (previously every round ran the identical search).
+    # setdefault: an explicit env from the orchestrator/watchdog still wins. Multipliers
+    # are derived from the round, never hardcoded absolute budgets.
+    round_no = max(1, int(args.round))
+    effort = {"tune_iter": {1: 6, 2: 12, 3: 18}, "seeds": {1: 2, 2: 3, 3: 4}}
+    tune_iter = effort["tune_iter"].get(round_no, 6 * round_no)
+    seeds = effort["seeds"].get(round_no, 2 + round_no)
+    if round_no > 1:
+        os.environ.setdefault("AWARDB_TUNE_ITER", str(tune_iter))
+        os.environ.setdefault("AWARDB_SEEDS", str(seeds))
 
     # Live progress heartbeat for the modeling-watchdog. Env-gated and
     # dataset-agnostic: a no-op unless AWARDB_HEARTBEAT_PATH is set, so default
@@ -171,6 +189,9 @@ def main() -> None:
     out = {
         "role": f"{args.approach}-specialist",
         "approach": args.approach,
+        "round": round_no,
+        "search_effort": {"tune_iter": os.environ.get("AWARDB_TUNE_ITER"),
+                          "seeds": os.environ.get("AWARDB_SEEDS")},
         "selected_model": mr.selected_model_name,
         "cv_metric": mr.metric_name,
         "cv_score": cv_score,

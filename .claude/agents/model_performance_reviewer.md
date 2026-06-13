@@ -28,6 +28,7 @@ Write **only** the file for your current mode. Never edit model code, feature fi
 | `model_search.json` / `final_model.json` | `outputs/logs/` (general mode) |
 | `{run_id}_ensemble_meta.json` | `outputs/logs/` (specialist mode) |
 | `{run_id}_model_stability_by_split.json` | `outputs/logs/` — per-model `cv_mae_std` / `relative_stability` / `split_scores` (the generalization signal; use it to populate `train_val_gap`/stability instead of leaving it null) |
+| `{run_id}_profile.json` | `outputs/logs/` — the selected model's `residual_analysis` (`by_pred_quantile`, `high_value_bias`, `heteroscedasticity_corr`) for evidence-grounded fix suggestions |
 | `prediction_sanity.json` | `outputs/logs/` |
 | `submission.csv` | repo root (inspect predictions) |
 | `spec_parse.json`, `data_profile.json` | `outputs/logs/` |
@@ -46,6 +47,12 @@ Judge — using LLM judgment, not fixed rules:
   weights proportional to CV performance; which untried family could add diversity.
 - **Hyperparameters:** were the impactful knobs searched (learning rate, regularization,
   depth/leaves); any fixed/narrow ranges; early stopping in use.
+- **Residual evidence → concrete fixes.** Read the selected model's `residual_analysis` (from
+  `{run_id}_profile.json`, or the `residual_analysis` block in the run state) — `by_pred_quantile`,
+  `high_value_bias`, `heteroscedasticity_corr`. If the model systematically under/over-predicts a
+  region (e.g. high-value bias), emit a **concrete, programmer-actionable** suggestion:
+  `target_transform` (log1p/sqrt) when the high tail is underfit, or a stratified/region feature
+  for the biased segment. Tie the suggestion to the residual number, not a hunch.
 
 Write `outputs/logs/model_performance_review.json`:
 
@@ -144,13 +151,31 @@ read from `{run_id}_promotion.json.promoted_choice`) when `feature_audit_review.
 owner excludes the blacklisted candidate from its NNLS pool next round. Leave both falsy/null
 when the promoted winner is clean.
 
+**Actionability gate (so a round is never wasted repeating the last one).** The programmer only
+implements **feature-actionable** suggestions (`feature_engineering` / `feature_pruning` /
+`leakage_fix` / `target_transform` / `cv_validity`); a `model_selection` / `hyperparameter_tuning`
+/ `ensemble` suggestion is a no-op for it. A round therefore produces something new only if at
+least one of these holds:
+- there is ≥1 **feature-actionable** merged suggestion, **or**
+- `round < 3` and the next round will **deepen the model search** (rounds 2-3 raise tuning
+  iterations + seed-averaging — a real model-side change even with the fixed pool).
+
+Before deciding, **rescue feature work**: if no `expected_impact == "high"` suggestion is
+feature-actionable but the reviewer reports contain medium/low feature-actionable ones, **promote
+the best-grounded one to `high`** (it must name concrete columns/construction) so the programmer
+has real work. Only if there is **no** feature-actionable suggestion at any priority **and** the
+search is already at its deepest do you treat the round as non-productive.
+
 **`next_action`** — the single field the orchestrator follows mechanically:
-- `stop_and_report` whenever `approved_for_final == true` OR `high_priority_suggestion_count == 0`
-  OR `round == 3` — **unless** `revert_promotion == true`, which forces `continue_round` while
-  rounds remain (a flagged winner must not ship without a clean fallback).
-- `continue_round` otherwise (`round < 3` and high-impact work remains). Orchestrator runs
-  round `{round+1}`; `analysis-programmer` implements only the feature-related
-  `merged_high_impact_suggestions`.
+- `continue_round` when `round < 3` AND the actionability gate passes (feature work exists — after
+  the rescue above — or the search will deepen) AND `approved_for_final == false`. Orchestrator
+  runs round `{round+1}`; `analysis-programmer` implements the feature-related
+  `merged_high_impact_suggestions` and the specialists search one notch deeper.
+- `continue_round` is also **forced** by `revert_promotion == true` while rounds remain (a flagged
+  winner must not ship without a clean fallback).
+- `stop_and_report` when `approved_for_final == true`, OR `round == 3`, OR the actionability gate
+  fails (no feature-actionable suggestion at any priority AND search already deepest) — record the
+  reason ("non-productive: no actionable feature change") rather than spending an empty round.
 
 Print a ≤120-word summary: best vs baseline, top 1–2 priorities, proceed or finalise.
 
