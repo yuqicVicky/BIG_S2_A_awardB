@@ -1,0 +1,14 @@
+{
+  "run_id": "20260614_175934",
+  "converted_files": [],
+  "already_csv": [
+    "data/test/sampleSubmission.csv",
+    "data/test/test.csv",
+    "data/train/train.csv"
+  ],
+  "skipped_files": [
+    {"file": "data/.DS_Store", "reason": "system metadata file"},
+    {"file": "data/Data_Description.md", "reason": "documentation"}
+  ],
+  "errors": []
+}

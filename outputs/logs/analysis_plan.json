@@ -1,0 +1,388 @@
+{
+  "run_id": "20260614_175934",
+  "planned_at": "2026-06-14T18:05:00Z",
+  "modeling_mode": "specialist",
+  "data_coverage": {
+    "available_sources": [
+      {
+        "source": "data/train/train.csv",
+        "column": "datetime",
+        "dtype": "object",
+        "usage": "datetime_derived",
+        "justification": "Datetime-parseable string (profiler confirmed); extract derived fields — never use raw string as a model feature."
+      },
+      {
+        "source": "data/train/train.csv",
+        "column": "season",
+        "dtype": "int64",
+        "usage": "direct_feature",
+        "justification": "Low-cardinality ordinal (4 values); direct numeric feature; abs_corr=0.163 with target."
+      },
+      {
+        "source": "data/train/train.csv",
+        "column": "holiday",
+        "dtype": "int64",
+        "usage": "direct_feature",
+        "justification": "Binary flag (2 unique values); direct numeric feature."
+      },
+      {
+        "source": "data/train/train.csv",
+        "column": "workingday",
+        "dtype": "int64",
+        "usage": "direct_feature",
+        "justification": "Binary flag (2 unique values); direct numeric feature; prioritized in aggregates per influence file."
+      },
+      {
+        "source": "data/train/train.csv",
+        "column": "weather",
+        "dtype": "int64",
+        "usage": "direct_feature",
+        "justification": "Low-cardinality ordinal (4 values); direct numeric feature; appears in top-influence interactions (hour x weather)."
+      },
+      {
+        "source": "data/train/train.csv",
+        "column": "temp",
+        "dtype": "float64",
+        "usage": "direct_feature",
+        "justification": "Continuous numeric; abs_corr=0.395 with target (3rd highest); high-influence direct feature per influence file."
+      },
+      {
+        "source": "data/train/train.csv",
+        "column": "atemp",
+        "dtype": "float64",
+        "usage": "direct_feature",
+        "justification": "Continuous numeric; abs_corr=0.390 with target; high-influence direct feature per influence file."
+      },
+      {
+        "source": "data/train/train.csv",
+        "column": "humidity",
+        "dtype": "int64",
+        "usage": "direct_feature",
+        "justification": "Continuous numeric (89 unique values); negatively correlated with ridership; retained as direct feature."
+      },
+      {
+        "source": "data/train/train.csv",
+        "column": "windspeed",
+        "dtype": "float64",
+        "usage": "direct_feature",
+        "justification": "Continuous numeric (28 unique values); weather covariate; included as direct feature."
+      },
+      {
+        "source": "data/train/train.csv",
+        "column": "casual",
+        "dtype": "int64",
+        "usage": "target",
+        "justification": "Train-only sub-target (corr=0.690 with count); excluded as direct feature to prevent leakage; used as separate prediction sub-target per spec_parse sub_target_candidates."
+      },
+      {
+        "source": "data/train/train.csv",
+        "column": "registered",
+        "dtype": "int64",
+        "usage": "target",
+        "justification": "Train-only sub-target (corr=0.971 with count); excluded as direct feature to prevent leakage; used as separate prediction sub-target per spec_parse sub_target_candidates."
+      },
+      {
+        "source": "data/train/train.csv",
+        "column": "count",
+        "dtype": "int64",
+        "usage": "target",
+        "justification": "Primary prediction target; log1p transform recommended for RMSLE metric."
+      },
+      {
+        "source": "data/test/test.csv",
+        "column": "datetime",
+        "dtype": "object",
+        "usage": "datetime_derived",
+        "justification": "Same datetime field as train; datetime-derived features computed identically."
+      },
+      {
+        "source": "data/test/test.csv",
+        "column": "season",
+        "dtype": "int64",
+        "usage": "direct_feature",
+        "justification": "Same as train column; present in both train and prediction frames."
+      },
+      {
+        "source": "data/test/test.csv",
+        "column": "holiday",
+        "dtype": "int64",
+        "usage": "direct_feature",
+        "justification": "Same as train column; present in both train and prediction frames."
+      },
+      {
+        "source": "data/test/test.csv",
+        "column": "workingday",
+        "dtype": "int64",
+        "usage": "direct_feature",
+        "justification": "Same as train column; present in both train and prediction frames."
+      },
+      {
+        "source": "data/test/test.csv",
+        "column": "weather",
+        "dtype": "int64",
+        "usage": "direct_feature",
+        "justification": "Same as train column; present in both train and prediction frames."
+      },
+      {
+        "source": "data/test/test.csv",
+        "column": "temp",
+        "dtype": "float64",
+        "usage": "direct_feature",
+        "justification": "Same as train column; present in both train and prediction frames."
+      },
+      {
+        "source": "data/test/test.csv",
+        "column": "atemp",
+        "dtype": "float64",
+        "usage": "direct_feature",
+        "justification": "Same as train column; present in both train and prediction frames."
+      },
+      {
+        "source": "data/test/test.csv",
+        "column": "humidity",
+        "dtype": "int64",
+        "usage": "direct_feature",
+        "justification": "Same as train column; present in both train and prediction frames."
+      },
+      {
+        "source": "data/test/test.csv",
+        "column": "windspeed",
+        "dtype": "float64",
+        "usage": "direct_feature",
+        "justification": "Same as train column; present in both train and prediction frames."
+      },
+      {
+        "source": "data/test/sampleSubmission.csv",
+        "column": "datetime",
+        "dtype": "object",
+        "usage": "key",
+        "justification": "Row identifier in submission frame; used for ordering output, never as a raw model feature."
+      },
+      {
+        "source": "data/test/sampleSubmission.csv",
+        "column": "count",
+        "dtype": "int64",
+        "usage": "excluded",
+        "justification": "Placeholder zeros in sample submission; not a feature or real target — submission template column only."
+      }
+    ],
+    "uncovered_columns": [],
+    "text_columns_exploited": [],
+    "datetime_sources": ["data/train/train.csv::datetime", "data/test/test.csv::datetime"],
+    "target_aggregate_keys": [
+      ["datetime__hour", "season"],
+      ["datetime__hour", "workingday"],
+      ["datetime__hour", "datetime__month", "datetime__year"],
+      ["datetime__hour", "weather"],
+      ["season", "datetime__month"],
+      ["datetime__year", "datetime__month"]
+    ],
+    "image_sidecars": []
+  },
+  "feature_plan": {
+    "direct_numeric": [
+      "season",
+      "holiday",
+      "workingday",
+      "weather",
+      "temp",
+      "atemp",
+      "humidity",
+      "windspeed"
+    ],
+    "categorical_encoding": [
+      {"column": "season", "strategy": "one_hot"},
+      {"column": "weather", "strategy": "one_hot"}
+    ],
+    "datetime_derived": [
+      "datetime__year",
+      "datetime__month",
+      "datetime__month_sin",
+      "datetime__month_cos",
+      "datetime__quarter",
+      "datetime__weekofyear",
+      "datetime__dayofweek",
+      "datetime__dayofweek_sin",
+      "datetime__dayofweek_cos",
+      "datetime__is_weekend",
+      "datetime__hour",
+      "datetime__hour_sin",
+      "datetime__hour_cos",
+      "datetime__ordinal"
+    ],
+    "text_tfidf_svd": [],
+    "per_fold_target_aggregates": [
+      {
+        "name": "agg_hour_season_mean_count",
+        "group_keys": ["datetime__hour", "season"],
+        "agg_fn": "mean",
+        "fit_on": "fold_train_only"
+      },
+      {
+        "name": "agg_hour_season_median_count",
+        "group_keys": ["datetime__hour", "season"],
+        "agg_fn": "median",
+        "fit_on": "fold_train_only"
+      },
+      {
+        "name": "agg_hour_workingday_mean_count",
+        "group_keys": ["datetime__hour", "workingday"],
+        "agg_fn": "mean",
+        "fit_on": "fold_train_only"
+      },
+      {
+        "name": "agg_hour_workingday_median_count",
+        "group_keys": ["datetime__hour", "workingday"],
+        "agg_fn": "median",
+        "fit_on": "fold_train_only"
+      },
+      {
+        "name": "agg_hour_weather_mean_count",
+        "group_keys": ["datetime__hour", "weather"],
+        "agg_fn": "mean",
+        "fit_on": "fold_train_only"
+      },
+      {
+        "name": "agg_hour_month_year_mean_count",
+        "group_keys": ["datetime__hour", "datetime__month", "datetime__year"],
+        "agg_fn": "mean",
+        "fit_on": "fold_train_only"
+      },
+      {
+        "name": "agg_season_month_mean_count",
+        "group_keys": ["season", "datetime__month"],
+        "agg_fn": "mean",
+        "fit_on": "fold_train_only"
+      },
+      {
+        "name": "agg_year_month_mean_count",
+        "group_keys": ["datetime__year", "datetime__month"],
+        "agg_fn": "mean",
+        "fit_on": "fold_train_only"
+      }
+    ],
+    "interactions": [
+      {
+        "name": "datetime__hour_x_season",
+        "columns": ["datetime__hour", "season"],
+        "type": "multiply",
+        "rationale": "Top-ranked feature in influence file (abs_corr=0.416); encode multiplicative hour-season effect."
+      },
+      {
+        "name": "datetime__hour_sin_x_season",
+        "columns": ["datetime__hour_sin", "season"],
+        "type": "multiply",
+        "rationale": "abs_corr=0.408; cyclic hour signal modulated by season."
+      },
+      {
+        "name": "datetime__hour_cos_x_season",
+        "columns": ["datetime__hour_cos", "season"],
+        "type": "multiply",
+        "rationale": "abs_corr=0.406; cyclic hour cosine modulated by season."
+      },
+      {
+        "name": "datetime__hour_sin_x_workingday",
+        "columns": ["datetime__hour_sin", "workingday"],
+        "type": "multiply",
+        "rationale": "Influence file listed hour_sin_x_workingday; commute pattern differs on working vs non-working days."
+      },
+      {
+        "name": "datetime__hour_cos_x_weather",
+        "columns": ["datetime__hour_cos", "weather"],
+        "type": "multiply",
+        "rationale": "abs_corr=0.357; weather modulates hourly ridership."
+      },
+      {
+        "name": "temp_x_season",
+        "columns": ["temp", "season"],
+        "type": "multiply",
+        "rationale": "Influence file prioritizes temp x season interaction; seasonal comfort effect."
+      },
+      {
+        "name": "hour_x_workingday",
+        "columns": ["datetime__hour", "workingday"],
+        "type": "multiply",
+        "rationale": "Influence file recommends hour x workingday; peak commute hours differ on working days."
+      }
+    ],
+    "lag_features": [],
+    "within_period_aggregates": [
+      {
+        "name": "early_day_hour_mean_count",
+        "group_keys": ["datetime__hour", "datetime__month", "datetime__year", "workingday"],
+        "day_filter": "day <= 13",
+        "agg_fn": "mean",
+        "fit_on": "fold_train_only",
+        "experimental": true,
+        "rationale": "Leakage-safe substitute for lags: compute mean count for hours in days 1-13 of each month/year/workingday group. Available for both train validation rows (days 14-19) and test rows (days 20+) since they only use earlier-day training data."
+      },
+      {
+        "name": "early_day_hour_median_count",
+        "group_keys": ["datetime__hour", "datetime__month", "datetime__year", "workingday"],
+        "day_filter": "day <= 13",
+        "agg_fn": "median",
+        "fit_on": "fold_train_only",
+        "experimental": true,
+        "rationale": "Median version of early-day aggregate to reduce outlier sensitivity."
+      },
+      {
+        "name": "early_day_hour_std_count",
+        "group_keys": ["datetime__hour", "datetime__month", "datetime__year"],
+        "day_filter": "day <= 13",
+        "agg_fn": "std",
+        "fit_on": "fold_train_only",
+        "experimental": true,
+        "rationale": "Within-period variability signal for the hour; experimental to validate utility against ablation gate."
+      }
+    ],
+    "imputation": {},
+    "exclude_columns": [
+      "casual",
+      "registered",
+      "datetime (raw string)"
+    ],
+    "sub_target_modeling": {
+      "enabled": true,
+      "sub_targets": ["registered", "casual"],
+      "strategy": "predict_each_independently_then_sum",
+      "rationale": "registered (corr=0.971) and casual (corr=0.690) are train-only additive components of count. Modeling each as a separate target and summing is the primary accuracy lever identified by the influence file. Each sub-model uses the same feature set (excluding casual/registered). Sub-model predictions summed to form count; both sub-models and the direct count model are candidates — best or blend selected by ensemble-meta.",
+      "log1p_transform": true
+    },
+    "log1p_transform_target": true,
+    "rationale": "Comprehensive: all 9 shared covariates used; datetime fully unpacked to hour/cyclic/ordinal features (top influence group); hour x season/workingday/weather interactions cover top-5 influence signals; per-fold target aggregates by hour/season/workingday capture temporal patterns leakage-free; within-period early-day aggregates are the safe lag substitute for this split structure; sub-target modeling (registered+casual) is the primary accuracy lever. Overfit guards: no lags (unsafe per influence file), experimental within-period aggregates flagged for ablation gate, all aggregates fit per fold only."
+  },
+  "completeness_constraints": {
+    "submission_frame_expansion": "6493 prediction rows in data/test/test.csv map directly to 6493 rows in sampleSubmission.csv (same datetime keys, one-to-one); no cross-join expansion needed — each datetime in test file is unique and corresponds to one submission row.",
+    "full_train_refit": true,
+    "sub_target_decomposition": [
+      {"column": "registered", "corr_with_target": 0.9709},
+      {"column": "casual", "corr_with_target": 0.6904}
+    ],
+    "missing_value_handling_required": false,
+    "two_column_submission": true,
+    "log1p_target_transform": true,
+    "submission_columns": ["datetime", "count"],
+    "notes": "No missingness in any column (all rates 0.0 per data_profile.json). RMSLE metric requires non-negative predictions; clip to 0 before expm1 inverse transform. Sub-target predictions (registered + casual) must each be clipped to >= 0 and summed; the sum is the count prediction."
+  },
+  "critique": {
+    "verdict": "PASS",
+    "checks_performed": [1, 2, 3, 4, 5, 6, 7],
+    "blocking_issues": [],
+    "advisory_issues": [
+      "Within-period aggregates (early_day_hour_*) are experimental and flagged for Step-6A' ablation gate validation before entering specialist models."
+    ],
+    "fixes_applied": [
+      "datetime__day excluded from direct features per influence file recommendation (distribution shift; day mean shifts from 10 in train to 25 in test).",
+      "casual and registered classified as 'target' (sub-target) not 'excluded' to correctly represent their usage as separate prediction targets.",
+      "sampleSubmission.csv::count classified 'excluded' with justification (placeholder zeros, submission template only).",
+      "No lag features planned: influence file confirms no safe same-month lags available; within-period early-day aggregates used instead.",
+      "file_sidecars is empty; image_sidecars block is empty list — no sidecar coverage gap."
+    ]
+  },
+  "plan_warnings": [
+    "WARN: evaluation metric inferred as RMSLE from competition context — confirm before modeling.",
+    "WARN: within_period_aggregates require careful fold-safe construction: day_filter must use only days <= 13 from the fold-train portion, not the validation rows (days 14-19).",
+    "WARN: sub-target modeling (registered+casual) is the primary accuracy lever; ensure ensemble-meta considers both sub-target-sum and direct count models in NNLS blend.",
+    "WARN: datetime__day must NOT be used as a direct feature — mean shifts from ~10 (train) to ~25 (test), causing distribution shift per influence file."
+  ]
+}

@@ -1,0 +1,8 @@
+{
+  "run_id": "20260614_175934",
+  "stage": "schema",
+  "status": "pass",
+  "reasons": [
+    "sample_submission resolved; row_id_column and target_column present; within_period_holdout strategy selected with sub_period_feature=day holdout_threshold=14"
+  ]
+}

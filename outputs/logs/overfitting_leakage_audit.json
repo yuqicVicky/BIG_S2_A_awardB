@@ -1,0 +1,88 @@
+{
+  "round": 1,
+  "reviewer": "generalization-reviewer",
+  "run_id": "20260614_175934",
+  "overall_verdict": "WARN",
+  "high_overfitting_risk": false,
+  "checks": [
+    {
+      "name": "cv_strategy_validity",
+      "verdict": "pass",
+      "severity": "low",
+      "detail": "cv_folds.json strategy='within_period_holdout' matches validation_strategy.json.chosen_strategy='within_period_holdout'. Val rows=3434 (days 14-19), train rows=7452 (days 1-13), per spec_parse.json sub_period_ranges train_days=1-19 / prediction_days=20-end. Correctly simulates the hidden-test gap. No group leakage; holdout not contaminated."
+    },
+    {
+      "name": "cv_single_split_variance",
+      "verdict": "warn",
+      "severity": "medium",
+      "detail": "n_folds=1 gives a single OOF estimate with cv_mae_std=0 (artificial stability, from agent_gbdt.json cv_stability). A single within-period holdout produces high-variance score estimates; the true generalization error cannot be bounded. Floor model_selection.json used a different scheme (GroupKFold n_splits=5 on year_month blocks) making floor vs gbdt OOF comparison (25.811 vs 25.549) methodologically inconsistent — they were scored on different fold assignments."
+    },
+    {
+      "name": "cv_holdout_calibration",
+      "verdict": "pass",
+      "severity": "low",
+      "detail": "No separate held-out test score is available from any agent file; calibration gap abs(cv-holdout) cannot be computed. Only OOF val MAE is reported: floor=25.811, gbdt=25.549, blend=25.582 (ensemble_meta.json). Since there is no second holdout period, this check is underdetermined. Scores are self-consistent within the single-split setup. Single-round run; no round-over-round regression to judge."
+    },
+    {
+      "name": "cv_metric_vs_official_metric",
+      "verdict": "warn",
+      "severity": "medium",
+      "detail": "Official evaluation metric is RMSLE (spec_parse.json evaluation_metric='rmsle'). All CV scoring uses block_mae (agent_gbdt.json cv_metric='block_mae'). Model selection, NNLS blending, and keep-best decisions are all based on MAE — a proxy that does not penalise relative errors on small counts the same way RMSLE does. Target skewness=1.242 (data_profile.json) and data_profile.json recommend_log_transform=true confirm log1p alignment is needed for RMSLE optimisation. MAE-selected model may not be RMSLE-optimal."
+    },
+    {
+      "name": "improvement_over_baseline",
+      "verdict": "warn",
+      "severity": "medium",
+      "detail": "Improvement from dummy_mean baseline (block_mae=143.019, model_selection.json) to best gbdt OOF (25.549) is 82.1%, exceeding the >20% single-round threshold. However, baseline is a degenerate dummy_mean — 82% over a dummy mean is expected for a competent GBDT on a time-series count target. No evidence of target leakage: casual/registered are absent from authored_features_used (agent_gbdt.json); no future data used."
+    },
+    {
+      "name": "prediction_sanity",
+      "verdict": "pass",
+      "severity": "low",
+      "detail": "Confirmed via prediction_sanity.json and direct inspection of submission.csv (6493 rows). CV=0.919 (well above 0.01 threshold). pred_min=0.439, pred_max=875.35; train range [1, 977] — no clipping at bounds (0% at lower/upper). 0% outside ±5σ of train target. pred_mean=188.65 vs train_mean=191.57 (ratio=0.985, KS≈0.007) — no distribution shift. Row count exact match."
+    },
+    {
+      "name": "train_val_gap",
+      "verdict": "pass",
+      "severity": "low",
+      "detail": "No in-sample train-fold predictions are provided by specialist agents (only OOF val predictions exist in oof_gbdt.csv). A direct train-vs-val MAE gap cannot be computed. Proxy check: val target mean=196.56 vs train target mean=189.27 (3.8% shift, days 14-19 vs days 1-13) — mild temporal drift consistent with within-month structure, not a leakage indicator. No evidence of overfitting from available artifacts."
+    },
+    {
+      "name": "leakage_risk_casual_registered",
+      "verdict": "pass",
+      "severity": "low",
+      "detail": "validation_strategy.json flags 'casual' and 'registered' as high-severity leakage risks (train-only target components). agent_gbdt.json authored_features_used contains only OHE/interaction features (season__ohe_*, weather__ohe_*, temp_x_season, hour_x_workingday) — neither casual nor registered appears. Leakage exclusion honoured."
+    }
+  ],
+  "suggestions": [
+    {
+      "priority": "high",
+      "category": "cv_validity",
+      "suggestion": "Switch CV scoring metric from block_mae to RMSLE (log1p(pred) vs log1p(actual)) to align model selection with the official leaderboard metric. MAE-selected models may rank differently under RMSLE, especially for low-count hours.",
+      "expected_impact": "high",
+      "implementation_hint": "In scoring loops replace mean(abs(pred-true)) with sqrt(mean((log1p(pred)-log1p(true))**2)); clip pred to >=0 before log1p. Update model_selection.json metric_name and specialist cv_metric."
+    },
+    {
+      "priority": "medium",
+      "category": "cv_validity",
+      "suggestion": "Upgrade from a single within-period holdout (n_folds=1) to a rolling or repeated within-period CV to reduce score variance. Use each month's days 14-19 as a rotating val set across multiple month-windows.",
+      "expected_impact": "medium",
+      "implementation_hint": "In cv_folds generation, iterate over each of the 24 months: train on days 1-13 of that month plus all prior months, validate on days 14-19 of that month. Average OOF MAEs across months. Keeps within-period structure per validation_strategy.json."
+    },
+    {
+      "priority": "medium",
+      "category": "regularization",
+      "suggestion": "Ensure GBDT training applies log1p target transform to align the loss with RMSLE. data_profile.json recommend_log_transform=true; expm1 back-transform predictions before submission.",
+      "expected_impact": "high",
+      "implementation_hint": "Set y_train = np.log1p(raw_counts); train on transformed target; prediction = np.expm1(model.predict(X_test)). Clip final predictions to >=0."
+    },
+    {
+      "priority": "low",
+      "category": "cv_validity",
+      "suggestion": "Standardise floor model_selection.json CV to use the same canonical cv_folds.json as specialists, so keep-best NNLS blending compares OOF scores on identical fold assignments rather than mixing GroupKFold(5) vs within-period-holdout.",
+      "expected_impact": "medium",
+      "implementation_hint": "Pass --cv-folds outputs/logs/{run_id}_cv_folds.json to the floor pipeline's main.py; disable its internal holdout_strategy in favour of the canonical folds file."
+    }
+  ],
+  "notes": "Overall WARN: no HIGH-severity fires. Two medium risks: CV optimises MAE not RMSLE (the official metric per spec_parse.json), and a single-split holdout gives zero variance estimate with floor/specialist OOF comparisons on inconsistent fold structures. Prediction distribution is healthy (CV=0.919, mean ratio=0.985, no clipping). No leakage of casual/registered into features confirmed."
+}

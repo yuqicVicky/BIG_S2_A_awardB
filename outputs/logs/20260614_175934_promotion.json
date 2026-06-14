@@ -1,0 +1,18 @@
+{
+  "round": 1,
+  "promoted_choice": "best_single:gbdt",
+  "promoted_cv_score": 25.549220169969686,
+  "prior_best_choice": "floor",
+  "prior_best_submission": "outputs/logs/20260614_175934_prior_best.csv",
+  "nnls_weights": {
+    "floor": 0.41934546445460447,
+    "gbdt": 0.5663282362412759,
+    "linear": 0.01432629930411965
+  },
+  "oof_scores": {
+    "floor": 25.811094238786563,
+    "gbdt": 25.549220169969686,
+    "linear": 90.47769520951982
+  },
+  "overwrote_submission": true
+}

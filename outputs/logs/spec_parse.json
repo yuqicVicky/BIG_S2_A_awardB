@@ -1,0 +1,90 @@
+{
+  "run_id": "20260614_175934",
+  "parsed_at": "2026-06-14T18:00:00",
+  "source": "DATA_DESCRIPTION.md",
+  "train_file": "data/train/train.csv",
+  "prediction_file": "data/test/test.csv",
+  "sample_submission_file": "data/test/sampleSubmission.csv",
+  "target_column": "count",
+  "row_id_column": "datetime",
+  "join_keys": ["datetime"],
+  "evaluation_metric": "rmsle",
+  "output_format": "continuous",
+  "task_type": "regression",
+  "confidence": 0.95,
+  "detected_structure": {
+    "time_columns": ["datetime"],
+    "group_columns": [],
+    "block_columns": [],
+    "panel_structure": false,
+    "join_keys": ["datetime"],
+    "split_pattern": {
+      "split_type": "within-period cross-sub-period",
+      "cv_recommendation": "Within each calendar month, train rows are days 1-19 and prediction rows are days 20-end. CV must hold out late-sub-period rows (days 14-19) as a validation set while keeping early-sub-period rows (days 1-13) in train; a simple last-N% chronological holdout will be misleadingly optimistic because the split pattern repeats within every month. Within-period aggregates (e.g. month-level means from days 1-13) are valid features.",
+      "sub_period_ranges": {
+        "train_days": "1-19",
+        "prediction_days": "20-end-of-month",
+        "overlap_months": 24
+      },
+      "sub_target_candidates": [
+        {"column": "registered", "corr_with_target": 0.9709},
+        {"column": "casual", "corr_with_target": 0.6904}
+      ]
+    }
+  },
+  "file_schemas": {
+    "data/train/train.csv": {
+      "n_rows": 10886,
+      "n_cols": 12,
+      "columns": ["datetime", "season", "holiday", "workingday", "weather", "temp", "atemp", "humidity", "windspeed", "casual", "registered", "count"],
+      "dtypes": {
+        "datetime": "object",
+        "season": "int64",
+        "holiday": "int64",
+        "workingday": "int64",
+        "weather": "int64",
+        "temp": "float64",
+        "atemp": "float64",
+        "humidity": "int64",
+        "windspeed": "float64",
+        "casual": "int64",
+        "registered": "int64",
+        "count": "int64"
+      }
+    },
+    "data/test/test.csv": {
+      "n_rows": 6493,
+      "n_cols": 9,
+      "columns": ["datetime", "season", "holiday", "workingday", "weather", "temp", "atemp", "humidity", "windspeed"],
+      "dtypes": {
+        "datetime": "object",
+        "season": "int64",
+        "holiday": "int64",
+        "workingday": "int64",
+        "weather": "int64",
+        "temp": "float64",
+        "atemp": "float64",
+        "humidity": "int64",
+        "windspeed": "float64"
+      }
+    },
+    "data/test/sampleSubmission.csv": {
+      "n_rows": 6493,
+      "n_cols": 2,
+      "columns": ["datetime", "count"],
+      "dtypes": {
+        "datetime": "object",
+        "count": "int64"
+      }
+    }
+  },
+  "scoring_subset": null,
+  "file_sidecars": [],
+  "sample_submission_validated": true,
+  "warnings": [
+    "WARN: within-period cross-sub-period split detected — train covers days 1-19 of each month, prediction covers days 20-end. A simple last-N% chronological holdout is misleadingly optimistic; CV must hold out late-sub-period days (e.g. days 14-19) while keeping early-sub-period days in train to match the real split structure.",
+    "WARN: evaluation_metric not explicitly named in DATA_DESCRIPTION.md — inferred as rmsle from Kaggle Bike Sharing Demand competition context (continuous count target, standard competition metric). Confirm before modeling.",
+    "WARN: sub_target_candidates 'registered' (corr=0.970) and 'casual' (corr=0.690) are train-only columns absent from prediction file. They are leakage as direct features but are valid as separate prediction sub-targets (predict each and sum to count)."
+  ],
+  "errors": []
+}

@@ -1,0 +1,21 @@
+{
+  "data_dir": "/Users/yuqic/Documents/Claude/Projects/STAI-X challenge/award-b-repo/data",
+  "description_path": "/Users/yuqic/Documents/Claude/Projects/STAI-X challenge/award-b-repo/data/DATA_DESCRIPTION.md",
+  "train_target_file": "/Users/yuqic/Documents/Claude/Projects/STAI-X challenge/award-b-repo/data/train/train.csv",
+  "train_covariates_file": "/Users/yuqic/Documents/Claude/Projects/STAI-X challenge/award-b-repo/data/test/test.csv",
+  "validation_covariates_file": "/Users/yuqic/Documents/Claude/Projects/STAI-X challenge/award-b-repo/data/test/test.csv",
+  "sample_submission_file": "/Users/yuqic/Documents/Claude/Projects/STAI-X challenge/award-b-repo/data/test/sampleSubmission.csv",
+  "row_id_column": "datetime",
+  "target_column": "count",
+  "join_keys": [],
+  "time_column": "datetime",
+  "category_column": null,
+  "block_column": "datetime",
+  "inferred_notes": [
+    "train_target_file: train/train.csv",
+    "train_covariates_file: test/test.csv",
+    "validation_covariates_file: test/test.csv",
+    "sample_submission_file: test/sampleSubmission.csv",
+    "No explicit join keys inferred; row-order fallback may be used."
+  ]
+}

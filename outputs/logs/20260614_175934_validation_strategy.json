@@ -1,0 +1,13 @@
+{
+  "type": "canonical_external",
+  "n_splits": 1,
+  "group_column": "datetime",
+  "stability": {
+    "split_scores": [
+      25.9101
+    ],
+    "cv_mae_mean": 25.9101,
+    "cv_mae_std": 0.0,
+    "relative_stability": 0.0
+  }
+}

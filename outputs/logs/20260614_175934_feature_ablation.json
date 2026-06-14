@@ -1,0 +1,107 @@
+{
+  "run_id": "20260614_175934",
+  "status": "ok",
+  "round": 1,
+  "metric_name": "block_mae",
+  "ablation_model": "hist_gradient_boosting",
+  "baseline_mae": 30.052572,
+  "prune_margin": 0.30052572,
+  "per_group": {
+    "per_fold_aggregates": {
+      "mae_without": 27.076982,
+      "delta": -2.97559,
+      "decision": "prune",
+      "n_cols": 11,
+      "cols": [
+        "agg_hour_season_mean_count",
+        "agg_hour_season_median_count",
+        "agg_hour_workingday_mean_count",
+        "agg_hour_workingday_median_count",
+        "agg_hour_weather_mean_count",
+        "agg_hour_month_year_mean_count",
+        "agg_season_month_mean_count",
+        "agg_year_month_mean_count",
+        "early_day_hour_mean_count",
+        "early_day_hour_median_count",
+        "early_day_hour_std_count"
+      ]
+    },
+    "datetime_derived": {
+      "mae_without": 31.629718,
+      "delta": 1.577147,
+      "decision": "keep",
+      "n_cols": 14,
+      "cols": [
+        "datetime__year",
+        "datetime__month",
+        "datetime__quarter",
+        "datetime__weekofyear",
+        "datetime__dayofweek",
+        "datetime__is_weekend",
+        "datetime__hour",
+        "datetime__ordinal",
+        "datetime__hour_sin",
+        "datetime__hour_cos",
+        "datetime__month_sin",
+        "datetime__month_cos",
+        "datetime__dayofweek_sin",
+        "datetime__dayofweek_cos"
+      ]
+    },
+    "other_features": {
+      "mae_without": 34.310116,
+      "delta": 4.257545,
+      "decision": "keep",
+      "n_cols": 23,
+      "cols": [
+        "atemp",
+        "holiday",
+        "humidity",
+        "season",
+        "temp",
+        "weather",
+        "windspeed",
+        "workingday",
+        "season__ohe_1",
+        "season__ohe_2",
+        "season__ohe_3",
+        "season__ohe_4",
+        "weather__ohe_1",
+        "weather__ohe_2",
+        "weather__ohe_3",
+        "weather__ohe_4",
+        "datetime__hour_x_season",
+        "datetime__hour_sin_x_season",
+        "datetime__hour_cos_x_season",
+        "datetime__hour_sin_x_workingday",
+        "datetime__hour_cos_x_weather",
+        "temp_x_season",
+        "hour_x_workingday"
+      ]
+    }
+  },
+  "pruned_groups": [
+    "per_fold_aggregates"
+  ],
+  "kept_groups": [
+    "datetime_derived",
+    "other_features"
+  ],
+  "pruned_columns": [
+    "agg_hour_month_year_mean_count",
+    "agg_hour_season_mean_count",
+    "agg_hour_season_median_count",
+    "agg_hour_weather_mean_count",
+    "agg_hour_workingday_mean_count",
+    "agg_hour_workingday_median_count",
+    "agg_season_month_mean_count",
+    "agg_year_month_mean_count",
+    "early_day_hour_mean_count",
+    "early_day_hour_median_count",
+    "early_day_hour_std_count"
+  ],
+  "n_pruned_columns": 11,
+  "feature_spec_full": "outputs/logs/20260614_175934_feature_spec_full.json",
+  "feature_spec_pruned": "outputs/logs/20260614_175934_feature_spec.json",
+  "determinism_seed": 42
+}

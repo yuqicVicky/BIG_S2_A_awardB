@@ -1,0 +1,74 @@
+{
+  "run_id": "20260614_175934",
+  "checked_at": "2026-06-14T10:53:29.082396Z",
+  "overall_verdict": "PASS",
+  "high_overfitting_risk": false,
+  "checks": [
+    {
+      "check_id": 1,
+      "check_name": "near_constant_predictions",
+      "verdict": "PASS",
+      "severity": "LOW",
+      "detail": "Prediction variance is high (CV=0.9188), not constant.",
+      "evidence": {
+        "cv": 0.9188,
+        "pred_mean": 188.65,
+        "pred_std": 173.33
+      }
+    },
+    {
+      "check_id": 2,
+      "check_name": "aggressive_clipping",
+      "verdict": "PASS",
+      "severity": "LOW",
+      "detail": "Clipping fraction is normal (0.03%).",
+      "evidence": {
+        "clip_fraction": 0.0003
+      }
+    },
+    {
+      "check_id": 3,
+      "check_name": "unrealistic_prediction_range",
+      "verdict": "PASS",
+      "severity": "LOW",
+      "detail": "Prediction range is consistent with training target (outlier_frac=0.0%).",
+      "evidence": {
+        "training_mean": 191.57,
+        "training_std": 181.14,
+        "pred_min": 0.44,
+        "pred_max": 875.35,
+        "outlier_fraction": 0.0
+      }
+    },
+    {
+      "check_id": 4,
+      "check_name": "prediction_distribution_shift",
+      "verdict": "PASS",
+      "severity": "LOW",
+      "detail": "Prediction distribution consistent with training target (KS=0.0246, mean_ratio=0.0152).",
+      "evidence": {
+        "ks_statistic": 0.0246,
+        "ks_pvalue": 0.9999,
+        "mean_ratio": 0.0152
+      }
+    },
+    {
+      "check_id": 5,
+      "check_name": "improvement_over_baseline",
+      "verdict": "PASS",
+      "severity": "LOW",
+      "detail": "Best model (block_mae=25.549) is 82.1% better than dummy_mean baseline (block_mae=143.019). Plausible improvement.",
+      "evidence": {
+        "best_cv_score": 25.549,
+        "baseline_score": 143.019,
+        "improvement": 0.821
+      }
+    }
+  ],
+  "summary": {
+    "total": 5,
+    "passed": 5,
+    "warned": 0,
+    "failed": 0
+  }
+}

@@ -1,0 +1,10 @@
+{
+  "run_id": "20260614_175934",
+  "generated_at": "2026-06-14T10:04:02.044660+00:00",
+  "method": "rule_based_from_missingness_profile",
+  "global_policy": "No columns have missing values in this dataset. No imputation is required. If future splits reveal edge-case missingness, apply: numeric \u2192 median (robust to skew); categorical \u2192 mode or 'missing' sentinel.",
+  "column_plans": {},
+  "notes": [
+    "All columns are complete in both train and prediction; imputation plan is trivial."
+  ]
+}

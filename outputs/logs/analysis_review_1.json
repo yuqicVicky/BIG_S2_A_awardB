@@ -1,0 +1,52 @@
+{
+  "round": 1,
+  "reviewer": "model-performance-reviewer (lead)",
+  "source_reports": [
+    "model_performance_review.json",
+    "feature_audit_review.json",
+    "overfitting_leakage_audit.json"
+  ],
+  "current_best_cv_score": 25.549220169969686,
+  "metric": "block_mae",
+  "baseline_cv_score": 143.01911446337385,
+  "prev_round_cv_score": null,
+  "round_over_round_improvement_pct": null,
+  "improvement_vs_baseline_pct": 82.14,
+  "merged_high_impact_suggestions": [
+    {
+      "source_reviewer": "model-performance-reviewer",
+      "category": "target_transform",
+      "suggestion": "Implement sub-target modeling: predict 'registered' and 'casual' separately per fold (corr 0.97/0.69 with count), sum predictions to form 'count'. Both columns are train-only — no leakage risk.",
+      "expected_impact": "high",
+      "implementation_hint": "In feature_pipeline.py, train two per-fold GBDT models on registered and casual targets using early-day (day<=13) train rows; store OOF preds as registered_pred and casual_pred; sum as count_pred. Refit on full train for prediction frame."
+    },
+    {
+      "source_reviewer": "model-performance-reviewer",
+      "category": "feature_engineering",
+      "suggestion": "Drop 'datetime__day' from all model features: train mean ~10 vs test mean ~25 (z=2.78) causes distribution shift. Currently present in authored specialist features; its removal will improve generalization to the 20-31 day range.",
+      "expected_impact": "high",
+      "implementation_hint": "Remove 'datetime__day' from feature_spec.json groups and feature_pipeline.py output columns. Flag confirmed in validation_implications and data-pattern-analyzer output."
+    },
+    {
+      "source_reviewer": "feature-leakage-reviewer",
+      "category": "feature_engineering",
+      "suggestion": "Add hour_x_temp and hour_x_humidity interaction features: datetime__hour is the strongest signal and temp/humidity modulate ridership at each hour. These are absent from current authored_features_used.",
+      "expected_impact": "high",
+      "implementation_hint": "Add multiply interactions: hour_x_temp = datetime__hour * temp; hour_x_humidity = datetime__hour * humidity. Append to plan interactions spec in feature_pipeline.py."
+    },
+    {
+      "source_reviewer": "generalization-reviewer",
+      "category": "cv_validity",
+      "suggestion": "Switch CV scoring metric from block_mae to RMSLE to align model selection with the official leaderboard metric. MAE-optimal models may differ from RMSLE-optimal, especially on low-count hours. data_profile.json recommend_log_transform=true confirms log1p alignment is needed.",
+      "expected_impact": "high",
+      "implementation_hint": "Replace mean(abs(pred-true)) with sqrt(mean((log1p(pred)-log1p(true))**2)) in all scoring loops; clip pred>=0 before log1p. Update metric_name in model_selection.json and specialist cv_metric fields."
+    }
+  ],
+  "high_priority_suggestion_count": 4,
+  "blocking_leakage": false,
+  "approved_for_final": true,
+  "revert_promotion": false,
+  "blacklist_candidate": "linear",
+  "next_action": "stop_and_report",
+  "notes": "Round 1 complete. GBDT achieves 82.1% improvement over dummy baseline (block_mae 25.549 vs 143.019). No HIGH-severity leakage found; promoted GBDT winner is clean. Per CLAUDE.md improvement-round limit=1, next_action is stop_and_report unconditionally. Linear family blacklisted: NNLS weight 0.014, OOF 90.48 (255% worse than floor) — pure dead weight. Top future priorities: sub-target modeling (registered+casual), drop datetime__day distribution-shift feature, add hour interaction features, and align CV metric to official RMSLE."
+}

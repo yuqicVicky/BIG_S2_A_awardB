@@ -1,0 +1,70 @@
+{
+  "run_id": "20260614_175934",
+  "reviewer": "report-reviewer",
+  "reviewed_at": "2026-06-14T18:05:00Z",
+  "report_path": "report.pdf",
+  "checks": [
+    {
+      "check": 1,
+      "name": "numbers_match_logs",
+      "verdict": "pass",
+      "location": "Sections 1, 3, 6, 7, 8.6; Appendix",
+      "detail": "All critical numbers verified against logs. Train rows 10,886 (data_profile.json n_rows=10886). Pred rows 6,493 (data_profile.json n_rows=6493). Target mean 191.57 reported as '192' (acceptable rounding). Skewness 1.24 (log: 1.2419). log1p_skewness -0.85 (log: -0.8513). GBDT cv_score 25.549 (agent_gbdt.json: 25.549220). Floor 25.811 (ensemble_meta.json: 25.811094). Baseline 143.0 (model_selection.json dummy_mean: 143.019). Improvement 82.1%: (143.019-25.549)/143.019=82.1%. NNLS blend 25.582 (ensemble_meta.json: 25.58214). Linear specialist 90.478 (agent_linear.json: 90.47770). NNLS weights floor=0.419, gbdt=0.566, linear=0.014 match ensemble_meta.json. Ablation delta -2.98 (feature_ablation.json: -2.97559, within 0.005 tol). Prediction sanity: range [0.44,875.35], mean 188.65, std 173.3, ratio 0.985 all match prediction_sanity.json. Sub-target correlations 0.971/0.690 match data_profile.json (0.9709/0.6904). Section 6 floor stability scores 25.9-28.4 std 0.90 match model_selection.json holdout_strategy.stability for lightgbm_sqrt (min 25.897, max 28.418, std 0.903). Minor: these stability scores attributed to 'floor' in Section 8.3 are from lightgbm_sqrt constituent, not the floor NNLS stack itself — the stack has no per-split scores. Numbers are real log values; no invented data. Tolerable WARN only."
+    },
+    {
+      "check": 2,
+      "name": "required_sections_present",
+      "verdict": "pass",
+      "location": "Headings 1-11; subsections 8.1-8.8",
+      "detail": "All 11 sections present: 1 Executive Summary, 2 Task Interpretation, 3 Data Overview, 4 Preprocessing & Feature Engineering, 5 Validation Strategy, 6 Candidate Models, 7 Selected Model & Predictions, 8 Overfitting & Generalization Controls, 9 Reproducibility & Integrity Check, 10 Limitations, 11 Appendix. All 8 subsections 8.1-8.8 present: 8.1 Validation Strategy Rationale, 8.2 Train vs Validation Gap, 8.3 Number of Validation Splits, 8.4 Model Complexity Summary, 8.5 Leakage Audit, 8.6 Prediction Sanity, 8.7 Final Model-Selection Rationale, 8.8 Repair-Rerun Status."
+    },
+    {
+      "check": 3,
+      "name": "causal_language_absent",
+      "verdict": "pass",
+      "location": "Section 10 final paragraph; all data-relationship sentences",
+      "detail": "No assertive causal language found in data-relationship sentences. Section 10 final paragraph contains the phrase 'they do not, in the sense explored here, cause those counts' — this explicitly denies causality rather than asserting it; not a violation. Terms 'causes', 'led to', 'leads to', 'results in', 'drives', 'determines', 'effect of', 'due to' do not appear in any assertive data-relationship context. All associations stated as correlational."
+    },
+    {
+      "check": 4,
+      "name": "report_describes_this_run",
+      "verdict": "pass",
+      "location": "Header; Sections 1, 2, 4, 5, 6, 7; Appendix run metadata",
+      "detail": "Run ID 20260614_175934 correctly stated in header and Appendix. All column names (datetime, count, registered, casual, temp, atemp, humidity, windspeed, season, weather, holiday, workingday) are present in data_profile.json. Official metric named as block-MAE (proxy) with RMSLE as the leaderboard metric — consistent with spec_parse.json evaluation_metric='rmsle' and agent_gbdt.json cv_metric='block_mae'. Report correctly names block-MAE as the selection metric used and acknowledges the RMSLE gap throughout (Sections 2, 5, and 10). No fixed conclusions contradict log values. Model names match agent files (LightGBM stack, elastic net). Submission row count 6,493 matches submission_validation.json."
+    },
+    {
+      "check": 5,
+      "name": "limitations_coverage",
+      "verdict": "warn",
+      "location": "Section 10; data_profile.json summary_warnings",
+      "detail": "Five summary_warnings in data_profile.json. (1) Within-period CV split warning — addressed in Sections 5 and 10 first limitation. (2) RMSLE metric — addressed in Sections 2, 5, and 10 second limitation. (3) 'registered' train-only leakage — addressed in Section 3 table note, Section 4, 8.5, and 10 third limitation. (4) 'casual' train-only leakage — same coverage. (5) 'MissingnessAuditor not found in src/' — this is a pipeline tooling warning, not a data critical_missing warning; no corresponding limitation required. No critical_missing warnings present in data_profile.json (all missing rates are 0.0). WARN for the tooling warning being unmentioned, but it is not a data limitation."
+    },
+    {
+      "check": 6,
+      "name": "baseline_comparison_present",
+      "verdict": "pass",
+      "location": "Section 6 candidate table; Section 7",
+      "detail": "Baseline dummy_mean explicitly stated in Section 6 table with block-MAE 143.019 (matches model_selection.json). All candidates compared against it. Section 7 states '82.1% over the dummy baseline'. model_search.json path: using model_selection.json which shows dummy_mean as the first model_scores entry. Baseline was beaten by all non-linear candidates. Baseline comparison present and accurate."
+    },
+    {
+      "check": 7,
+      "name": "overfitting_section_completeness",
+      "verdict": "pass",
+      "location": "Sections 8.1-8.8",
+      "detail": "8.1 Validation strategy rationale: present and sourced from validation_strategy.json (within_period_holdout, days 14-19). 8.2 Train-val gap: explicitly notes no in-sample train predictions recorded; provides proxy analysis (3.8% temporal drift) + heteroscedasticity correlation 0.454 — sourced from overfitting_leakage_audit.json train_val_gap check. 8.3 n_splits: 'single' holdout plus 5-fold floor — sourced from agent_gbdt.json cv_stability (n_folds=1) and model_selection.json holdout_strategy (n_splits=5). 8.4 Model complexity: lists all candidate families and scores sourced from model_selection.json. 8.5 Leakage audit: references exclusion of registered/casual, ablation pruning — sourced from feature_audit_review.json. 8.6 Prediction sanity: all 5 checks cited as passing — sourced from prediction_sanity.json. 8.7 Selection rationale: GBDT over NNLS blend because 25.549 < 25.582 — sourced from ensemble_meta.json. 8.8 Repair status: 'No repair rerun was triggered' — consistent with analysis_review_1.json (single round, stop_and_report)."
+    }
+  ],
+  "summary": {
+    "total_checks": 7,
+    "passed": 6,
+    "warned": 1,
+    "failed": 0
+  },
+  "required_revisions": [],
+  "optional_improvements": [
+    "Section 8.3 attributes floor stability scores (std=0.90, range 25.9-28.4) to 'the floor model' but these per-split scores are from the lightgbm_sqrt constituent (model_selection.json holdout_strategy.stability); the NNLS floor stack itself has no per-split breakdown. A precise attribution would say 'the best floor constituent (LightGBM-sqrt)' to avoid confusion.",
+    "Section 10 does not mention the MissingnessAuditor tooling warning from data_profile.json summary_warnings, though this is a pipeline note rather than a data limitation and its omission does not affect correctness."
+  ],
+  "approved": true,
+  "next_action": "approve_report"
+}

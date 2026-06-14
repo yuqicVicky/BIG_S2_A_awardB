@@ -1,0 +1,342 @@
+{
+  "run_id": "20260614_175934",
+  "audited_at": "2026-06-14T10:06:57Z",
+  "phase": "pre",
+  "verdict": "warn",
+  "dynamic_suspicious_terms": [
+    "atemp",
+    "casual",
+    "datetime",
+    "holiday",
+    "humidity",
+    "registered",
+    "samplesubmission.csv",
+    "season",
+    "temp",
+    "test.csv",
+    "train.csv",
+    "weather",
+    "windspeed",
+    "workingday"
+  ],
+  "findings": [
+    {
+      "file": "src/data_agent/audit.py",
+      "line": 48,
+      "term": "rate_per_10000_ed_visits",
+      "context": "STATIC_TERMS catalogue definition \u2014 term in a list of 3+ search-pattern entries (audit tool data, not operational use)",
+      "classification": "acceptable",
+      "severity": "info"
+    },
+    {
+      "file": "src/data_agent/audit.py",
+      "line": 49,
+      "term": "overdose_category",
+      "context": "STATIC_TERMS catalogue definition \u2014 term in a list of 3+ search-pattern entries (audit tool data, not operational use)",
+      "classification": "acceptable",
+      "severity": "info"
+    },
+    {
+      "file": "src/data_agent/audit.py",
+      "line": 50,
+      "term": "all_drugs",
+      "context": "STATIC_TERMS catalogue definition \u2014 term in a list of 3+ search-pattern entries (audit tool data, not operational use)",
+      "classification": "acceptable",
+      "severity": "info"
+    },
+    {
+      "file": "src/data_agent/audit.py",
+      "line": 51,
+      "term": "all_opioids",
+      "context": "STATIC_TERMS catalogue definition \u2014 term in a list of 3+ search-pattern entries (audit tool data, not operational use)",
+      "classification": "acceptable",
+      "severity": "info"
+    },
+    {
+      "file": "src/data_agent/audit.py",
+      "line": 52,
+      "term": "all_stimulants",
+      "context": "STATIC_TERMS catalogue definition \u2014 term in a list of 3+ search-pattern entries (audit tool data, not operational use)",
+      "classification": "acceptable",
+      "severity": "info"
+    },
+    {
+      "file": "src/data_agent/audit.py",
+      "line": 56,
+      "term": "survived",
+      "context": "STATIC_TERMS catalogue definition \u2014 term in a list of 3+ search-pattern entries (audit tool data, not operational use)",
+      "classification": "acceptable",
+      "severity": "info"
+    },
+    {
+      "file": "src/data_agent/audit.py",
+      "line": 57,
+      "term": "passengerid",
+      "context": "STATIC_TERMS catalogue definition \u2014 term in a list of 3+ search-pattern entries (audit tool data, not operational use)",
+      "classification": "acceptable",
+      "severity": "info"
+    },
+    {
+      "file": "src/data_agent/audit.py",
+      "line": 58,
+      "term": "pclass",
+      "context": "STATIC_TERMS catalogue definition \u2014 term in a list of 3+ search-pattern entries (audit tool data, not operational use)",
+      "classification": "acceptable",
+      "severity": "info"
+    },
+    {
+      "file": "src/data_agent/audit.py",
+      "line": 59,
+      "term": "sibsp",
+      "context": "STATIC_TERMS catalogue definition \u2014 term in a list of 3+ search-pattern entries (audit tool data, not operational use)",
+      "classification": "acceptable",
+      "severity": "info"
+    },
+    {
+      "file": "src/data_agent/audit.py",
+      "line": 60,
+      "term": "parch",
+      "context": "STATIC_TERMS catalogue definition \u2014 term in a list of 3+ search-pattern entries (audit tool data, not operational use)",
+      "classification": "acceptable",
+      "severity": "info"
+    },
+    {
+      "file": "src/data_agent/audit.py",
+      "line": 61,
+      "term": "embarked",
+      "context": "STATIC_TERMS catalogue definition \u2014 term in a list of 3+ search-pattern entries (audit tool data, not operational use)",
+      "classification": "acceptable",
+      "severity": "info"
+    },
+    {
+      "file": "src/data_agent/audit.py",
+      "line": 62,
+      "term": "saleprice",
+      "context": "STATIC_TERMS catalogue definition \u2014 term in a list of 3+ search-pattern entries (audit tool data, not operational use)",
+      "classification": "acceptable",
+      "severity": "info"
+    },
+    {
+      "file": "src/data_agent/audit.py",
+      "line": 63,
+      "term": "lotarea",
+      "context": "STATIC_TERMS catalogue definition \u2014 term in a list of 3+ search-pattern entries (audit tool data, not operational use)",
+      "classification": "acceptable",
+      "severity": "info"
+    },
+    {
+      "file": "src/data_agent/audit.py",
+      "line": 64,
+      "term": "yearbuilt",
+      "context": "STATIC_TERMS catalogue definition \u2014 term in a list of 3+ search-pattern entries (audit tool data, not operational use)",
+      "classification": "acceptable",
+      "severity": "info"
+    },
+    {
+      "file": "src/data_agent/audit.py",
+      "line": 65,
+      "term": "casual",
+      "context": "STATIC_TERMS catalogue definition \u2014 term in a list of 3+ search-pattern entries (audit tool data, not operational use)",
+      "classification": "acceptable",
+      "severity": "info"
+    },
+    {
+      "file": "src/data_agent/audit.py",
+      "line": 66,
+      "term": "registered",
+      "context": "STATIC_TERMS catalogue definition \u2014 term in a list of 3+ search-pattern entries (audit tool data, not operational use)",
+      "classification": "acceptable",
+      "severity": "info"
+    },
+    {
+      "file": "src/data_agent/audit.py",
+      "line": 70,
+      "term": "train.csv",
+      "context": "STATIC_TERMS catalogue definition \u2014 term in a list of 3+ search-pattern entries (audit tool data, not operational use)",
+      "classification": "acceptable",
+      "severity": "info"
+    },
+    {
+      "file": "src/data_agent/audit.py",
+      "line": 71,
+      "term": "test.csv",
+      "context": "STATIC_TERMS catalogue definition \u2014 term in a list of 3+ search-pattern entries (audit tool data, not operational use)",
+      "classification": "acceptable",
+      "severity": "info"
+    },
+    {
+      "file": "src/data_agent/audit.py",
+      "line": 72,
+      "term": "samplesubmission.csv",
+      "context": "STATIC_TERMS catalogue definition \u2014 term in a list of 3+ search-pattern entries (audit tool data, not operational use)",
+      "classification": "acceptable",
+      "severity": "info"
+    },
+    {
+      "file": "src/data_agent/audit.py",
+      "line": 73,
+      "term": "samplesubmission.csv",
+      "context": "STATIC_TERMS catalogue definition \u2014 term in a list of 3+ search-pattern entries (audit tool data, not operational use)",
+      "classification": "acceptable",
+      "severity": "info"
+    },
+    {
+      "file": "src/data_agent/audit.py",
+      "line": 74,
+      "term": "val.csv",
+      "context": "STATIC_TERMS catalogue definition \u2014 term in a list of 3+ search-pattern entries (audit tool data, not operational use)",
+      "classification": "acceptable",
+      "severity": "info"
+    },
+    {
+      "file": "src/data_agent/audit.py",
+      "line": 75,
+      "term": "train.parquet",
+      "context": "STATIC_TERMS catalogue definition \u2014 term in a list of 3+ search-pattern entries (audit tool data, not operational use)",
+      "classification": "acceptable",
+      "severity": "info"
+    },
+    {
+      "file": "src/data_agent/audit.py",
+      "line": 76,
+      "term": "test.parquet",
+      "context": "STATIC_TERMS catalogue definition \u2014 term in a list of 3+ search-pattern entries (audit tool data, not operational use)",
+      "classification": "acceptable",
+      "severity": "info"
+    },
+    {
+      "file": "src/data_agent/audit.py",
+      "line": 77,
+      "term": "submission.csv",
+      "context": "STATIC_TERMS catalogue definition \u2014 term in a list of 3+ search-pattern entries (audit tool data, not operational use)",
+      "classification": "acceptable",
+      "severity": "info"
+    },
+    {
+      "file": "src/data_agent/audit.py",
+      "line": 81,
+      "term": "overdose",
+      "context": "STATIC_TERMS catalogue definition \u2014 term in a list of 3+ search-pattern entries (audit tool data, not operational use)",
+      "classification": "acceptable",
+      "severity": "info"
+    },
+    {
+      "file": "src/data_agent/audit.py",
+      "line": 82,
+      "term": "opioid",
+      "context": "STATIC_TERMS catalogue definition \u2014 term in a list of 3+ search-pattern entries (audit tool data, not operational use)",
+      "classification": "acceptable",
+      "severity": "info"
+    },
+    {
+      "file": "src/data_agent/audit.py",
+      "line": 83,
+      "term": "stimulant",
+      "context": "STATIC_TERMS catalogue definition \u2014 term in a list of 3+ search-pattern entries (audit tool data, not operational use)",
+      "classification": "acceptable",
+      "severity": "info"
+    },
+    {
+      "file": "src/data_agent/audit.py",
+      "line": 84,
+      "term": "titanic",
+      "context": "STATIC_TERMS catalogue definition \u2014 term in a list of 3+ search-pattern entries (audit tool data, not operational use)",
+      "classification": "acceptable",
+      "severity": "info"
+    },
+    {
+      "file": "src/data_agent/audit.py",
+      "line": 85,
+      "term": "shipwreck",
+      "context": "STATIC_TERMS catalogue definition \u2014 term in a list of 3+ search-pattern entries (audit tool data, not operational use)",
+      "classification": "acceptable",
+      "severity": "info"
+    },
+    {
+      "file": "src/data_agent/audit.py",
+      "line": 89,
+      "term": "918",
+      "context": "STATIC_TERMS catalogue definition \u2014 term in a list of 3+ search-pattern entries (audit tool data, not operational use)",
+      "classification": "acceptable",
+      "severity": "info"
+    },
+    {
+      "file": "src/data_agent/modeling_group.py",
+      "line": 292,
+      "term": "submission.csv",
+      "context": "\"chosen_submission\": \"submission.csv\" \u2014 fixed deliverable name in 2-item dict; submission.csv is the required output per CLAUDE.md spec, not a dataset-specific file",
+      "classification": "risky",
+      "severity": "warn"
+    },
+    {
+      "file": "src/data_agent/orchestrator.py",
+      "line": 348,
+      "term": "submission.csv",
+      "context": "_ck_sub.to_csv(repo_root / \"submission.csv\", index=False) \u2014 fixed deliverable path write; structural constant per spec",
+      "classification": "risky",
+      "severity": "warn"
+    },
+    {
+      "file": "src/data_agent/orchestrator.py",
+      "line": 463,
+      "term": "submission.csv",
+      "context": "_floor_sub.to_csv(repo_root / \"submission.csv\", index=False) \u2014 fixed deliverable path write; structural constant per spec",
+      "classification": "risky",
+      "severity": "warn"
+    },
+    {
+      "file": "src/data_agent/orchestrator.py",
+      "line": 595,
+      "term": "submission.csv",
+      "context": "submission_path = repo_root / \"submission.csv\" \u2014 fixed deliverable path variable; structural constant per spec",
+      "classification": "risky",
+      "severity": "warn"
+    },
+    {
+      "file": "src/data_agent/runner.py",
+      "line": 82,
+      "term": "submission.csv",
+      "context": "submission_path = repo_root / \"submission.csv\" \u2014 fixed deliverable path variable; structural constant per spec",
+      "classification": "risky",
+      "severity": "warn"
+    },
+    {
+      "file": "src/data_agent/runner.py",
+      "line": 329,
+      "term": "submission.csv",
+      "context": "for name in [\"submission.csv\", \"report.pdf\"] \u2014 2-item deliverable check list",
+      "classification": "risky",
+      "severity": "warn"
+    },
+    {
+      "file": "src/data_agent/skills/profile_data.py",
+      "line": 20,
+      "term": "survived",
+      "context": "_TARGET_TOKENS set with 11+ candidate tokens \u2014 generic heuristic fallback list",
+      "classification": "acceptable",
+      "severity": "info"
+    },
+    {
+      "file": "src/data_agent/task.py",
+      "line": 415,
+      "term": "survived",
+      "context": "for token in (\"yes\", \"true\", \"survived\", \"positive\", \"1\", \"y\") \u2014 6-item heuristic list",
+      "classification": "acceptable",
+      "severity": "info"
+    },
+    {
+      "file": "scripts/check_run.py",
+      "line": 162,
+      "term": "submission.csv",
+      "context": "Deliverable check tuple with multiple items \u2014 structural constant in test harness",
+      "classification": "acceptable",
+      "severity": "info"
+    }
+  ],
+  "summary": {
+    "total_findings": 39,
+    "unacceptable": 0,
+    "risky": 6,
+    "acceptable": 33
+  }
+}

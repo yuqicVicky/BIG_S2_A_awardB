@@ -1,0 +1,26 @@
+{
+  "run_id": "20260614_175934",
+  "round": 1,
+  "reviewer": "feature-engineering-reviewer",
+  "baseline_mae": 30.052572,
+  "prune_margin": 0.30052572,
+  "script_pruned_groups": ["per_fold_aggregates"],
+  "final_pruned_groups": ["per_fold_aggregates"],
+  "final_pruned_columns": [
+    "agg_hour_season_mean_count",
+    "agg_hour_season_median_count",
+    "agg_hour_workingday_mean_count",
+    "agg_hour_workingday_median_count",
+    "agg_hour_weather_mean_count",
+    "agg_hour_month_year_mean_count",
+    "agg_season_month_mean_count",
+    "agg_year_month_mean_count",
+    "early_day_hour_mean_count",
+    "early_day_hour_median_count",
+    "early_day_hour_std_count"
+  ],
+  "restored_groups": [],
+  "extra_pruned_groups": [],
+  "rationale": "per_fold_aggregates: delta=-2.976, removing raises OOF from 30.05→27.08 — large negative delta (group hurts) on 11 cols flagged experimental with day_filter<=13; unambiguous high-confidence prune confirmed. datetime_derived (delta=+1.577) and other_features (delta=+4.258) both strong helpers, kept. No leakage review present (round 1). No dead-weight kept groups (all kept groups show strongly positive deltas). Script prune set accepted unchanged.",
+  "next_action": "proceed_to_specialists"
+}

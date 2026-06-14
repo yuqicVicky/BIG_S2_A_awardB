@@ -1,0 +1,14 @@
+{"ts": 1781432620.985327, "event": "candidate_done", "elapsed_sec": 2.425, "role": "gbdt-specialist", "run_id": "20260614_175934", "model": "dummy_mean", "partial_cv": 142.7550018428953, "best_so_far": 142.7550018428953}
+{"ts": 1781432622.1923032, "event": "candidate_done", "elapsed_sec": 3.632, "role": "gbdt-specialist", "run_id": "20260614_175934", "model": "hist_gradient_boosting", "partial_cv": 27.076981978171986, "best_so_far": 27.076981978171986}
+{"ts": 1781432624.343363, "event": "candidate_done", "elapsed_sec": 5.783, "role": "gbdt-specialist", "run_id": "20260614_175934", "model": "gradient_boosting", "partial_cv": 37.22750193213395, "best_so_far": 27.076981978171986}
+{"ts": 1781432625.55039, "event": "candidate_done", "elapsed_sec": 6.99, "role": "gbdt-specialist", "run_id": "20260614_175934", "model": "hgb_sqrt", "partial_cv": 26.614583255891457, "best_so_far": 26.614583255891457}
+{"ts": 1781432626.85389, "event": "candidate_done", "elapsed_sec": 8.294, "role": "gbdt-specialist", "run_id": "20260614_175934", "model": "lightgbm", "partial_cv": 26.03665156155939, "best_so_far": 26.03665156155939}
+{"ts": 1781432628.8205838, "event": "candidate_done", "elapsed_sec": 10.26, "role": "gbdt-specialist", "run_id": "20260614_175934", "model": "lightgbm_strong", "partial_cv": 26.28606448077916, "best_so_far": 26.03665156155939}
+{"ts": 1781432630.1385112, "event": "candidate_done", "elapsed_sec": 11.578, "role": "gbdt-specialist", "run_id": "20260614_175934", "model": "lightgbm_sqrt", "partial_cv": 25.56618707514988, "best_so_far": 25.56618707514988}
+{"ts": 1781432631.277705, "event": "candidate_done", "elapsed_sec": 12.718, "role": "gbdt-specialist", "run_id": "20260614_175934", "model": "xgboost", "partial_cv": 26.89739682998109, "best_so_far": 25.56618707514988}
+{"ts": 1781432633.2612748, "event": "candidate_done", "elapsed_sec": 14.701, "role": "gbdt-specialist", "run_id": "20260614_175934", "model": "catboost", "partial_cv": 27.61099230294933, "best_so_far": 25.56618707514988}
+{"ts": 1781432647.4312, "event": "seed_done", "elapsed_sec": 28.871, "role": "gbdt-specialist", "run_id": "20260614_175934", "fold": 0}
+{"ts": 1781432648.110479, "event": "seed_done", "elapsed_sec": 29.551, "role": "gbdt-specialist", "run_id": "20260614_175934", "fold": 1}
+{"ts": 1781432649.503649, "event": "seed_done", "elapsed_sec": 30.944, "role": "gbdt-specialist", "run_id": "20260614_175934", "fold": 0}
+{"ts": 1781432650.881597, "event": "seed_done", "elapsed_sec": 32.322, "role": "gbdt-specialist", "run_id": "20260614_175934", "fold": 1}
+{"ts": 1781432650.904968, "event": "final_done", "elapsed_sec": 32.345, "role": "gbdt-specialist", "run_id": "20260614_175934", "best_so_far": 25.549220169969686}

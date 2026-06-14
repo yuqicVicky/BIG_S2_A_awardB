@@ -21,17 +21,9 @@ build/
 .env.*
 .DS_Store
 
-# Outputs
-outputs/artifacts/*
-outputs/logs/*
-outputs/reports/*
-submission.csv
-report.pdf
-
-# Keep output folders
-!outputs/artifacts/.gitkeep
-!outputs/logs/.gitkeep
-!outputs/reports/.gitkeep
+# Outputs — tracked intentionally
+# (outputs/scratch excluded: ephemeral generated code)
+outputs/scratch/
 
 # Large data
 data/*

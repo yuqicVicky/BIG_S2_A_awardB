@@ -1,0 +1,19 @@
+{
+  "expected_columns": [
+    "datetime",
+    "count"
+  ],
+  "actual_columns": [
+    "datetime",
+    "count"
+  ],
+  "output_kind": "value",
+  "n_rows_sample": 6493,
+  "n_rows_submission": 6493,
+  "columns_ok": true,
+  "row_count_ok": true,
+  "row_id_alignment_ok": true,
+  "missing_predictions": 0,
+  "all_finite": true,
+  "dtype_ok": true
+}

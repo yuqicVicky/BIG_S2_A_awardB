@@ -1,0 +1,63 @@
+{
+  "round": 1,
+  "reviewer": "feature-leakage-reviewer",
+  "overall_verdict": "warn",
+  "leakage_findings": [
+    {
+      "severity": "low",
+      "feature": "datetime__day (floor model only)",
+      "issue": "20260614_175934_profile.json final_feature_columns includes datetime__day, which has a known distribution shift (train mean ~10, test mean ~25). This appears in the floor model feature set from main.py, NOT in the authored feature_pipeline.py (which correctly excludes it via DATETIME_DERIVED_COLS filter). The GBDT specialist uses authored features and is not affected. Risk is confined to floor OOF.",
+      "required_fix": "Confirm floor model (main.py) also drops datetime__day; if it cannot be controlled, accept floor as degraded baseline only."
+    },
+    {
+      "severity": "low",
+      "feature": "per_fold_aggregates group (all 11 columns)",
+      "issue": "The agg_* and early_day_* columns were built with per-fold safety (canonical train_idx from cv_folds.json, never ~val_mask), but the ablation gate confirmed they hurt OOF (delta=-2.976, decision=prune). They were correctly pruned from feature_spec.json before specialist training. No active leakage remains.",
+      "required_fix": "None — already pruned. Do not regenerate this group in future rounds."
+    },
+    {
+      "severity": "low",
+      "feature": "single-fold holdout (cv_folds.json strategy=within_period_holdout, n_folds=1)",
+      "issue": "Only one validation split is used, so OOF score variance is unquantified. CV stability report shows cv_mae_std=0.0 by construction. CV reliability for model selection is reduced; holdout vs test gap cannot be measured within-run.",
+      "required_fix": "Medium-term: extend to multi-month rolling windows (e.g. last-3-months holdout per month). Not a leakage issue but inflates confidence in CV score."
+    }
+  ],
+  "suggestions": [
+    {
+      "priority": "high",
+      "category": "feature_engineering",
+      "suggestion": "Add within-period sub-target aggregates for registered and casual separately (predicted via per-fold regression on early-day rows), then sum for count. Sub-targets have corr 0.97/0.69 with count and are train-only — predict them separately and use predictions as fold-safe features.",
+      "expected_impact": "high",
+      "implementation_hint": "For each fold's train_idx rows where day<=13, fit a simple model predicting registered and casual; store fold OOF preds as registered_pred and casual_pred features; refit on full train for prediction frame."
+    },
+    {
+      "priority": "high",
+      "category": "feature_engineering",
+      "suggestion": "Build hour_x_temp and hour_x_humidity interactions — datetime__hour is the strongest signal (ablation delta +4.26 for other_features group which includes hour interactions); temp and humidity modulate ridership at each hour of day.",
+      "expected_impact": "high",
+      "implementation_hint": "Add {'name': 'hour_x_temp', 'columns': ['datetime__hour', 'temp'], 'type': 'multiply'} and {'name': 'hour_x_humidity', 'columns': ['datetime__hour', 'humidity'], 'type': 'multiply'} to plan interactions spec."
+    },
+    {
+      "priority": "medium",
+      "category": "feature_pruning",
+      "suggestion": "Prune season (raw int) and weather (raw int) from direct features since season__ohe_1..4 and weather__ohe_1..4 already encode them fully; the raw ordinal integers add noise for non-linear models and redundancy for linear.",
+      "expected_impact": "low",
+      "implementation_hint": "Remove 'season' and 'weather' from DIRECT_FEATURE_COLS after OHE columns are added; keep OHE variants."
+    },
+    {
+      "priority": "medium",
+      "category": "feature_engineering",
+      "suggestion": "Add year_x_month interaction (datetime__year * datetime__month__ordinal) to capture growth trend within seasons — datetime__year shows 94-unit target mean range across 2 years, and month interacts with it.",
+      "expected_impact": "medium",
+      "implementation_hint": "Add {'name': 'year_x_month', 'columns': ['datetime__year', 'datetime__month'], 'type': 'multiply'} to plan interactions."
+    },
+    {
+      "priority": "low",
+      "category": "feature_pruning",
+      "suggestion": "Per_fold_aggregates group (agg_hour_season_mean_count, agg_hour_workingday_mean_count, and 9 others) confirmed harmful by ablation (delta=-2.976). Do not regenerate in future rounds; replace with the sub-target prediction approach instead.",
+      "expected_impact": "medium",
+      "implementation_hint": "Keep PLAN_FOLD_AGGS empty or remove within_period_aggregates spec entries entirely; implement registered_pred/casual_pred sub-target features instead."
+    }
+  ],
+  "notes": "No HIGH-severity leakage found. Pipeline correctly uses canonical train_idx from cv_folds.json (not ~val_mask). Sub-targets casual/registered are properly excluded as direct features. datetime__day distribution-shift issue exists only in the floor model, not the authored specialist features. Ablation pruning of per_fold_aggregates was correct. Primary opportunity is sub-target (registered+casual) prediction as fold-safe features and richer hour interactions."
+}

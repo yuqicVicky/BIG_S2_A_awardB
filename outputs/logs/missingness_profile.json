@@ -1,0 +1,283 @@
+{
+  "run_id": "20260614_175934",
+  "generated_at": "2026-06-14T10:04:02.044013+00:00",
+  "train_path": "data/train/train.csv",
+  "prediction_path": "data/test/test.csv",
+  "target_column": "count",
+  "train_column_audit": {
+    "datetime": {
+      "role": "train",
+      "dtype": "object",
+      "n_missing": 0,
+      "miss_rate": 0.0,
+      "pattern": "complete",
+      "mechanism_guess": "none"
+    },
+    "season": {
+      "role": "train",
+      "dtype": "int64",
+      "n_missing": 0,
+      "miss_rate": 0.0,
+      "pattern": "complete",
+      "mechanism_guess": "none"
+    },
+    "holiday": {
+      "role": "train",
+      "dtype": "int64",
+      "n_missing": 0,
+      "miss_rate": 0.0,
+      "pattern": "complete",
+      "mechanism_guess": "none"
+    },
+    "workingday": {
+      "role": "train",
+      "dtype": "int64",
+      "n_missing": 0,
+      "miss_rate": 0.0,
+      "pattern": "complete",
+      "mechanism_guess": "none"
+    },
+    "weather": {
+      "role": "train",
+      "dtype": "int64",
+      "n_missing": 0,
+      "miss_rate": 0.0,
+      "pattern": "complete",
+      "mechanism_guess": "none"
+    },
+    "temp": {
+      "role": "train",
+      "dtype": "float64",
+      "n_missing": 0,
+      "miss_rate": 0.0,
+      "pattern": "complete",
+      "mechanism_guess": "none"
+    },
+    "atemp": {
+      "role": "train",
+      "dtype": "float64",
+      "n_missing": 0,
+      "miss_rate": 0.0,
+      "pattern": "complete",
+      "mechanism_guess": "none"
+    },
+    "humidity": {
+      "role": "train",
+      "dtype": "int64",
+      "n_missing": 0,
+      "miss_rate": 0.0,
+      "pattern": "complete",
+      "mechanism_guess": "none"
+    },
+    "windspeed": {
+      "role": "train",
+      "dtype": "float64",
+      "n_missing": 0,
+      "miss_rate": 0.0,
+      "pattern": "complete",
+      "mechanism_guess": "none"
+    },
+    "casual": {
+      "role": "train",
+      "dtype": "int64",
+      "n_missing": 0,
+      "miss_rate": 0.0,
+      "pattern": "complete",
+      "mechanism_guess": "none"
+    },
+    "registered": {
+      "role": "train",
+      "dtype": "int64",
+      "n_missing": 0,
+      "miss_rate": 0.0,
+      "pattern": "complete",
+      "mechanism_guess": "none"
+    },
+    "count": {
+      "role": "train",
+      "dtype": "int64",
+      "n_missing": 0,
+      "miss_rate": 0.0,
+      "pattern": "complete",
+      "mechanism_guess": "none"
+    }
+  },
+  "prediction_column_audit": {
+    "datetime": {
+      "role": "prediction",
+      "dtype": "object",
+      "n_missing": 0,
+      "miss_rate": 0.0,
+      "pattern": "complete",
+      "mechanism_guess": "none"
+    },
+    "season": {
+      "role": "prediction",
+      "dtype": "int64",
+      "n_missing": 0,
+      "miss_rate": 0.0,
+      "pattern": "complete",
+      "mechanism_guess": "none"
+    },
+    "holiday": {
+      "role": "prediction",
+      "dtype": "int64",
+      "n_missing": 0,
+      "miss_rate": 0.0,
+      "pattern": "complete",
+      "mechanism_guess": "none"
+    },
+    "workingday": {
+      "role": "prediction",
+      "dtype": "int64",
+      "n_missing": 0,
+      "miss_rate": 0.0,
+      "pattern": "complete",
+      "mechanism_guess": "none"
+    },
+    "weather": {
+      "role": "prediction",
+      "dtype": "int64",
+      "n_missing": 0,
+      "miss_rate": 0.0,
+      "pattern": "complete",
+      "mechanism_guess": "none"
+    },
+    "temp": {
+      "role": "prediction",
+      "dtype": "float64",
+      "n_missing": 0,
+      "miss_rate": 0.0,
+      "pattern": "complete",
+      "mechanism_guess": "none"
+    },
+    "atemp": {
+      "role": "prediction",
+      "dtype": "float64",
+      "n_missing": 0,
+      "miss_rate": 0.0,
+      "pattern": "complete",
+      "mechanism_guess": "none"
+    },
+    "humidity": {
+      "role": "prediction",
+      "dtype": "int64",
+      "n_missing": 0,
+      "miss_rate": 0.0,
+      "pattern": "complete",
+      "mechanism_guess": "none"
+    },
+    "windspeed": {
+      "role": "prediction",
+      "dtype": "float64",
+      "n_missing": 0,
+      "miss_rate": 0.0,
+      "pattern": "complete",
+      "mechanism_guess": "none"
+    }
+  },
+  "combined_column_audit": {
+    "atemp": {
+      "train_miss_rate": 0.0,
+      "pred_miss_rate": 0.0,
+      "train_pattern": "complete",
+      "pred_pattern": "complete",
+      "mechanism_guess": "none",
+      "dtype": "float64"
+    },
+    "casual": {
+      "train_miss_rate": 0.0,
+      "pred_miss_rate": null,
+      "train_pattern": "complete",
+      "pred_pattern": null,
+      "mechanism_guess": "none",
+      "dtype": "int64"
+    },
+    "count": {
+      "train_miss_rate": 0.0,
+      "pred_miss_rate": null,
+      "train_pattern": "complete",
+      "pred_pattern": null,
+      "mechanism_guess": "none",
+      "dtype": "int64"
+    },
+    "datetime": {
+      "train_miss_rate": 0.0,
+      "pred_miss_rate": 0.0,
+      "train_pattern": "complete",
+      "pred_pattern": "complete",
+      "mechanism_guess": "none",
+      "dtype": "object"
+    },
+    "holiday": {
+      "train_miss_rate": 0.0,
+      "pred_miss_rate": 0.0,
+      "train_pattern": "complete",
+      "pred_pattern": "complete",
+      "mechanism_guess": "none",
+      "dtype": "int64"
+    },
+    "humidity": {
+      "train_miss_rate": 0.0,
+      "pred_miss_rate": 0.0,
+      "train_pattern": "complete",
+      "pred_pattern": "complete",
+      "mechanism_guess": "none",
+      "dtype": "int64"
+    },
+    "registered": {
+      "train_miss_rate": 0.0,
+      "pred_miss_rate": null,
+      "train_pattern": "complete",
+      "pred_pattern": null,
+      "mechanism_guess": "none",
+      "dtype": "int64"
+    },
+    "season": {
+      "train_miss_rate": 0.0,
+      "pred_miss_rate": 0.0,
+      "train_pattern": "complete",
+      "pred_pattern": "complete",
+      "mechanism_guess": "none",
+      "dtype": "int64"
+    },
+    "temp": {
+      "train_miss_rate": 0.0,
+      "pred_miss_rate": 0.0,
+      "train_pattern": "complete",
+      "pred_pattern": "complete",
+      "mechanism_guess": "none",
+      "dtype": "float64"
+    },
+    "weather": {
+      "train_miss_rate": 0.0,
+      "pred_miss_rate": 0.0,
+      "train_pattern": "complete",
+      "pred_pattern": "complete",
+      "mechanism_guess": "none",
+      "dtype": "int64"
+    },
+    "windspeed": {
+      "train_miss_rate": 0.0,
+      "pred_miss_rate": 0.0,
+      "train_pattern": "complete",
+      "pred_pattern": "complete",
+      "mechanism_guess": "none",
+      "dtype": "float64"
+    },
+    "workingday": {
+      "train_miss_rate": 0.0,
+      "pred_miss_rate": 0.0,
+      "train_pattern": "complete",
+      "pred_pattern": "complete",
+      "mechanism_guess": "none",
+      "dtype": "int64"
+    }
+  },
+  "summary": {
+    "train_cols_with_missing": [],
+    "pred_cols_with_missing": [],
+    "max_train_miss_rate": 0.0,
+    "max_pred_miss_rate": 0.0
+  }
+}

@@ -1,0 +1,64 @@
+{
+  "run_id": "20260614_175934",
+  "reviewed_at": "2026-06-14T10:05:16.166781Z",
+  "mode": "schema_review",
+  "detected_structure": {
+    "has_time": true,
+    "has_group": false,
+    "has_panel": false,
+    "sub_period_pattern": {
+      "feature": "day",
+      "train_range": "1-19",
+      "predict_range": "20-end",
+      "direction": "train_lower"
+    },
+    "temporal_overlap": true,
+    "class_imbalance": false,
+    "minority_class_rate": null,
+    "distribution_shift_columns": []
+  },
+  "chosen_strategy": "within_period_holdout",
+  "strategy_rationale": "The hidden test contains days 20-end of each month while training contains days 1-19. This is a sub_period_pattern with direction=train_lower (Priority 1). To mirror this gap, rows with day >= 14 (top ~32% of training days, i.e. days 14-19) are held out as validation, while days 1-13 are used for training. This faithfully simulates the model needing to extrapolate from early-month data to late-month periods, which is exactly the hidden evaluation structure. A naive chronological holdout would not respect the within-month split pattern and would give optimistically biased scores.",
+  "holdout_parameters": {
+    "sub_period_feature": "day",
+    "holdout_threshold": 14,
+    "holdout_fraction": null,
+    "time_column": "datetime",
+    "group_column": null,
+    "n_splits": 1,
+    "stratify_column": null,
+    "random_state": 42,
+    "period_order": null,
+    "horizon": null,
+    "n_folds": null,
+    "full_period_order": null
+  },
+  "simulates_hidden_evaluation": "Holdout rows are days 14-19 in each month (train file); the hidden test rows are days 20-end. Both are the latter portion of each month, so the model must learn from early-month patterns and generalise to late-month conditions \u2014 matching the real gap.",
+  "leakage_risks": [
+    {
+      "risk_type": "target_component_in_train_only",
+      "column": "registered",
+      "severity": "high",
+      "action": "Exclude as direct feature; may use as a separate prediction sub-target (predict registered independently and sum with casual to form count)."
+    },
+    {
+      "risk_type": "target_component_in_train_only",
+      "column": "casual",
+      "severity": "high",
+      "action": "Exclude as direct feature; may use as a separate prediction sub-target."
+    },
+    {
+      "risk_type": "distribution_shift",
+      "column": "[]",
+      "severity": "low",
+      "action": "Note distribution shift; ensure features are derived from available covariates only."
+    },
+    {
+      "risk_type": "high_cardinality_datetime_id",
+      "column": "datetime",
+      "severity": "medium",
+      "action": "Extract datetime components (year, month, day, hour, dayofweek, season, etc.) as features; never use raw datetime string as a model feature."
+    }
+  ],
+  "validation_limitations": "Single holdout (not k-fold) so variance of the estimate is higher. The holdout does not capture temporal drift between years 2011 and 2012 (the model trains on all months within the 2-year span). Distribution shift in humidity and atemp between train and prediction may cause optimistic local scores. Sub-targets registered/casual are train-only so sub-target modeling must be validated carefully."
+}

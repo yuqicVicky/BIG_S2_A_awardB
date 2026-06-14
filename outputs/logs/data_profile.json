@@ -1,0 +1,580 @@
+{
+  "run_id": "20260614_175934",
+  "profiled_at": "2026-06-14T10:03:35.081552Z",
+  "train": {
+    "path": "data/train/train.csv",
+    "n_rows": 10886,
+    "n_cols": 12,
+    "columns": [
+      "datetime",
+      "season",
+      "holiday",
+      "workingday",
+      "weather",
+      "temp",
+      "atemp",
+      "humidity",
+      "windspeed",
+      "casual",
+      "registered",
+      "count"
+    ],
+    "dtypes": {
+      "datetime": "object",
+      "season": "int64",
+      "holiday": "int64",
+      "workingday": "int64",
+      "weather": "int64",
+      "temp": "float64",
+      "atemp": "float64",
+      "humidity": "int64",
+      "windspeed": "float64",
+      "casual": "int64",
+      "registered": "int64",
+      "count": "int64"
+    },
+    "missing": {
+      "datetime": {
+        "count": 0,
+        "rate": 0.0
+      },
+      "season": {
+        "count": 0,
+        "rate": 0.0
+      },
+      "holiday": {
+        "count": 0,
+        "rate": 0.0
+      },
+      "workingday": {
+        "count": 0,
+        "rate": 0.0
+      },
+      "weather": {
+        "count": 0,
+        "rate": 0.0
+      },
+      "temp": {
+        "count": 0,
+        "rate": 0.0
+      },
+      "atemp": {
+        "count": 0,
+        "rate": 0.0
+      },
+      "humidity": {
+        "count": 0,
+        "rate": 0.0
+      },
+      "windspeed": {
+        "count": 0,
+        "rate": 0.0
+      },
+      "casual": {
+        "count": 0,
+        "rate": 0.0
+      },
+      "registered": {
+        "count": 0,
+        "rate": 0.0
+      },
+      "count": {
+        "count": 0,
+        "rate": 0.0
+      }
+    },
+    "numeric_stats": {
+      "season": {
+        "min": 1.0,
+        "max": 4.0,
+        "mean": 2.5066139996325556,
+        "std": 1.1161743093442644,
+        "p25": 2.0,
+        "p50": 3.0,
+        "p75": 4.0,
+        "n_unique": 4,
+        "n_missing": 0
+      },
+      "holiday": {
+        "min": 0.0,
+        "max": 1.0,
+        "mean": 0.02856880396839978,
+        "std": 0.16659885062471985,
+        "p25": 0.0,
+        "p50": 0.0,
+        "p75": 0.0,
+        "n_unique": 2,
+        "n_missing": 0
+      },
+      "workingday": {
+        "min": 0.0,
+        "max": 1.0,
+        "mean": 0.6808745177291935,
+        "std": 0.4661591687997421,
+        "p25": 0.0,
+        "p50": 1.0,
+        "p75": 1.0,
+        "n_unique": 2,
+        "n_missing": 0
+      },
+      "weather": {
+        "min": 1.0,
+        "max": 4.0,
+        "mean": 1.418427337865148,
+        "std": 0.6338385858190921,
+        "p25": 1.0,
+        "p50": 1.0,
+        "p75": 2.0,
+        "n_unique": 4,
+        "n_missing": 0
+      },
+      "temp": {
+        "min": 0.82,
+        "max": 41.0,
+        "mean": 20.23085981995223,
+        "std": 7.791589843987506,
+        "p25": 13.94,
+        "p50": 20.5,
+        "p75": 26.24,
+        "n_unique": 49,
+        "n_missing": 0
+      },
+      "atemp": {
+        "min": 0.76,
+        "max": 45.455,
+        "mean": 23.655084052912,
+        "std": 8.474600626484888,
+        "p25": 16.665,
+        "p50": 24.24,
+        "p75": 31.06,
+        "n_unique": 60,
+        "n_missing": 0
+      },
+      "humidity": {
+        "min": 0.0,
+        "max": 100.0,
+        "mean": 61.88645967297446,
+        "std": 19.245033277394786,
+        "p25": 47.0,
+        "p50": 62.0,
+        "p75": 77.0,
+        "n_unique": 89,
+        "n_missing": 0
+      },
+      "windspeed": {
+        "min": 0.0,
+        "max": 56.9969,
+        "mean": 12.7993954069447,
+        "std": 8.16453732683849,
+        "p25": 7.0015,
+        "p50": 12.998,
+        "p75": 16.9979,
+        "n_unique": 28,
+        "n_missing": 0
+      },
+      "casual": {
+        "min": 0.0,
+        "max": 367.0,
+        "mean": 36.02195480433584,
+        "std": 49.9604765726498,
+        "p25": 4.0,
+        "p50": 17.0,
+        "p75": 49.0,
+        "n_unique": 309,
+        "n_missing": 0
+      },
+      "registered": {
+        "min": 0.0,
+        "max": 886.0,
+        "mean": 155.5521771082124,
+        "std": 151.0390330819246,
+        "p25": 36.0,
+        "p50": 118.0,
+        "p75": 222.0,
+        "n_unique": 731,
+        "n_missing": 0
+      },
+      "count": {
+        "min": 1.0,
+        "max": 977.0,
+        "mean": 191.57413191254824,
+        "std": 181.14445383028496,
+        "p25": 42.0,
+        "p50": 145.0,
+        "p75": 284.0,
+        "n_unique": 822,
+        "n_missing": 0
+      }
+    },
+    "categorical_stats": {
+      "datetime": {
+        "n_unique": 10886,
+        "top_values": {
+          "2011-01-01 00:00:00": 1,
+          "2012-05-01 21:00:00": 1,
+          "2012-05-01 13:00:00": 1,
+          "2012-05-01 14:00:00": 1,
+          "2012-05-01 15:00:00": 1,
+          "2012-05-01 16:00:00": 1,
+          "2012-05-01 17:00:00": 1,
+          "2012-05-01 18:00:00": 1,
+          "2012-05-01 19:00:00": 1,
+          "2012-05-01 20:00:00": 1
+        }
+      }
+    },
+    "datetime_like_columns": [
+      "datetime"
+    ],
+    "potential_id_columns": [
+      "datetime"
+    ],
+    "constant_columns": [],
+    "near_constant_columns": [],
+    "high_cardinality_columns": [],
+    "text_like_columns": [],
+    "duplicate_rows": 0,
+    "warnings": []
+  },
+  "prediction": {
+    "path": "data/test/test.csv",
+    "n_rows": 6493,
+    "n_cols": 9,
+    "columns": [
+      "datetime",
+      "season",
+      "holiday",
+      "workingday",
+      "weather",
+      "temp",
+      "atemp",
+      "humidity",
+      "windspeed"
+    ],
+    "dtypes": {
+      "datetime": "object",
+      "season": "int64",
+      "holiday": "int64",
+      "workingday": "int64",
+      "weather": "int64",
+      "temp": "float64",
+      "atemp": "float64",
+      "humidity": "int64",
+      "windspeed": "float64"
+    },
+    "missing": {
+      "datetime": {
+        "count": 0,
+        "rate": 0.0
+      },
+      "season": {
+        "count": 0,
+        "rate": 0.0
+      },
+      "holiday": {
+        "count": 0,
+        "rate": 0.0
+      },
+      "workingday": {
+        "count": 0,
+        "rate": 0.0
+      },
+      "weather": {
+        "count": 0,
+        "rate": 0.0
+      },
+      "temp": {
+        "count": 0,
+        "rate": 0.0
+      },
+      "atemp": {
+        "count": 0,
+        "rate": 0.0
+      },
+      "humidity": {
+        "count": 0,
+        "rate": 0.0
+      },
+      "windspeed": {
+        "count": 0,
+        "rate": 0.0
+      }
+    },
+    "numeric_stats": {
+      "season": {
+        "min": 1.0,
+        "max": 4.0,
+        "mean": 2.49330047743724,
+        "std": 1.0912579418644255,
+        "p25": 2.0,
+        "p50": 3.0,
+        "p75": 3.0,
+        "n_unique": 4,
+        "n_missing": 0
+      },
+      "holiday": {
+        "min": 0.0,
+        "max": 1.0,
+        "mean": 0.029108270445094717,
+        "std": 0.16812296760853587,
+        "p25": 0.0,
+        "p50": 0.0,
+        "p75": 0.0,
+        "n_unique": 2,
+        "n_missing": 0
+      },
+      "workingday": {
+        "min": 0.0,
+        "max": 1.0,
+        "mean": 0.6858154936085015,
+        "std": 0.464226014798812,
+        "p25": 0.0,
+        "p50": 1.0,
+        "p75": 1.0,
+        "n_unique": 2,
+        "n_missing": 0
+      },
+      "weather": {
+        "min": 1.0,
+        "max": 4.0,
+        "mean": 1.4367780686893579,
+        "std": 0.6483898010717158,
+        "p25": 1.0,
+        "p50": 1.0,
+        "p75": 2.0,
+        "n_unique": 4,
+        "n_missing": 0
+      },
+      "temp": {
+        "min": 0.82,
+        "max": 40.18,
+        "mean": 20.620606807330972,
+        "std": 8.059583026412835,
+        "p25": 13.94,
+        "p50": 21.32,
+        "p75": 27.06,
+        "n_unique": 49,
+        "n_missing": 0
+      },
+      "atemp": {
+        "min": 0.0,
+        "max": 50.0,
+        "mean": 24.01286462344063,
+        "std": 8.782741298669128,
+        "p25": 16.665,
+        "p50": 25.0,
+        "p75": 31.06,
+        "n_unique": 65,
+        "n_missing": 0
+      },
+      "humidity": {
+        "min": 16.0,
+        "max": 100.0,
+        "mean": 64.1252117665178,
+        "std": 19.293390986073437,
+        "p25": 49.0,
+        "p50": 65.0,
+        "p75": 81.0,
+        "n_unique": 79,
+        "n_missing": 0
+      },
+      "windspeed": {
+        "min": 0.0,
+        "max": 55.9986,
+        "mean": 12.631157200061606,
+        "std": 8.250151174075718,
+        "p25": 7.0015,
+        "p50": 11.0014,
+        "p75": 16.9979,
+        "n_unique": 27,
+        "n_missing": 0
+      }
+    },
+    "categorical_stats": {
+      "datetime": {
+        "n_unique": 6493,
+        "top_values": {
+          "2011-01-20 00:00:00": 1,
+          "2012-05-21 02:00:00": 1,
+          "2012-05-21 12:00:00": 1,
+          "2012-05-21 11:00:00": 1,
+          "2012-05-21 10:00:00": 1,
+          "2012-05-21 09:00:00": 1,
+          "2012-05-21 08:00:00": 1,
+          "2012-05-21 07:00:00": 1,
+          "2012-05-21 06:00:00": 1,
+          "2012-05-21 05:00:00": 1
+        }
+      }
+    },
+    "datetime_like_columns": [
+      "datetime"
+    ],
+    "potential_id_columns": [
+      "datetime"
+    ],
+    "constant_columns": [],
+    "near_constant_columns": [],
+    "high_cardinality_columns": [],
+    "text_like_columns": [],
+    "duplicate_rows": 0,
+    "warnings": []
+  },
+  "sample_submission": {
+    "path": "data/test/sampleSubmission.csv",
+    "n_rows": 6493,
+    "n_cols": 2,
+    "columns": [
+      "datetime",
+      "count"
+    ],
+    "dtypes": {
+      "datetime": "object",
+      "count": "int64"
+    },
+    "missing": {
+      "datetime": {
+        "count": 0,
+        "rate": 0.0
+      },
+      "count": {
+        "count": 0,
+        "rate": 0.0
+      }
+    },
+    "numeric_stats": {
+      "count": {
+        "min": 0.0,
+        "max": 0.0,
+        "mean": 0.0,
+        "std": 0.0,
+        "p25": 0.0,
+        "p50": 0.0,
+        "p75": 0.0,
+        "n_unique": 1,
+        "n_missing": 0
+      }
+    },
+    "categorical_stats": {
+      "datetime": {
+        "n_unique": 6493,
+        "top_values": {
+          "2011-01-20 00:00:00": 1,
+          "2012-05-21 02:00:00": 1,
+          "2012-05-21 12:00:00": 1,
+          "2012-05-21 11:00:00": 1,
+          "2012-05-21 10:00:00": 1,
+          "2012-05-21 09:00:00": 1,
+          "2012-05-21 08:00:00": 1,
+          "2012-05-21 07:00:00": 1,
+          "2012-05-21 06:00:00": 1,
+          "2012-05-21 05:00:00": 1
+        }
+      }
+    },
+    "datetime_like_columns": [
+      "datetime"
+    ],
+    "potential_id_columns": [
+      "datetime"
+    ],
+    "constant_columns": [
+      "count"
+    ],
+    "near_constant_columns": [],
+    "high_cardinality_columns": [],
+    "text_like_columns": [],
+    "duplicate_rows": 0,
+    "warnings": [
+      "Column 'count' is constant"
+    ]
+  },
+  "schema_diff": {
+    "in_train_only": [
+      "casual",
+      "count",
+      "registered"
+    ],
+    "in_prediction_only": [],
+    "in_both": [
+      "atemp",
+      "datetime",
+      "holiday",
+      "humidity",
+      "season",
+      "temp",
+      "weather",
+      "windspeed",
+      "workingday"
+    ]
+  },
+  "split_structure": {
+    "type": "within_month_cross_day",
+    "cv_recommendation": "Within each calendar month, train rows are days 1-19 and prediction rows are days 20-end. CV must hold out late-sub-period rows (days 14-19) as a validation set while keeping early-sub-period rows (days 1-13) in train; a simple last-N% chronological holdout will be misleadingly optimistic because the split pattern repeats within every month. Within-period aggregates (e.g. month-level means from days 1-13) are valid features.",
+    "train_day_range": {
+      "min": 1,
+      "max": 19
+    },
+    "test_day_range": {
+      "min": 20,
+      "max": 31
+    },
+    "overlapping_months": 24,
+    "sub_target_candidates": [
+      {
+        "column": "registered",
+        "corr_with_target": 0.9709
+      },
+      {
+        "column": "casual",
+        "corr_with_target": 0.6904
+      }
+    ]
+  },
+  "target_distribution": {
+    "type": "numeric",
+    "min": 1.0,
+    "max": 977.0,
+    "mean": 191.57413191254824,
+    "std": 181.14445383028496,
+    "p25": 42.0,
+    "p50": 145.0,
+    "p75": 284.0,
+    "skewness": 1.241895058803035,
+    "excess_kurtosis": 1.2989447727380323,
+    "log1p_skewness": -0.851294310261887,
+    "n_missing": 0,
+    "recommend_log_transform": true,
+    "log_transform_reason": "Metric is RMSLE (error on log scale); log1p transforms target to align loss with evaluation. Skewness=1.242, log1p_skewness=-0.851."
+  },
+  "descriptive_summary": {
+    "train_n_rows": 10886,
+    "train_n_cols": 12,
+    "pred_n_rows": 6493,
+    "pred_n_cols": 9,
+    "target_column": "count",
+    "target_type": "numeric",
+    "target_mean": 191.57413191254824,
+    "target_std": 181.14445383028496,
+    "target_min": 1.0,
+    "target_max": 977.0,
+    "target_skewness": 1.241895058803035,
+    "recommend_log_transform": true,
+    "log_transform_reason": "Metric is RMSLE (error on log scale); log1p transforms target to align loss with evaluation. Skewness=1.242, log1p_skewness=-0.851.",
+    "columns_with_missing_in_train": [],
+    "max_missing_rate_in_train": 0.0,
+    "n_numeric_cols_train": 11,
+    "n_categorical_cols_train": 1,
+    "n_datetime_like_cols_train": 1,
+    "duplicate_rows_train": 0,
+    "high_cardinality_cols_train": [],
+    "constant_cols_train": []
+  },
+  "summary_warnings": [
+    "LOUD WARNING: within-period cross-sub-period split \u2014 train covers days 1-19, prediction covers days 20-end of each month. A simple last-N% chronological holdout will give misleadingly optimistic local scores. CV must hold out late-sub-period rows (days ~14-19) while keeping early-sub-period rows (days 1-13) in train.",
+    "Metric is RMSLE: recommend log1p transform on target before training and expm1 after prediction.",
+    "Column 'registered' (corr=0.9709 with target) is train-only \u2014 leakage as direct feature but valid as a sub-target (predict separately and sum).",
+    "Column 'casual' (corr=0.6904 with target) is train-only \u2014 leakage as direct feature but valid as a sub-target (predict separately and sum).",
+    "MissingnessAuditor not found in src/; missingness audit written manually below."
+  ]
+}
