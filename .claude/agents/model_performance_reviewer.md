@@ -113,7 +113,7 @@ Read `prev_round_cv_score` from `analysis_review_{round-1}.json` (null in round 
 - `true` in round 1 if no merged suggestion has `expected_impact == "high"`.
 - **Override to `false`** if `feature_audit_review.json` or `overfitting_leakage_audit.json`
   reported any HIGH-severity leakage / CV-validity finding — leakage must be fixed before
-  shipping (force at least one more round when `round < 3`).
+  shipping (force at least one more round when `round < 2`).
 - **Loop-closure escalation — override to `false`** if a leakage / CV-validity finding **recurs**:
   i.e. a `leakage_fix` (or feature-fold-safety) finding present in this round's
   `feature_audit_review.json` / `overfitting_leakage_audit.json` was *also* raised in the prior
@@ -179,8 +179,10 @@ implements **feature-actionable** suggestions (`feature_engineering` / `feature_
 / `ensemble` suggestion is a no-op for it. A round therefore produces something new only if at
 least one of these holds:
 - there is ≥1 **feature-actionable** merged suggestion, **or**
-- `round < 3` and the next round will **deepen the model search** (rounds 2-3 raise tuning
-  iterations + seed-averaging — a real model-side change even with the fixed pool).
+- `round < 2` and the next round will **act on the model-class review** (round 2 = specialists read
+  `analysis_review_1.json` and apply its `hyperparameter_tuning`/`model_selection` suggestions —
+  deeper/wider tuning + seed-averaging — a real model-side change even with the fixed pool). The
+  orchestrator caps Step 6 at **one** improvement round (round 2) and time-gates it.
 
 Before deciding, **rescue feature work**: if no `expected_impact == "high"` suggestion is
 feature-actionable but the reviewer reports contain medium/low feature-actionable ones, **promote
@@ -189,13 +191,14 @@ has real work. Only if there is **no** feature-actionable suggestion at any prio
 search is already at its deepest do you treat the round as non-productive.
 
 **`next_action`** — the single field the orchestrator follows mechanically:
-- `continue_round` when `round < 3` AND the actionability gate passes (feature work exists — after
-  the rescue above — or the search will deepen) AND `approved_for_final == false`. Orchestrator
-  runs round `{round+1}`; `analysis-programmer` implements the feature-related
-  `merged_high_impact_suggestions` and the specialists search one notch deeper.
+- `continue_round` when `round < 2` AND the actionability gate passes (feature work exists — after
+  the rescue above — or there is ≥1 actionable **model-class** suggestion the specialists will apply)
+  AND `approved_for_final == false`. Orchestrator runs round `{round+1}` **iff its time gate passes**;
+  `analysis-programmer` implements the feature-related suggestions and the specialists read
+  `analysis_review_1.json` to apply the model-class ones (deeper/wider search).
 - `continue_round` is also **forced** by `revert_promotion == true` while rounds remain (a flagged
   winner must not ship without a clean fallback).
-- `stop_and_report` when `approved_for_final == true`, OR `round == 3`, OR the actionability gate
+- `stop_and_report` when `approved_for_final == true`, OR `round == 2` (the improvement-round cap), OR the actionability gate
   fails (no feature-actionable suggestion at any priority AND search already deepest) — record the
   reason ("non-productive: no actionable feature change") rather than spending an empty round.
 

@@ -27,6 +27,7 @@ produce a *candidate* (a CV score + a candidate submission); you **never** touch
 - `outputs/logs/{run_id}_profile.json` — feature bundle profile (group-aggregate keys, text columns, metric).
 - `outputs/logs/{run_id}_cv_folds.json` — the **canonical shared folds**; pass them so your CV is comparable to every other candidate.
 - `outputs/logs/{run_id}_feature_spec.json` — the analysis-programmer's **authored features** (appended to the floor's features).
+- **(round > 1 only)** the latest `outputs/logs/analysis_review_{round-1}.json` — the Step-6 **lead's** consolidated review. Glob `analysis_review_*.json`, take the highest round, and read `merged_high_impact_suggestions`. The **model-class** ones (`category` ∈ `hyperparameter_tuning` / `model_selection` / `ensemble`) are **yours to act on** — the programmer ignores them by design, so if you don't read them they fall into a black hole.
 
 ## Action (reuse the tested engine — never reimplement modeling, hardcode a column, or hardcode a budget)
 ```bash
@@ -50,6 +51,22 @@ This builds the bundle from the schema, appends the authored features, runs the
 leakage-safe group/target-aggregate + TF-IDF features), applies any monotonic constraint, and
 writes the candidate submission to `outputs/logs/{run_id}_cand_<family>.csv`, the OOF to
 `outputs/logs/{run_id}_oof_<family>.csv`, and the candidate JSON.
+
+## Acting on the lead's model-class review (round > 1 only — closes the route-A loop)
+On round 1 there is no review yet — run the plain command above. On **round > 1**, before launching,
+read the latest `analysis_review_{round-1}.json` and translate the model-class suggestions for **your
+family** into the engine's **already-exposed knobs only** (never invent a hyperparameter the engine
+doesn't accept, never hardcode a column or a dataset-specific value):
+
+| Suggestion category | Concrete, dataset-agnostic action |
+|---|---|
+| `hyperparameter_tuning` (e.g. "search harder / wider") | export a larger `AWARDB_TUNE_ITER` and/or `AWARDB_SEEDS` before the launch (these override the launcher's round defaults, which already escalate by `--round`) |
+| `model_selection` (e.g. "prefer the log-target variant", "this family is dead weight") | pass `--round {round}` so the launcher deepens; if the suggestion says **your** family carried NNLS weight 0 and is far worse than the floor, report that and **skip** — do not burn the slice |
+| `ensemble` (e.g. "change the blend") | **not yours** — that is `ensemble-meta`'s lever; note it and ignore |
+
+Always pass `--round {round}` (from your prompt) so the launcher's built-in escalation applies. A
+suggestion the engine cannot action (a knob it doesn't expose) is **noted in your output JSON and
+skipped** — never fake it. Respect `AWARDB_TIME_BUDGET_SEC`: a deeper search still self-caps.
 
 ## Output — shared candidate schema
 The script writes `outputs/logs/{run_id}_agent_<family>.json`:

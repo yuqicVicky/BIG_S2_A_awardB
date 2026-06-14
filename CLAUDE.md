@@ -50,7 +50,7 @@ that owns the artifact — the reviewer never fixes it itself.
 | Token budget | 1,000,000 | skip to Step 7 |
 | Wall-clock | 2 hours | skip to Step 7 |
 | Feature-plan/completeness gate | ≤2 | accept plan after round 2 |
-| Improvement rounds | ≤1 | ship best after round 1 (single round only) |
+| Improvement rounds | ≤1 | one round-2 allowed when the lead emits `continue_round` AND the Step-6E time gate passes (≥30 min left); else ship round-1 best |
 
 **Budget guard (your only self-check):** after any step, if cumulative tokens > 800,000 OR
 elapsed > 90 min, skip directly to Step 7. Under this shortcut also set `AWARDB_SKIP_ABLATION=1`
@@ -111,7 +111,7 @@ and `DATA_DESCRIPTION.md`). The prose here gives the **control logic** only.
 - `accept_plan` → go to Step 6.
 - `revise_plan` → dispatch `analysis-planner` (revision mode, pass the `plan_review_{r}.json` path), then re-dispatch `plan-reviewer` for round 2 and accept unconditionally.
 
-**Step 6 — Execution (single round).** Division of labor: **`analysis-programmer` = features**, **modeling agents = models**. All candidates score OOF on the canonical shared folds (`{run_id}_cv_folds.json`).
+**Step 6 — Execution (≤1 improvement round, time-gated — see E).** Division of labor: **`analysis-programmer` = features**, **modeling agents = models**. All candidates score OOF on the canonical shared folds (`{run_id}_cv_folds.json`).
 - **A.** Dispatch `analysis-programmer` (**features only**): seed the floor **once** — launch `AWARDB_RUN_ID=$RUN_ID AWARDB_SKIP_REPORT=1 AWARDB_TIME_BUDGET_SEC=600 python main.py` **in the background** (Bash `run_in_background`), then **immediately and concurrently** author `outputs/scratch/{run_id}/feature_pipeline.py`. After main.py finishes, execute `feature_pipeline.py` to write `{run_id}_features_train/pred.parquet` + `{run_id}_feature_spec.json`. No modeling, no `submission.csv` after floor. (Floor budget is capped at 600s — it is only the保底 deliverable; the specialists + ensemble do the real lifting. Raise it only if the 100-min total has slack.) Outputs: `submission.csv` baseline, `{run_id}_model_selection.json`, `{run_id}_oof_floor.csv`, `{run_id}_cv_folds.json` (if absent), `{run_id}_features_train/pred.parquet`, `{run_id}_feature_spec.json`.
 - **A′. Feature ablation gate.** Run `python scripts/run_feature_ablation_gate.py --run-id {run_id} --cv-folds outputs/logs/{run_id}_cv_folds.json --feature-spec outputs/logs/{run_id}_feature_spec.json --round 1`. Then dispatch `feature-engineering-reviewer`. On any failure set `AWARDB_SKIP_ABLATION=1` (pass-through).
 - **B.** Branch on `analysis_plan.json.modeling_mode`:
@@ -120,7 +120,9 @@ and `DATA_DESCRIPTION.md`). The prose here gives the **control logic** only.
   - The mode owner also writes `prediction_sanity.json`, `{run_id}_promotion.json`, `{run_id}_prior_best.csv`.
 - **C.** Dispatch the **three reviewers in parallel**: `model-performance-reviewer` (review mode), `feature-leakage-reviewer`, `generalization-reviewer`.
 - **D.** Re-dispatch `model-performance-reviewer` (**lead** mode): writes `analysis_review_1.json`, owns `next_action`.
-- **E.** `next_action` is always `stop_and_report` (single round — do not loop). Proceed directly to Step 7.
+- **E.** Follow the lead's `next_action` (the route-A model-review loop), **bounded by the budget guard**:
+  - `stop_and_report` → proceed directly to Step 7.
+  - `continue_round` → run **exactly one** second modeling round (≤1 improvement round, per the constraints table) **only if the time gate passes**: cumulative tokens < 800,000 **AND** ≥ 30 min of the 100-min budget still remain (a full second modeling round costs ~25–30 min). If the gate fails, treat it as `stop_and_report` and go to Step 7. Second round = re-dispatch **6A** `analysis-programmer` (it implements the feature-actionable suggestions from `analysis_review_1.json`; **it does NOT re-seed the floor — the floor is seeded once in round 1**, so round 2 only re-authors `feature_pipeline.py` + the feature parquets) → **6A′** ablation gate → **6B** specialists with `--round 2` (each reads `analysis_review_1.json` and acts on its **model-class** suggestions — the route-A wiring) + `ensemble-meta` (keep-best only promotes a strict improvement, so round 2 can never regress) → **6C** three reviewers → **6D** lead writes `analysis_review_2.json`. After round 2, `next_action` is forced to `stop_and_report` (round 2 is the cap). Proceed to Step 7.
 
 **Keep-best (common-OOF NNLS):** every candidate's OOF on `{run_id}_cv_folds.json` is scored on the one official metric; the keep-best owner (`model-search-agent` general / `ensemble-meta` specialist) NNLS-blends across candidates (weights applied to test preds) and overwrites `submission.csv` only on a strict improvement, recording `{run_id}_promotion.json` (+ `{run_id}_prior_best.csv` for rollback). The floor seeded in 6A guarantees a deliverable. After Step 6 `submission.csv` holds the best prediction; `supervisor-gatekeeper` re-checks in Step 8.
 
@@ -159,7 +161,7 @@ It produces `submission.csv` + `report.pdf` via the in-process pipeline; then re
 | 6A′ | `run_feature_ablation_gate.py` (script) → `feature-engineering-reviewer` | `{run_id}_feature_spec.json`, `{run_id}_cv_folds.json`, `data/` (+ prior `{run_id}_feature_spec_full.json` round>1) | `{run_id}_feature_ablation.json`, `{run_id}_feature_spec_full.json` (original backup), pruned `{run_id}_feature_spec.json`, `{run_id}_feature_gate.json`, `{run_id}_llm_gate_feature_gate.json` |
 | 6B | `model-search-agent` (general) **or** `modeling-specialist` (×2: gbdt/linear)+`modeling-watchdog`+`ensemble-meta` (specialist) | `{run_id}_cv_folds.json`, `{run_id}_feature_spec.json`, `{run_id}_oof_floor.csv`, `{run_id}_model_selection.json`, `spec_parse.json`, `validation_strategy.json` | general: `model_search.json`+`final_model.json`; specialist: `{run_id}_<fam>-specialist_progress.jsonl` (heartbeats) + `{run_id}_<fam>-specialist_watchdog.json` (watchdog verdicts) + `{run_id}_ensemble_meta.json`+`{run_id}_meta_choice.csv`+`{run_id}_cand_*.csv`+`{run_id}_agent_*.json`; both: `{run_id}_oof_*.csv`, `prediction_sanity.json`, `{run_id}_promotion.json`, `{run_id}_prior_best.csv`, `submission.csv` |
 | 6C | `model-performance-reviewer` (review); `feature-leakage-reviewer`; `generalization-reviewer` — **parallel** | modeling outputs (6B), `{run_id}_profile.json`, pruned `{run_id}_feature_spec.json`+`feature_pipeline.py`+`{run_id}_feature_gate.json` (feature reviewer), `validation_strategy.json`, `prediction_sanity.json`, `{run_id}_promotion.json`, `submission.csv` | `model_performance_review.json`; `feature_audit_review.json`; `overfitting_leakage_audit.json` |
-| 6D | `model-performance-reviewer` (lead) ↔ `analysis-programmer` | the 3 reports above + `analysis_review_{r-1}.json` | `analysis_review_{1,2,3}.json` (owns `next_action`) |
+| 6D | `model-performance-reviewer` (lead) ↔ `analysis-programmer` + specialists | the 3 reports above + `analysis_review_{r-1}.json` | `analysis_review_{1,2}.json` (owns `next_action`; route-A: specialists read it round 2) |
 | 7a | `validation-and-schema-guardian` (submission-validation) | `submission.csv`, `data/sample_submission.csv`, `spec_parse.json` | `submission_validation.json` + formatted `submission.csv` |
 | 7b | `report-writer` | all logs above | `report.pdf` (repo root) + `outputs/reports/{run_id}_report.{md,pdf}` |
 | 8a | `report-reviewer` ↔ `report-writer` | `report.pdf` + logs | `report_review.json` |
