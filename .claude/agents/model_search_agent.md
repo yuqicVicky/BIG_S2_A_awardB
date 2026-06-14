@@ -23,7 +23,6 @@ You are the Model Search Agent. You train baselines, then candidate models, reco
 | `{run_id}_feature_spec.json` | `outputs/logs/` — the analysis-programmer's **authored features** |
 | `{run_id}_oof_floor.csv`, `{run_id}_oof_*.csv` | `outputs/logs/` — candidates' OOF for the keep-best blend |
 | Existing `submission.csv` | Repo root (the floor baseline / current best) |
-| **(round > 1)** latest `analysis_review_{round-1}.json` | `outputs/logs/` — the Step-6 **lead's** review. Read `merged_high_impact_suggestions` and act on the **model-class** ones (`hyperparameter_tuning` / `model_selection` / `ensemble`): translate them into your search — wider/longer randomized tuning, add/swap a candidate within the fixed pool, more seed-averaging. These are **yours**; the programmer ignores them by design, so unread = black hole. A suggestion the engine can't action is noted and skipped, never faked. |
 
 ---
 
