@@ -129,6 +129,15 @@ respects; leakage risks and limitations. If scoring is restricted to a subset of
 that the cross-validated metric is computed over exactly those scored rows so it aligns with the
 leaderboard, and that the other categories still inform lag features but do not count toward the score.
 
+**Report ONE primary metric — the leaderboard-aligned one.** Use the metric that actually drove
+model selection: the OOF score on the canonical folds restricted to the scored rows (the value in
+`{run_id}_ensemble_meta.json` / `{run_id}_promotion.json`, e.g. 1.671). Name it consistently with
+the selection logs (here block-MAE, which equals plain MAE when the dataset has no block column —
+say so once). **Do NOT surface a model's internal self-reported score** (e.g. an agent JSON's
+`cv_score` computed over all categories or on a different fold scheme) alongside it as if comparable
+— if you must mention it, label it explicitly as a non-aligned diagnostic, never in the headline /
+at-a-glance table. One number, one definition, everywhere in the report.
+
 #### Section 6 — Candidate Models
 One sentence on how many candidates were evaluated and what won, then a table with the
 selected/blended row in **bold**.

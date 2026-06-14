@@ -96,7 +96,13 @@ applicable family, each **fold-safe**:
 - `datetime_derived` — the `col__<field>` set (year, month, sin/cos, day, dayofweek, is_weekend,
   quarter, weekofyear, ordinal; hour fields when sub-day). Opaque ordered id → a single ordinal
   rank.
-- `text_tfidf_svd` — `{col, svd_components}` for each text column.
+- `text_tfidf_svd` — `{col, svd_components}` for each text column. **Do not default to a fixed
+  large count (e.g. 20).** A free-text column with weak target correlation rarely justifies many
+  components; an over-sized SVD block becomes dead weight the Step-6A′ gate must pay to prune.
+  **Size it small and let the gate grow it:** start at ≈8 components (fewer when the column is
+  sparse / low-cardinality or shows little measured influence), mark the block `experimental: true`
+  so the ablation gate validates it, and only plan a larger count when prior-round ablation
+  evidence shows the text group carries a clearly positive delta.
 - `per_fold_target_aggregates` — `[{name, group_keys}]`, each computed on fold-train rows only.
 - `interactions` / `lag_features` — propose when justified, but **flag overfit risk**: lag/rolling
   aggregates on a small number of periods are noisy; mark them experimental so the Step-6A′
@@ -142,7 +148,10 @@ record it as `feature_plan.image_features`:
   `mean, std, p10, p50, p90, high_frac` (fraction above mid-scale), `cover` (fraction of
   non-background pixels — itself informative), and spatial `cmass_x, cmass_y` / quadrant means.
   Optionally add a small `TruncatedSVD` (e.g. 8 comps) of a 32×32 grayscale downsample for coarse
-  spatial structure.
+  spatial structure — **mark this SVD `experimental: true`**: it is the most overfit-prone part of
+  the image block, especially when images are group-constant (one image per key already captured by
+  the scalar summaries), so let the Step-6A′ gate decide whether it earns its columns rather than
+  shipping it by default. Keep the scalar summaries (cheap, robust) and gate the SVD.
 - **Join.** These features are keyed by the sidecar's `key_columns`; left-join onto **both** the
   train and prediction frames by those keys. Fill rows with a missing image from the **training**
   feature median (`missing_fill: train_median`).
@@ -242,7 +251,7 @@ fabricate a `..._000000` timestamp — use the canonical run_id so the field is 
     "direct_numeric": ["..."],
     "categorical_encoding": [{"column": "...", "strategy": "one_hot|ordinal|target_enc_per_fold"}],
     "datetime_derived": ["..."],
-    "text_tfidf_svd": [{"column": "...", "svd_components": 20}],
+    "text_tfidf_svd": [{"column": "...", "svd_components": 8, "experimental": true}],
     "per_fold_target_aggregates": [{"name": "...", "group_keys": ["..."]}],
     "interactions": ["..."],
     "lag_features": [{"name": "...", "group_keys": ["..."], "experimental": true}],
@@ -251,7 +260,7 @@ fabricate a `..._000000` timestamp — use the canonical run_id so the field is 
       "source_sidecar": "<file_sidecars[i].path_*>", "join_keys": ["..."],
       "method": "colormap_inversion_summary | grayscale_summary",
       "summary_stats": ["mean","std","p10","p50","p90","high_frac","cover","cmass_x","cmass_y"],
-      "optional_svd": {"on": "grayscale_downsample_32x32", "n_components": 8},
+      "optional_svd": {"on": "grayscale_downsample_32x32", "n_components": 8, "experimental": true},
       "missing_fill": "train_median", "degraded_if_no_pillow": true
     },
     "exclude_columns": ["..."],

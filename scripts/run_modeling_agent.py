@@ -176,11 +176,34 @@ def main() -> None:
         oof_path = logs / f"{args.run_id}_oof_{args.approach}.csv"
         write_oof(oof_path, oof_full, scored_mask=scored_mask)
 
-    cv_score = next(
-        (s.get("score") for s in mr.model_scores
-         if s.get("name") == mr.selected_model_name and s.get("status") == "ok"),
-        None,
-    )
+    # cv_score must be reported on the SAME footing every other candidate (and the
+    # ensemble keep-best) uses: MAE on the canonical-fold OOF restricted to the scored
+    # rows. The engine's internal model_scores may aggregate over all categories / a
+    # different block path, producing a number that is not comparable to the ensemble's
+    # (the source of the "0.85 vs 1.67" confusion). Prefer the scored-OOF MAE; fall back
+    # to the engine score only if the OOF/target rows do not line up.
+    cv_score = None
+    cv_score_source = "scored_oof_mae"
+    try:
+        if oof_full is not None:
+            y_valid = pd.to_numeric(bundle.target, errors="coerce")
+            y_valid = y_valid[y_valid.notna()].to_numpy(dtype=float)
+            oof_arr = np.asarray(oof_full, dtype=float)
+            if len(oof_arr) == len(y_valid):
+                keep = np.isfinite(oof_arr) & np.isfinite(y_valid)
+                if scored_mask is not None:
+                    keep &= np.asarray(scored_mask, dtype=bool)
+                if keep.any():
+                    cv_score = float(np.abs(oof_arr[keep] - y_valid[keep]).mean())
+    except Exception as exc:  # noqa: BLE001
+        print(f"[cv] scored-OOF cv_score unavailable: {type(exc).__name__}: {exc}")
+    if cv_score is None:
+        cv_score_source = "engine_model_score"
+        cv_score = next(
+            (s.get("score") for s in mr.model_scores
+             if s.get("name") == mr.selected_model_name and s.get("status") == "ok"),
+            None,
+        )
     # Surface the selected model's cross-fold stability (already computed by the
     # engine) so the model-performance-reviewer has a real generalization signal
     # instead of a null train_val_gap. relative_stability = cv_std / cv_mean is a
@@ -195,6 +218,7 @@ def main() -> None:
         "selected_model": mr.selected_model_name,
         "cv_metric": mr.metric_name,
         "cv_score": cv_score,
+        "cv_score_source": cv_score_source,  # "scored_oof_mae" = ensemble-comparable; "engine_model_score" = fallback
         "lower_is_better": not mr.greater_is_better,
         "cv_stability": stability,  # {split_scores, cv_mae_mean, cv_mae_std, relative_stability}
         "candidate_submission": str(cand_csv),

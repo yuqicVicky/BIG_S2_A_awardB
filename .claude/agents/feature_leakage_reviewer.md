@@ -76,10 +76,14 @@ features":
   sits near the bottom of the observed distribution (decide the cutoff from the spread, do not
   hardcode) AND that are not per-fold target aggregates → a `feature_pruning` suggestion naming
   the columns.
-- **Harmful / dead groups → don't rebuild; replace.** From `{run_id}_feature_ablation.json`, any
-  group with `decision == "prune"` (removal improved OOF) is harmful — suggest the programmer
-  **not regenerate it** and, where sensible, propose a concrete alternative construction. A group
-  kept with a near-zero delta is dead weight worth simplifying.
+- **Harmful / dead groups → don't rebuild; replace.** `{run_id}_feature_ablation.json` defines
+  `delta = mae_without − baseline_mae`; lower MAE is better, so **`delta < 0` means removing the
+  group LOWERS MAE → the group HURTS** (never the reverse — a negative delta is *not* evidence a
+  group "improves OOF"; do not recommend *adding more* of a negative-delta group, e.g. raising its
+  SVD component count). A group with `decision == "prune"`, or any large group with `delta ≤ 0`,
+  is harmful or dead weight — suggest the programmer **not regenerate it** (or shrink it: fewer
+  SVD components / drop the block) and, where sensible, propose a concrete alternative. Only a
+  group with a clearly **positive** delta has earned a "build on it" suggestion.
 - **Strong features → build on them.** From the top of `{run_id}_feature_importance.json`, propose
   `feature_engineering`: specific interactions / ratios / binning on the named top features (e.g.
   `top_a × top_b`, `top_a / top_b`), so the next round's feature set genuinely differs.

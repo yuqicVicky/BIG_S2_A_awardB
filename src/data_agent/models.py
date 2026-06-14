@@ -572,6 +572,20 @@ def _train_regression(bundle: FeatureBundle, block_column: str | None, random_st
             candidates = filtered
     budget = _TimeBudget(_time_budget_seconds())
 
+    # Protected log-target candidate: when the target is heavily right-skewed the
+    # profiler flags log1p as worth doing and _build_candidates floats the *_log
+    # variants to the front — but under a tight wall-clock budget (e.g. the 600s
+    # floor) even an early _log variant can be starved if the baselines/raw models
+    # run long. Guarantee the FIRST log-target candidate is always evaluated so
+    # keep-best always has a raw-vs-log comparison on the real metric. It still
+    # respects the per-candidate cap below, so a protected candidate can never run
+    # away with the whole slice.
+    protected: set[str] = set()
+    for _name, _ in candidates:
+        if _name.endswith("_log"):
+            protected.add(_name)
+            break
+
     scores: list[dict] = []
     oof_preds: dict[str, np.ndarray] = {}
     factories: dict[str, Callable] = {}
@@ -586,7 +600,8 @@ def _train_regression(bundle: FeatureBundle, block_column: str | None, random_st
     # (the common-OOF NNLS keep-best requires every candidate scored on the same
     # full partition).
     for name, factory in candidates:
-        if budget.exhausted():
+        is_protected = name in protected
+        if budget.exhausted() and not is_protected:
             scores.append({"name": name, "status": "skipped", "error": "time_budget_exhausted"})
             continue
         # Per-candidate ceiling: at most half the total slice (floored at 90s) so
@@ -600,7 +615,11 @@ def _train_regression(bundle: FeatureBundle, block_column: str | None, random_st
             fold_scores = []
             aborted = False
             for tr_idx, va_idx in folds:
-                if budget.exhausted() or (time.monotonic() - cand_start) > cand_cap:
+                over_cap = (time.monotonic() - cand_start) > cand_cap
+                # A protected log candidate ignores the global budget (so it is
+                # never starved) but still obeys its per-candidate cap, so it can
+                # extend wall-clock by at most one candidate-slice, never unbounded.
+                if over_cap or (budget.exhausted() and not is_protected):
                     aborted = True
                     break
                 est = factory()
@@ -1694,6 +1713,23 @@ def _build_candidates(bundle: FeatureBundle, train_df: pd.DataFrame, random_stat
             ))
     except Exception:
         pass
+
+    # ── prioritise log-target variants under heavy skew ────────────────────────
+    # When the target is heavily right-skewed (add_log), the *_log variants are the
+    # highest-value candidates — but they are appended AFTER their raw twins, so a
+    # tight wall-clock budget runs the raw models first and the _log variants get
+    # skipped (time_budget_exhausted), losing the very transform the profiler flagged
+    # as worth doing. Float every *_log candidate to the front, just behind the
+    # leading baselines, so a tuned log-target model is always evaluated; selection
+    # still picks the best of whatever ran (this orders the search, it does not force
+    # the log model to win).
+    if add_log:
+        def _is_base(n: str) -> bool:
+            return n.startswith("baseline") or n.startswith("dummy")
+        baselines = [c for c in candidates if _is_base(c[0])]
+        log_vars = [c for c in candidates if c[0].endswith("_log") and not _is_base(c[0])]
+        others = [c for c in candidates if not _is_base(c[0]) and not c[0].endswith("_log")]
+        candidates = baselines + log_vars + others
 
     return candidates
 
