@@ -17,16 +17,19 @@ from reportlab.platypus import (
 PAGE_W, PAGE_H = A4
 MARGIN = 2.2 * cm
 
+# ── Visual palette ───────────────────────────────────────────────────────────
+ACCENT       = colors.HexColor("#1F6F78")   # teal — headings, table header, rules
+ACCENT_DARK  = colors.HexColor("#11424A")   # title + h2 text
+ACCENT_LIGHT = colors.HexColor("#E7F1F2")   # callout / card background
+INK          = colors.HexColor("#1A1A1A")   # body text
+INK_SOFT     = colors.HexColor("#444444")   # secondary text
+RULE_SOFT    = colors.HexColor("#C9D6D8")   # hairline rules
+ZEBRA        = colors.HexColor("#F4F8F8")   # alternate table row
+
+# Helvetica (WinAnsi) renders em/en dashes, smart quotes, ×, ² natively, so we keep
+# those glyphs. Only substitute characters genuinely outside the base font encoding.
 REPLACEMENTS = [
-    ("—", "--"),
-    ("–", "-"),
-    ("‘", "'"),
-    ("’", "'"),
-    ("“", '"'),
-    ("”", '"'),
     ("•", "-"),
-    ("×", "x"),
-    ("²", "2"),
     ("√", "sqrt"),
     ("≥", ">="),
     ("≤", "<="),
@@ -75,51 +78,52 @@ def build_styles():
     base = getSampleStyleSheet()
     styles = {}
     styles["h1"] = ParagraphStyle(
-        "h1", parent=base["Heading1"], fontSize=18, spaceAfter=6,
-        textColor=colors.HexColor("#111111"),
+        "h1", parent=base["Heading1"], fontName="Helvetica-Bold",
+        fontSize=21, leading=25, spaceBefore=2, spaceAfter=6, textColor=ACCENT_DARK,
     )
     styles["h2"] = ParagraphStyle(
-        "h2", parent=base["Heading2"], fontSize=14, spaceAfter=4,
-        textColor=colors.HexColor("#222222"),
+        "h2", parent=base["Heading2"], fontName="Helvetica-Bold",
+        fontSize=14, leading=18, spaceBefore=8, spaceAfter=3, textColor=ACCENT_DARK,
     )
     styles["h3"] = ParagraphStyle(
-        "h3", parent=base["Heading3"], fontSize=11, spaceAfter=3,
-        textColor=colors.HexColor("#333333"),
+        "h3", parent=base["Heading3"], fontName="Helvetica-Bold",
+        fontSize=10.5, leading=13, spaceBefore=4, spaceAfter=2, textColor=ACCENT,
     )
     styles["body"] = ParagraphStyle(
-        "body", parent=base["Normal"], fontSize=10, leading=14,
-        spaceAfter=4, textColor=colors.HexColor("#1a1a1a"),
+        "body", parent=base["Normal"], fontSize=10, leading=15,
+        spaceAfter=5, textColor=INK,
     )
     styles["bullet"] = ParagraphStyle(
-        "bullet", parent=styles["body"], leftIndent=12, firstLineIndent=0,
-        bulletIndent=0, spaceAfter=2,
+        "bullet", parent=styles["body"], leftIndent=14, firstLineIndent=0,
+        bulletIndent=0, spaceAfter=3,
     )
     styles["code"] = ParagraphStyle(
         "code", parent=base["Code"], fontSize=8, leading=11,
-        textColor=colors.HexColor("#333333"),
-        backColor=colors.HexColor("#f5f5f5"),
-        leftIndent=10, rightIndent=10, spaceAfter=4,
+        textColor=INK_SOFT, backColor=colors.HexColor("#F4F6F6"),
+        borderColor=RULE_SOFT, borderWidth=0.5, borderPadding=6,
+        leftIndent=4, rightIndent=4, spaceBefore=2, spaceAfter=6,
     )
-    styles["blockquote"] = ParagraphStyle(
-        "blockquote", parent=styles["body"],
-        leftIndent=20, textColor=colors.HexColor("#555555"),
-        backColor=colors.HexColor("#eeeeee"), italic=1,
+    # Callout text style; the colored card is drawn around it in parse_markdown.
+    styles["callout"] = ParagraphStyle(
+        "callout", parent=styles["body"], fontSize=10.5, leading=15,
+        textColor=ACCENT_DARK, spaceAfter=0,
     )
     return styles
 
 
 TABLE_HEADER_STYLE = TableStyle([
-    ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#e0e0e0")),
-    ("TEXTCOLOR", (0, 0), (-1, 0), colors.black),
+    ("BACKGROUND", (0, 0), (-1, 0), ACCENT),
+    ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
     ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
     ("FONTSIZE", (0, 0), (-1, -1), 8),
-    ("GRID", (0, 0), (-1, -1), 0.4, colors.HexColor("#bbbbbb")),
-    ("ROWBACKGROUNDS", (0, 1), (-1, -1), [colors.white, colors.HexColor("#f9f9f9")]),
-    ("TOPPADDING", (0, 0), (-1, -1), 4),
-    ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
-    ("LEFTPADDING", (0, 0), (-1, -1), 6),
-    ("RIGHTPADDING", (0, 0), (-1, -1), 6),
-    ("VALIGN", (0, 0), (-1, -1), "TOP"),
+    ("LINEBELOW", (0, 0), (-1, 0), 0.6, ACCENT_DARK),
+    ("LINEBELOW", (0, 1), (-1, -1), 0.3, RULE_SOFT),
+    ("ROWBACKGROUNDS", (0, 1), (-1, -1), [colors.white, ZEBRA]),
+    ("TOPPADDING", (0, 0), (-1, -1), 5),
+    ("BOTTOMPADDING", (0, 0), (-1, -1), 5),
+    ("LEFTPADDING", (0, 0), (-1, -1), 7),
+    ("RIGHTPADDING", (0, 0), (-1, -1), 7),
+    ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
     ("WORDWRAP", (0, 0), (-1, -1), True),
 ])
 
@@ -188,23 +192,25 @@ def parse_markdown(md_text: str, styles):
 
         # Headings
         if line.startswith("# "):
-            story.append(Spacer(1, 10))
+            story.append(Spacer(1, 8))
             story.append(Paragraph(sanitize(line[2:]), styles["h1"]))
-            story.append(HRFlowable(width="100%", thickness=1, color=colors.HexColor("#444444")))
-            story.append(Spacer(1, 4))
+            story.append(HRFlowable(width="100%", thickness=2, color=ACCENT,
+                                    spaceBefore=2, spaceAfter=2))
+            story.append(Spacer(1, 6))
             i += 1
             continue
         if line.startswith("## "):
-            story.append(Spacer(1, 8))
+            story.append(Spacer(1, 9))
             story.append(Paragraph(sanitize(line[3:]), styles["h2"]))
-            story.append(HRFlowable(width="100%", thickness=0.4, color=colors.HexColor("#aaaaaa")))
+            story.append(HRFlowable(width="100%", thickness=0.8, color=ACCENT,
+                                    spaceBefore=1, spaceAfter=2))
             story.append(Spacer(1, 3))
             i += 1
             continue
         if line.startswith("### "):
             story.append(Spacer(1, 5))
             story.append(Paragraph(sanitize(line[4:]), styles["h3"]))
-            story.append(Spacer(1, 2))
+            story.append(Spacer(1, 1))
             i += 1
             continue
 
@@ -225,12 +231,29 @@ def parse_markdown(md_text: str, styles):
             i += 1
             continue
 
-        # Blockquote
+        # Blockquote → callout card with a left accent bar
         if line.startswith("> "):
-            story.append(Paragraph(
-                inline_markup(sanitize(line[2:])), styles["blockquote"]
-            ))
-            i += 1
+            quote_lines = []
+            while i < len(lines) and lines[i].startswith(">"):
+                quote_lines.append(lines[i].lstrip(">").strip())
+                i += 1
+            text = inline_markup(sanitize(" ".join(l for l in quote_lines if l)))
+            para = Paragraph(text, styles["callout"])
+            card = Table([["", para]], colWidths=[4, usable_w - 4])
+            card.setStyle(TableStyle([
+                ("BACKGROUND", (0, 0), (0, 0), ACCENT),
+                ("BACKGROUND", (1, 0), (1, 0), ACCENT_LIGHT),
+                ("LEFTPADDING", (1, 0), (1, 0), 10),
+                ("RIGHTPADDING", (1, 0), (1, 0), 10),
+                ("TOPPADDING", (0, 0), (-1, -1), 7),
+                ("BOTTOMPADDING", (0, 0), (-1, -1), 7),
+                ("LEFTPADDING", (0, 0), (0, 0), 0),
+                ("RIGHTPADDING", (0, 0), (0, 0), 0),
+                ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+            ]))
+            story.append(Spacer(1, 2))
+            story.append(card)
+            story.append(Spacer(1, 6))
             continue
 
         # Bullet list
@@ -266,9 +289,15 @@ def parse_markdown(md_text: str, styles):
 
 def header_footer(canvas, doc):
     canvas.saveState()
-    canvas.setFont("Helvetica", 8)
+    # Hairline rule above the footer
+    canvas.setStrokeColor(RULE_SOFT)
+    canvas.setLineWidth(0.5)
+    canvas.line(MARGIN, 1.35 * cm, PAGE_W - MARGIN, 1.35 * cm)
+    canvas.setFont("Helvetica", 7.5)
+    canvas.setFillColor(INK_SOFT)
+    canvas.drawString(MARGIN, 1.0 * cm, "Analysis Report")
     canvas.setFillColor(colors.grey)
-    canvas.drawCentredString(PAGE_W / 2, 1.0 * cm, f"Page {doc.page}")
+    canvas.drawRightString(PAGE_W - MARGIN, 1.0 * cm, f"Page {doc.page}")
     canvas.restoreState()
 
 

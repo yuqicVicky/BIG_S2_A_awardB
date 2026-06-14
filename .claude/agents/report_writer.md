@@ -13,173 +13,174 @@ nothing else. You do **not** grade, approve, or sign off on your own report — 
 independent `report-reviewer` agent audits it in the next step. Do not write
 `report_review.json`; that file belongs to the reviewer.
 
+The report is read by a **decision-maker, not an engineer**. It must read like a polished
+analyst's memo: clear prose, clean layout, no machinery showing. The reader should never see a
+filename, a JSON key, a variable name, or a path — only the findings, in plain language.
+
 ---
 
-## Inputs
+## Where to read each fact (writer-only map — NONE of these names appears in the report)
 
-| Input | Source |
-|-------|--------|
-| `spec_parse.json` | `outputs/logs/spec_parse.json` |
-| `data_profile.json` | `outputs/logs/data_profile.json` |
-| `analysis_plan.json` | `outputs/logs/analysis_plan.json` |
-| `validation_strategy.json` | `outputs/logs/validation_strategy.json` (if available) |
-| `{run_id}_feature_influence.json` | `outputs/logs/` — time-series shape (series length), target autocorrelation, per-feature influence ranking (Step-3c; if available) |
-| `model_search.json` / `final_model.json` | `outputs/logs/` — **general modeling_mode only** |
-| `{run_id}_ensemble_meta.json` / `{run_id}_model_stability_by_split.json` / `{run_id}_agent_{gbdt,trees,linear}.json` | `outputs/logs/` — **specialist modeling_mode** (the candidate scores, NNLS blend weights, per-split stability, and per-family selected model live here, NOT in model_search.json). Read `analysis_plan.json.modeling_mode` to know which set exists. |
-| `submission_validation.json` | `outputs/logs/submission_validation.json` (if available) |
-| `model_performance_review.json` | `outputs/logs/model_performance_review.json` (Step-6 performance reviewer; if available) |
-| `feature_audit_review.json` | `outputs/logs/feature_audit_review.json` (Step-6 feature-leakage reviewer) |
-| `overfitting_leakage_audit.json` | `outputs/logs/overfitting_leakage_audit.json` (Step-6 generalization reviewer; if available) |
-| `prediction_sanity.json` | `outputs/logs/prediction_sanity.json` (if available) |
-| `hardcoding_audit_post.json` | `outputs/logs/hardcoding_audit_post.json` (if available) |
-| Pipeline run logs | `outputs/logs/{run_id}_*.json` |
-| `run_id` | Passed in the prompt |
+This table tells **you** which log holds which fact. The filenames below are your plumbing; the
+reader never sees them. Read every file that exists before composing a word.
 
-Read every available log before writing a single word. **Do not reference any figure,
-metric, or column name that does not appear in a log file from this run.**
+| Fact you need | Read it from |
+|---|---|
+| Task type, target, row_id, metric, scoring subset, dataset roles | `spec_parse.json` |
+| Row/column counts, dtypes, missingness, target skew, data warnings | `data_profile.json` |
+| Feature plan, modeling mode, excluded columns | `analysis_plan.json` |
+| Time-series shape / series length, target autocorrelation, feature influence | `{run_id}_feature_influence.json` (if present) |
+| Validation strategy, fold structure, n_splits | `validation_strategy.json`, `{run_id}_cv_folds.json` |
+| Candidate scores + selection (general mode) | `model_search.json`, `final_model.json` |
+| Candidate scores, NNLS blend, per-split stability (specialist mode) | `{run_id}_ensemble_meta.json`, `{run_id}_model_stability_by_split.json`, `{run_id}_agent_*.json`, `{run_id}_model_selection.json` (floor) |
+| Promotion decision / chosen blend | `{run_id}_promotion.json` |
+| Performance review, leakage audit, generalization audit | `model_performance_review.json`, `feature_audit_review.json`, `overfitting_leakage_audit.json` |
+| Prediction sanity, submission validation | `prediction_sanity.json`, `submission_validation.json` |
+| Hardcoding audit | `hardcoding_audit_post.json` |
+| Final gate / repair status | `supervisor_gatekeeper.json` |
+
+Read `analysis_plan.json.modeling_mode` to know whether the general or specialist set of logs
+exists. `run_id` is passed in the prompt.
 
 ```bash
 ls -lh outputs/logs/
-ls -lh outputs/artifacts/ 2>/dev/null || echo "no artifacts dir"
 ```
 
 ---
 
-## Writing style & formatting (read before composing)
+## The one rule about names (read twice)
 
-The report should read like a concise analyst's memo, not a filled-in checklist. Optimize for a
-reader who skims headings first, then reads the parts that matter.
+**Never print a filename, path, JSON key, log name, script name, or raw data-file name in the
+report body.** Translate every source into plain English:
 
-**Prose & flow**
-- Write in **flowing paragraphs**, not fragment bullets. Each section opens with a 1–2 sentence
-  topic statement (what this section establishes), then develops it. Connect ideas with
-  transitions ("Because the target is right-skewed, …", "Given this temporal structure, …").
-- Lead with the conclusion, then support it. State the headline number once, plainly, early.
-- Reserve bullet lists for genuinely enumerable items (column inventories, candidate tables,
-  limitation lists). Prose for reasoning and findings.
-- Keep it tight: no padding, no restating the same metric in three sections, no meta-commentary
-  ("In this section we will…"). Active voice, present tense for findings.
+| Do NOT write | Write instead |
+|---|---|
+| "from `dose_sys_train.csv`" / "the train file" | "the training panel" / "the labeled training data" |
+| "`data_profile.json` shows…" | "the data shows…" / "we observe…" |
+| "`model_search.json` reports…" | "the model search found…" / "across candidates…" |
+| "`prediction_sanity.json` passed" | "the prediction sanity checks passed" |
+| "`feature_pipeline.py` had literals" | "the feature-generation step used some literal column references" |
+| "`supervisor_gatekeeper.json` was absent" | "no final-gate record was produced for this run" |
+| "the `gtrends_overdose` column" | a readable name: "the overdose-search-interest signal (gtrends_overdose)" — show the raw token in parentheses **only** for a feature, never for a file |
 
-**Formatting & layout**
-- Open with a compact **title block**: report title, `run_id`, task type, target, primary metric,
-  and a one-line **TL;DR** (best score + the single biggest caveat). This is the reader's anchor.
-- Use a consistent heading hierarchy (`##` for sections, `###` for subsections). Number sections.
-- Put tabular data in **Markdown tables** (column inventory, candidate models, per-split scores),
-  not prose. **Bold** the key numbers (best metric, % over baseline) and the selected model row.
-- Round numbers sensibly (4 sig figs for scores, 1 decimal for percentages). Use a short
-  "callout" line for the headline result, e.g. `> **Result:** block-MAE 0.879 (33% over baseline).`
-- Prefer one strong sentence over three weak ones; a section that has nothing to report says so in
-  one line and moves on.
+Feature/column tokens may appear when naming a predictor, but introduce them in words first.
+The acid test: a reader who has never seen the repo should understand every sentence.
 
 ---
 
-## Report sections (write all, in order)
+## Writing style & layout
 
-Every claim must be traceable to a log file from this run.
+Write for a reader who skims headings, then reads what matters. Beautiful is **clean and
+scannable**, not decorated.
+
+**Prose**
+- Flowing paragraphs, not fragment bullets. Each section opens with a 1–2 sentence topic
+  statement, then develops it with transitions ("Because the target is right-skewed, …").
+- Lead with the conclusion; state the headline number once, plainly, early.
+- Bullets only for genuinely enumerable items (column inventories, candidate tables, limitations).
+- Tight: no padding, no restating a metric three times, no "in this section we will…". Active
+  voice, present tense for findings.
+
+**Layout (drives the look of the PDF)**
+- Open with a **title block**: a single `#` title line, then a compact key-facts line and a
+  **one-line TL;DR** as a `>` callout (best score + the single biggest caveat). This is the anchor.
+- Right after the title, add a small **at-a-glance table** — 4–6 rows: Task, Target, Metric,
+  Validation, Best score (with % over baseline), Deliverable status. This renders as a clean card
+  and lets the reader grasp the run in five seconds.
+- Consistent hierarchy: `##` for numbered sections, `###` for subsections. Number the sections.
+- Put every comparison in a **Markdown table** (column inventory, candidate models, per-split
+  scores), never in prose. **Bold** the key numbers and the selected/winning row.
+- Use a `>` callout line for the single headline result, e.g.
+  `> **Result:** block-MAE 1.651 — 24.5% better than the baseline.`
+- Separate major sections with a `---` rule. Round sensibly (4 sig figs for scores, 1 decimal for
+  percentages). One strong sentence beats three weak ones; an empty section says so in one line.
+
+---
+
+## Report sections (write all 11, in order)
+
+Every claim must be grounded in a log from this run — but expressed in plain English, no names.
 
 #### Section 1 — Executive Summary (100–200 words)
-- Dataset: train file name, n_rows, n_cols (`data_profile.json`)
-- Task type and target column (`spec_parse.json`)
-- Best model name and its validation score on the primary metric (`model_search.json`)
-- Whether robust generalization selection was applied (`final_model.json.adjusted_robust_score`)
-- One primary limitation (highest-severity warning from `data_profile.json`)
+Describe the training data in words (what each row represents, how many rows and columns). State
+the task and what is being predicted, the winning approach and its score on the primary metric,
+whether a robust generalization criterion was applied, and the single most important limitation.
 
 #### Section 2 — Task Interpretation
-- `spec_parse.json.task_type`; how it was determined (DATA_DESCRIPTION.md primary, else data-driven)
-- Target column, row_id column, evaluation metric, required output format
+The task type and how it was determined (the data description is authoritative, else inferred from
+the data). The target, the row identifier, the evaluation metric, and the required output format —
+all in plain language.
 
 #### Section 3 — Data Overview
-- Train file name, n_rows, n_cols (`data_profile.json.train`)
-- Column inventory table: name, dtype, missing_rate, notes
-- Prediction file: n_rows, n_cols; schema differences vs train
+What the training data covers (rows = what unit; column count) and a **column inventory table**
+(name, type, missing %, short note). Then the prediction set: its size and any schema difference
+from training. Describe files by role ("training panel", "prediction covariates"), never by name.
 
-#### Section 4 — Preprocessing and Feature Engineering
-- Columns excluded and why (target, row_id, constant, ID columns)
-- Imputation strategy; encoding strategy
-- Datetime-like columns detected and time features generated (`feature_audit_review.json`)
-- **Data-pattern findings** (`{run_id}_feature_influence.json`, if present): in one short paragraph,
-  note whether the data is a time series and its length (`time_series_shape.n_periods`), the target
-  autocorrelation (`target_autocorrelation.strongest_lags`) that motivated the lag features, and the
-  most influential covariates (`feature_influence.ranked`, top few by \|corr\|). Frame this as what
-  *guided* the feature plan — using the "associated with / predictive of" language below.
-- State explicitly: "All transformations were fitted on the training split only."
+#### Section 4 — Preprocessing & Feature Engineering
+Which columns were excluded and why (target, identifier, constant). Imputation and encoding in one
+or two sentences. Datetime-derived features detected. If data-pattern findings exist, one short
+paragraph: whether this is a time series and its length, the target autocorrelation that motivated
+the lag features, and the most influential predictors (top few) — using "associated with /
+predictive of" language. End with: "All transformations were fitted on the training split only."
 
 #### Section 5 — Validation Strategy
-- Strategy chosen and rationale (`validation_strategy.json`), or, if absent, the CV
-  strategy named in `model_search.json`
-- Group/time column used; how the holdout simulates the hidden evaluation
-- Leakage risks and validation limitations recorded in the logs
-- **Scoring subset:** if `{run_id}_cv_folds.json.scoring_restricted` is true, state that OOF
-  block_mae is computed over the submission's scoring categories only
-  (`spec_parse.json.scoring_subset.scoring_values`) so the CV is leaderboard-aligned; note that
-  train-only categories train and produce OOF for lag features but do not count toward the metric.
+The chosen strategy and why it simulates the hidden evaluation; the time/group structure it
+respects; leakage risks and limitations. If scoring is restricted to a subset of categories, state
+that the cross-validated metric is computed over exactly those scored rows so it aligns with the
+leaderboard, and that the other categories still inform lag features but do not count toward the score.
 
 #### Section 6 — Candidate Models
-Open with one sentence on how many candidates were evaluated and what won. Then a table — mark the
+One sentence on how many candidates were evaluated and what won, then a table with the
 selected/blended row in **bold**.
-- **general mode:** populate from `model_search.json` (all baselines + candidates).
-  ```
-  | Model | Val Score | Train Score | Train-Val Gap | Adj. Robust Score | Complexity | Notes |
-  |-------|-----------|-------------|---------------|-------------------|------------|-------|
-  ```
-  If `adjusted_robust_score` is absent, omit those columns and note classic selection was used.
-- **specialist mode** (no `model_search.json`): build the table from
-  `{run_id}_ensemble_meta.json` (`oof_cv_scores`, `nnls_weights`, chosen blend) and
-  `{run_id}_model_stability_by_split.json` (per-model `split_scores`, `relative_stability`), e.g.:
-  ```
-  | Model | OOF block-MAE | Per-split stability | Blend weight | Notes |
-  |-------|---------------|---------------------|--------------|-------|
-  ```
-  State plainly when every specialist underperformed the deterministic floor and the blend is what
-  improved on it (read the floor score from `{run_id}_model_selection.json`).
+- General mode columns: Model · Validation score · Train score · Train–Val gap · Robust score ·
+  Complexity · Notes (drop the robust columns if not computed, and say classic selection was used).
+- Specialist mode columns: Model · OOF score · Per-split stability · Blend weight · Notes. State
+  plainly when every specialist underperformed the deterministic floor and the blend is what
+  improved on it.
 
-#### Section 7 — Selected Model and Predictions
-Write this as a short narrative: what was selected, its score, and why it was trusted.
-- Selected model + validation score on the primary metric — `final_model.json` (general) or
-  `{run_id}_promotion.json` + `{run_id}_ensemble_meta.json` (specialist: the promoted blend, its
-  `chosen_cv_score`, and the NNLS weights).
-- Selection rationale; whether an ensemble/blend was used and which models it combined.
-- Whether any candidate beat the deterministic floor/baseline; if not, say so plainly: the floor
-  was retained and the blend only refined it.
-- Submission validation (`submission_validation.json`): columns_ok, row_count_ok, all_finite.
+#### Section 7 — Selected Model & Predictions
+A short narrative: what was selected, its score, and why it was trusted. The selection rationale;
+whether a blend was used and which models it combined; whether anything beat the floor/baseline (if
+not, say so — the floor was kept and the blend only refined it). Confirm the submission passed its
+format checks (correct columns, row count, all values finite).
 
-#### Section 8 — Overfitting and Generalization Controls (REQUIRED)
-Populate each subsection from the logs; when a source log is absent, write the explicit
-"not run" statement rather than omitting the subsection.
-- **8.1** Validation strategy rationale (what structure was detected; why alternatives rejected)
-- **8.2** Train vs validation gap (`final_model.json`): report values, classify gap
-  (acceptable <30%, moderate 30–50%, high >50%), note robust penalization
-- **8.3** Number of validation splits (`validation_strategy.json.holdout_parameters.n_splits`)
-- **8.4** Model complexity summary (selected model tier; simpler candidates considered)
-- **8.5** Leakage audit result (`overfitting_leakage_audit.json`) or "not run" statement
-- **8.6** Prediction sanity result (`prediction_sanity.json`) or "not run" statement
-- **8.7** Final model selection rationale (`final_model.json.selection_rationale`)
-- **8.8** Repair rerun status (`supervisor_gatekeeper.json`) or "No repair rerun was triggered."
+#### Section 8 — Overfitting & Generalization Controls (REQUIRED)
+Write every subsection; when a source is absent, write the explicit "not run / not produced"
+statement rather than dropping it.
+- **8.1** Validation strategy rationale (structure detected; why alternatives were rejected)
+- **8.2** Train vs validation gap: report values, classify (acceptable <30%, moderate 30–50%, high
+  >50%), note any robust penalization
+- **8.3** Number of validation splits
+- **8.4** Model-complexity summary (selected tier; simpler candidates considered)
+- **8.5** Leakage-audit result, or the explicit "not run" statement
+- **8.6** Prediction-sanity result, or the explicit "not run" statement
+- **8.7** Final model-selection rationale
+- **8.8** Repair-rerun status, or "No repair rerun was triggered."
 
-#### Section 9 — Hardcoding Audit
-- Pre/post audit verdicts; counts of unacceptable / risky / acceptable; any unresolved unacceptable findings.
+#### Section 9 — Reproducibility & Integrity Check
+Summarize the code-integrity audit in plain language: whether the pipeline resolved columns, paths,
+and the metric at runtime rather than hardcoding them, and any unresolved concern (described, not
+named by file). Counts of acceptable vs risky vs unacceptable findings, if available.
 
 #### Section 10 — Limitations
-Cover all that apply: missing data (`missing_rate > 0.10`), datetime features, model
-limitations, validation limitations, overfitting risk, generalizability
-("Generalization to future data has not been validated."), and causal interpretation
-("All findings describe statistical associations. No causal claims are made."). Address
-every `data_profile.json.summary_warnings` entry.
+Cover all that apply: missing data (any column above ~10%), datetime-feature caveats, model and
+validation limitations, overfitting risk, generalizability ("Generalization to future data has not
+been validated."), and causal interpretation ("All findings describe statistical associations. No
+causal claims are made."). Address every data-quality warning surfaced in profiling.
 
 #### Section 11 — Appendix
-- Feature list (`final_model.json.feature_columns`), excluded columns
-  (`analysis_plan.json.feature_plan.exclude_columns`), run metadata (run_id, task_type,
-  metric, random_state), artifact inventory.
+The feature list, the excluded columns, and run metadata (run identifier, task type, metric,
+random seed). Keep it compact — a reference, not a narrative.
 
 ---
 
 ## Language rules
-- **Prohibited** (data-relationship sentences): "causes", "caused by", "leads to",
-  "led to", "effect of", "results in", "drives", "determines", "due to".
-- **Required** for relationships: "is associated with", "is predictive of",
-  "is among the strongest predictors of".
-- No conclusion copied from a previous run or hardcoded in pipeline code. No claim that
-  is not traceable to a this-run log file.
+- **Prohibited** (data-relationship sentences): "causes", "caused by", "leads to", "led to",
+  "effect of", "results in", "drives", "determines", "due to".
+- **Required** for relationships: "is associated with", "is predictive of", "is among the strongest
+  predictors of".
+- No conclusion copied from a previous run or hardcoded in pipeline code. Every claim traces to a
+  this-run log — but the trace lives in your head, not on the page.
 
 ---
 
@@ -188,7 +189,6 @@ every `data_profile.json.summary_warnings` entry.
 ```bash
 python - <<'EOF'
 import os, sys, shutil
-from pathlib import Path
 run_id = "<run_id>"
 out_dir = "outputs/reports"
 os.makedirs(out_dir, exist_ok=True)
@@ -214,10 +214,11 @@ Confirm `report.pdf` exists in the repo root and `outputs/reports/{run_id}_repor
 ---
 
 ## Constraints
-- **Do not fabricate numbers.** Every metric, count, and rate comes from a log file.
-- **Do not reference figures that do not exist.** Verify artifact paths first.
+- **No filenames, paths, JSON keys, or script names in the report body.** This is the headline rule.
+- **Do not fabricate numbers.** Every metric, count, and rate comes from a this-run log.
+- **Do not reference figures that do not exist.** Verify any image path before embedding.
 - **Do not write `report_review.json`** — that is the independent reviewer's file.
 - **Do not approve or grade your own report.** Your job ends when `report.pdf` is written.
-- **Section 8 is mandatory** and must appear even when its source logs are absent (use the
-  explicit "not run" statements).
+- **Section 8 is mandatory** and must appear even when its sources are absent (use the explicit
+  "not run / not produced" statements).
 - Write both `report.pdf` (repo root) and `outputs/reports/{run_id}_report.pdf`.
