@@ -57,6 +57,22 @@ from .state import AnalysisState, UserRequest
 from .task import BINARY, MULTICLASS, REGRESSION
 
 
+def _save_predictions_checkpoint(predictions: np.ndarray, scratch_dir: Path) -> None:
+    """Persist test-set predictions after training so post-processing failures
+    can recover without retraining (checkpoint-restore pattern)."""
+    scratch_dir.mkdir(parents=True, exist_ok=True)
+    np.save(scratch_dir / "predictions_checkpoint.npy", predictions)
+
+
+def _load_predictions_checkpoint(scratch_dir: Path) -> np.ndarray | None:
+    """Reload predictions saved by _save_predictions_checkpoint. Returns None
+    if no checkpoint exists."""
+    p = scratch_dir / "predictions_checkpoint.npy"
+    if p.exists():
+        return np.load(p)
+    return None
+
+
 def _baseline_checkpoint(bundle, schema):
     """Fast group-mean baseline predictions for the pre-search checkpoint
     submission. Uses overlapping group keys (jurisdiction/category-like) + the
@@ -110,8 +126,33 @@ def run_orchestrated_analysis(
             return _run_award_b(repo_root, run_id, logs_dir, artifacts_dir, goal, random_state)
         return _run_generic(repo_root, run_id, logs_dir, artifacts_dir, goal, file_path, random_state)
     except Exception as exc:  # safety net — never lose the deliverable
-        print(f"[orchestrator] staged run failed ({type(exc).__name__}: {exc}); "
-              f"falling back to deterministic runner.run_analysis")
+        print(f"[orchestrator] staged run failed ({type(exc).__name__}: {exc})")
+        # ── Phase-1 recovery: if training already completed, a predictions
+        # checkpoint exists in outputs/scratch/{run_id}/.  Reuse it to write
+        # submission.csv without retraining (seconds, not minutes).
+        _scratch_dir = repo_root / "outputs" / "scratch" / _run_id(repo_root)
+        _ckpt_preds = _load_predictions_checkpoint(_scratch_dir)
+        if _ckpt_preds is not None:
+            try:
+                from .runner import _build_submission as _rb, _validate_submission as _rv
+                from .schema import discover_schema as _ds
+                _schema = _ds(repo_root / "data")
+                _bundle = __import__(
+                    "src.data_agent.features", fromlist=["build_feature_bundle"]
+                ).build_feature_bundle(_schema)
+                _sub = _rb(_bundle, _schema.row_id_column, _schema.target_column,
+                           _ckpt_preds, "value")
+                _sub.to_csv(repo_root / "submission.csv", index=False)
+                print(f"[orchestrator] checkpoint recovery: submission.csv written "
+                      f"({len(_sub)} rows) without retraining")
+                return {"run_id": _run_id(repo_root), "recovery": "checkpoint",
+                        "rows": len(_sub)}
+            except Exception as _rec_exc:
+                print(f"[orchestrator] checkpoint recovery failed ({_rec_exc}); "
+                      f"falling back to deterministic runner.run_analysis")
+        else:
+            print("[orchestrator] no predictions checkpoint found; "
+                  "falling back to deterministic runner.run_analysis")
         return run_analysis(repo_root)
 
 
@@ -451,6 +492,16 @@ def _run_award_b(repo_root, run_id, logs_dir, artifacts_dir, goal, random_state)
     state.split_metadata = mr.holdout_strategy
     state.residual_analysis = mr.residual_analysis or {}
     print(f"Selected model: {mr.selected_model_name} ({mr.metric_name})")
+
+    # ── Checkpoint: persist test predictions immediately after training ──────────
+    # Any post-processing failure (evaluation, monotonic constraints, submission
+    # writing) can recover from here without retraining — O(seconds) not O(minutes).
+    _scratch_dir = repo_root / "outputs" / "scratch" / run_id
+    try:
+        _save_predictions_checkpoint(mr.predictions, _scratch_dir)
+        print(f"[checkpoint] predictions saved → outputs/scratch/{run_id}/predictions_checkpoint.npy")
+    except Exception as _ck_err:
+        print(f"[checkpoint] skipped ({_ck_err})")
 
     # ── Step 2 — parallel modeling group (auto-run when budget remains) ─────────
     # Checkpoint the floor submission first so a valid, scored deliverable exists

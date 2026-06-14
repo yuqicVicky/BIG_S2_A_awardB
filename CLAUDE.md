@@ -84,7 +84,17 @@ A doer failure never terminates the run. On any doer failure:
 1. **Repair-retry (≤2 attempts):** re-dispatch the **same** agent with `repair_mode=true` and the
    captured error/traceback; it diagnoses and fixes its own authored code (no dataset-specific
    hardcoding to dodge the error). The agent reports `repair_exhausted` after its 2nd failed try.
-2. **Minimal deterministic fallback:** if still failing, synthesize the step's required artifact
+   - **`analysis-programmer` repair target:** `outputs/scratch/{run_id}/feature_pipeline.py`
+     (and any other scripts it authored under `outputs/scratch/{run_id}/`). **Never** `src/data_agent/` —
+     that is the frozen floor. A bug in `src/` triggers the checkpoint recovery path below, not a
+     programmer repair.
+2. **Checkpoint recovery (orchestrator only):** if `main.py`'s orchestrated path fails
+   *after* model training completed, `orchestrator.py` automatically reloads
+   `outputs/scratch/{run_id}/predictions_checkpoint.npy` and writes `submission.csv` without
+   retraining (~seconds). Only if no checkpoint exists does it fall back to the full deterministic
+   runner. This makes post-training bugs (prediction assembly, evaluation, monotonic constraints)
+   cheap to recover from.
+3. **Minimal deterministic fallback:** if still failing, synthesize the step's required artifact
    from the frozen `src/data_agent/` building blocks (per-step recipe below), log a `degraded`
    warning, and **continue** to the next step.
 

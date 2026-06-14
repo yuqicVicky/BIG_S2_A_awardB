@@ -193,10 +193,23 @@ round N+1's `feature_spec.feature_columns` genuinely differs from round N's.
 
 ## Repair mode
 
-When `repair_mode == true`: read `critical_issues`, apply only the specific generic fixes to
-your authored script (never hardcode column/target/file names to dodge an error), rerun once.
-After 2 failed attempts, report `repair_exhausted` (the floor seeded in A1 remains the
-deliverable). Do not attempt a third run.
+When `repair_mode == true`: read `critical_issues` and the captured traceback. Fix the issue
+**in `outputs/scratch/{run_id}/feature_pipeline.py`** (your authored runtime code), then
+re-execute it. Do NOT edit `src/data_agent/` — that is the frozen floor infrastructure.
+
+Repair target hierarchy:
+1. **`outputs/scratch/{run_id}/feature_pipeline.py`** — your feature pipeline: fix shape
+   mismatches, index alignment, missing-column guards, dtype coercions.
+2. **`outputs/scratch/{run_id}/predict_assemble.py`** — if you authored a separate prediction
+   assembly script, fix and re-execute it.
+3. **Never touch `src/data_agent/`** — any bug there is floor infrastructure; report it and
+   let the checkpoint recovery path handle `submission.csv`.
+
+Rules:
+- Apply only generic fixes (index alignment, shape guards, try/except for optional features)
+- Never hardcode column/target/file names to dodge an error
+- After 2 failed repair attempts, report `repair_exhausted` (checkpoint or floor stays)
+- Do not attempt a third run
 
 ---
 
