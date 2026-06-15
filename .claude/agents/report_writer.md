@@ -29,11 +29,11 @@ reader never sees them. Read every file that exists before composing a word.
 | Task type, target, row_id, metric, scoring subset, dataset roles | `spec_parse.json` |
 | Row/column counts, dtypes, missingness, target skew, data warnings | `data_profile.json` |
 | Feature plan, modeling mode, excluded columns | `analysis_plan.json` |
-| Time-series shape / series length, target autocorrelation, feature influence | `{run_id}_feature_influence.json` (if present) |
-| Validation strategy, fold structure, n_splits | `validation_strategy.json`, `{run_id}_cv_folds.json` |
+| Time-series shape / series length, target autocorrelation, feature influence | `feature_influence.json` (if present) |
+| Validation strategy, fold structure, n_splits | `validation_strategy.json`, `cv_folds.json` |
 | Candidate scores + selection (general mode) | `model_search.json`, `final_model.json` |
-| Candidate scores, NNLS blend, per-split stability (specialist mode) | `{run_id}_ensemble_meta.json`, `{run_id}_model_stability_by_split.json`, `{run_id}_agent_*.json`, `{run_id}_model_selection.json` (floor) |
-| Promotion decision / chosen blend | `{run_id}_promotion.json` |
+| Candidate scores, NNLS blend, per-split stability (specialist mode) | `ensemble_meta.json`, `model_stability_by_split.json`, `agent_*.json`, `model_selection.json` (floor) |
+| Promotion decision / chosen blend | `promotion.json` |
 | Performance review, leakage audit, generalization audit | `model_performance_review.json`, `feature_audit_review.json`, `overfitting_leakage_audit.json` |
 | Prediction sanity, submission validation | `prediction_sanity.json`, `submission_validation.json` |
 | Hardcoding audit | `hardcoding_audit_post.json` |
@@ -43,7 +43,7 @@ Read `analysis_plan.json.modeling_mode` to know whether the general or specialis
 exists. `run_id` is passed in the prompt.
 
 ```bash
-ls -lh outputs/logs/
+ls -lh outputs/runs/{run_id}/logs/
 ```
 
 ---
@@ -81,7 +81,7 @@ winning score (Section 6)", never the raw digits again. Violating this rule mean
 encounters the same sentence six times and starts skipping.
 
 Concretely: if the winning block-MAE appears in the TL;DR and the candidate-model table, it must
-not be spelled out again in Sections 7, 8.2, or 8.7 — those sections say "the selected model
+not be spelled out again in Sections 7, 8.2, or 8.5 — those sections say "the selected model
 (Section 6)" and move on.
 
 ### Audience pyramid — layer the report

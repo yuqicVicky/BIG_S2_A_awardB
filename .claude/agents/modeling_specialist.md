@@ -22,16 +22,42 @@ produce a *candidate* (a CV score + a candidate submission); you **never** touch
 
 ## Inputs
 - `data/DATA_DESCRIPTION.md` — the authority for the task (read it first).
-- `outputs/logs/{run_id}_model_selection.json` — the deterministic floor's CV score: the **bar you must try to beat**.
-- `outputs/logs/{run_id}_profile.json` — feature bundle profile (group-aggregate keys, text columns, metric).
-- `outputs/logs/{run_id}_cv_folds.json` — the **canonical shared folds**; pass them so your CV is comparable to every other candidate.
-- `outputs/logs/{run_id}_feature_spec.json` — the analysis-programmer's **authored features** (appended to the floor's features).
+- `outputs/runs/{run_id}/logs/model_selection.json` — the deterministic floor's CV score: the **bar you must try to beat**.
+- `outputs/runs/{run_id}/logs/profile.json` — feature bundle profile (group-aggregate keys, text columns, metric).
+- `outputs/runs/{run_id}/logs/cv_folds.json` — the **canonical shared folds**; pass them so your CV is comparable to every other candidate.
+- `outputs/runs/{run_id}/logs/feature_spec.json` — the analysis-programmer's **authored features** (appended to the floor's features).
+- `outputs/runs/{run_id}/logs/analysis_plan.json` — read `modeling_hints` before launching the engine (see below).
+
+## Read modeling hints before launching
+
+```bash
+python - <<'EOF'
+import json
+plan  = json.load(open(f"outputs/runs/{RUN_ID}/logs/analysis_plan.json"))
+hints = plan.get("modeling_hints", {})
+print(json.dumps(hints, indent=2))
+EOF
+```
+
+Apply hints to your launch parameters:
+- `model_family_recommendation.primary` → if it matches your `$FAMILY`, log "planner recommended
+  this family (primary)"; if it matches `secondary`, log "planner designated this family as
+  secondary diversity". No behavioral change — you always train your assigned family regardless.
+  Report the recommendation alignment in your summary to the orchestrator.
+- `prefer_regularized == true` + `family=gbdt` → export `AWARDB_MAX_LEAVES=31 AWARDB_MAX_DEPTH=4`
+  before the engine call so randomized tuning stays within shallow ranges.
+- `native_missing_handling_preferred == true` + `family=gbdt` → the GBDT family already uses
+  CatBoost/HGB which handle NaN natively; no extra action needed. Log this as confirmed.
+- `prefer_regularized == true` + `family=linear` → standard regularized linear is already the
+  right choice; no parameter change needed. Log as confirmed.
+- `apply_log1p_hint == true` → export `AWARDB_LOG1P=1` so the engine applies the log1p transform.
+- Log which hints were applied in your plain-text summary back to the orchestrator.
 
 ## Action (reuse the tested engine — never reimplement modeling, hardcode a column, or hardcode a budget)
 ```bash
 python scripts/run_modeling_agent.py --approach "$FAMILY" --run-id "$RUN_ID" \
-    --cv-folds "outputs/logs/${RUN_ID}_cv_folds.json" \
-    --feature-spec "outputs/logs/${RUN_ID}_feature_spec.json"
+    --cv-folds "outputs/runs/{run_id}/logs/${RUN_ID}_cv_folds.json" \
+    --feature-spec "outputs/runs/{run_id}/logs/${RUN_ID}_feature_spec.json"
 ```
 where `$FAMILY` is the `gbdt|linear` you were given. Omit a flag only if that file does
 not exist (the script falls back gracefully).
@@ -47,16 +73,16 @@ restart if it overruns its slice.
 This builds the bundle from the schema, appends the authored features, runs the
 **canonical-fold** cross-validation over your family with randomized tuning (and the
 leakage-safe group/target-aggregate + TF-IDF features), applies any monotonic constraint, and
-writes the candidate submission to `outputs/logs/{run_id}_cand_<family>.csv`, the OOF to
-`outputs/logs/{run_id}_oof_<family>.csv`, and the candidate JSON.
+writes the candidate submission to `outputs/runs/{run_id}/logs/cand_<family>.csv`, the OOF to
+`outputs/runs/{run_id}/logs/oof_<family>.csv`, and the candidate JSON.
 
 ## Output — shared candidate schema
-The script writes `outputs/logs/{run_id}_agent_<family>.json`:
+The script writes `outputs/runs/{run_id}/logs/agent_<family>.json`:
 ```json
 {"role": "<family>-specialist", "approach": "<family>", "selected_model": "...",
  "cv_metric": "block_mae", "cv_score": 0.0, "lower_is_better": true,
- "candidate_submission": "outputs/logs/{run_id}_cand_<family>.csv",
- "oof_path": "outputs/logs/{run_id}_oof_<family>.csv", "canonical_folds": true,
+ "candidate_submission": "outputs/runs/{run_id}/logs/cand_<family>.csv",
+ "oof_path": "outputs/runs/{run_id}/logs/oof_<family>.csv", "canonical_folds": true,
  "authored_features_used": [], "monotonic_applied": false}
 ```
 Report your `cv_score` back to the orchestrator and state plainly whether you beat the floor's

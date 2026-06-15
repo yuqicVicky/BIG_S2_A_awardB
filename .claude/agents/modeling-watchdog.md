@@ -29,7 +29,7 @@ it to decide whether a bounded redo is still affordable. You make no quality jud
 | `remaining_wall_clock_sec` | prompt — wall-clock left before the global 2-hour cap |
 | `round`, `rounds_left` | prompt — which improvement round, how many remain |
 | `roles` | prompt — the families launched this round, e.g. `gbdt trees linear` |
-| heartbeat files | `outputs/logs/{run_id}_{role}-specialist_progress.jsonl` (the workers append to these) |
+| heartbeat files | `outputs/runs/{run_id}/logs/{role}-specialist_progress.jsonl` (the workers append to these) |
 
 Heartbeat line schema (one JSON object per line, appended by the worker):
 `{"ts","event","model","fold","elapsed_sec","partial_cv","best_so_far","role","run_id"}`
@@ -73,7 +73,7 @@ counts:
    pkill -f "run_modeling_agent.py --approach <fam> --run-id {run_id}"
    ```
    The `--approach`+`--run-id` pair is unique, so siblings are untouched. The last heartbeat
-   line and any completed `{run_id}_cand_<fam>.csv` preserve that role's best-so-far.
+   line and any completed `cand_<fam>.csv` preserve that role's best-so-far.
 
 5. **Recommend a leaner restart.** Scale the knobs *down toward the floor* in proportion to how
    far the projection overshot — fewer seeds, fewer tuning iterations, fewer inner folds, a
@@ -94,7 +94,7 @@ remaining = float(os.environ["REMAINING_SEC"]); rounds_left = float(os.environ["
 deadline = time.monotonic() + remaining
 # ... derive round_slice / per-role allowance from remaining & rounds_left (see steps above)
 def tail(fam):
-    p = logs / f"{run_id}_{fam}-specialist_progress.jsonl"
+    p = logs / f"{fam}-specialist_progress.jsonl"
     if not p.exists(): return []
     return [json.loads(l) for l in p.read_text().splitlines() if l.strip()]
 verdicts = {}
@@ -109,7 +109,7 @@ while time.monotonic() < deadline and len(verdicts) < len(roles):
     time.sleep(20)
 for fam in roles:
     v = verdicts.get(fam, {"killed": False, "reason": "slice_elapsed"})
-    (logs / f"{run_id}_{fam}-specialist_watchdog.json").write_text(json.dumps({"role": f"{fam}-specialist", **v}, indent=2))
+    (logs / f"{fam}-specialist_watchdog.json").write_text(json.dumps({"role": f"{fam}-specialist", **v}, indent=2))
 PY
 ```
 
@@ -117,7 +117,7 @@ PY
 
 ## Output — one verdict per role
 
-Write `outputs/logs/{run_id}_{role}_watchdog.json`:
+Write `outputs/runs/{run_id}/logs/{role}_watchdog.json`:
 ```json
 {"role": "trees-specialist", "killed": true,
  "reason": "projected 2400s > slice 800s after fold 1",

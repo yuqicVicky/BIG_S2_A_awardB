@@ -17,11 +17,11 @@ The orchestrator reads your output to decide: proceed to report generation, trig
 
 | Input | Source |
 |-------|--------|
-| All log files | `outputs/logs/` |
+| All log files | `outputs/runs/{run_id}/logs/` |
 | `submission.csv` | Repo root |
 | `report.pdf` | Repo root (final gate only) |
 | `final_gate` | `true` = final gate; `false` = first review |
-| `{run_id}_ensemble_meta.json` | the modeling group's chosen candidate + CV score (if the group ran) |
+| `ensemble_meta.json` | the modeling group's chosen candidate + CV score (if the group ran) |
 
 ---
 
@@ -30,40 +30,67 @@ The orchestrator reads your output to decide: proceed to report generation, trig
 If the parallel modeling group ran, you own the **keep-best** decision. Compare the
 `ensemble-meta` choice's cross-validated score (the resolved official metric, e.g.
 `block_mae`) against the **current** `submission.csv` — which already reflects the floor +
-in-process blend (`{run_id}_model_selection.json`, `{run_id}_ensemble_meta.json`).
+in-process blend (`model_selection.json`, `ensemble_meta.json`).
 Overwrite the repo-root `submission.csv` with the meta choice **only if it is strictly
 better**; otherwise keep the current submission untouched. The subagent layer can therefore
 never regress the deliverable. After any overwrite, re-verify the submission: every
 sample-submission `row_id` present, in order, two columns, finite values. Record the
 decision (`kept_current` vs `took_meta`) in `supervisor_gatekeeper.json`, and emit the same
-verdict to `{run_id}_llm_gate_supervisor.json` (it takes precedence over the deterministic
+verdict to `llm_gate_supervisor.json` (it takes precedence over the deterministic
 supervisor verdict via `gates.load_llm_verdict`).
 
 ---
 
 ## Step 1 — Inventory required logs
 
+The modeling deliverables differ by `modeling_mode` (read from `analysis_plan.json`): the
+**specialist** path (default — gbdt+linear) produces `ensemble_meta.json` and never
+writes `model_search.json` / `final_model.json`, while the **general** path produces the latter
+two and not the ensemble file. Require the files the *actual* mode produces, else the gate reports
+a spurious `missing_required` on every default run. Resolve `{run_id}` from the logs directory.
+
 ```bash
 python - <<'EOF'
-import json
+import json, glob, os
 from pathlib import Path
 
+# Resolve modeling_mode from the plan (default to specialist — the wired default).
+try:
+    mode = json.load(open("outputs/runs/{run_id}/logs/analysis_plan.json")).get("modeling_mode", "specialist")
+except Exception:
+    mode = "specialist"
+
+# Resolve run_id from any ensemble_meta.json / model_selection.json present.
+def _run_id():
+    for pat in ("outputs/runs/{run_id}/logs/*_ensemble_meta.json", "outputs/runs/{run_id}/logs/*_model_selection.json"):
+        hits = sorted(glob.glob(pat))
+        if hits:
+            base = os.path.basename(hits[-1])
+            return base.split("_ensemble_meta")[0].split("_model_selection")[0]
+    return None
+run_id = _run_id()
+
 required = [
-    "outputs/logs/spec_parse.json",
-    "outputs/logs/data_profile.json",
-    "outputs/logs/analysis_plan.json",
-    "outputs/logs/validation_strategy.json",
-    "outputs/logs/model_search.json",
-    "outputs/logs/final_model.json",
-    "outputs/logs/submission_validation.json",
-    "outputs/logs/feature_audit_review.json",
+    "outputs/runs/{run_id}/logs/spec_parse.json",
+    "outputs/runs/{run_id}/logs/data_profile.json",
+    "outputs/runs/{run_id}/logs/analysis_plan.json",
+    "outputs/runs/{run_id}/logs/validation_strategy.json",
+    "outputs/runs/{run_id}/logs/submission_validation.json",
+    "outputs/runs/{run_id}/logs/feature_audit_review.json",
 ]
 optional = [
-    "outputs/logs/hardcoding_audit_pre.json",
-    "outputs/logs/hardcoding_audit_post.json",
-    "outputs/logs/overfitting_leakage_audit.json",
-    "outputs/logs/report_review.json",
+    "outputs/runs/{run_id}/logs/hardcoding_audit_pre.json",
+    "outputs/runs/{run_id}/logs/hardcoding_audit_post.json",
+    "outputs/runs/{run_id}/logs/overfitting_leakage_audit.json",
+    "outputs/runs/{run_id}/logs/report_review.json",
 ]
+# Mode-conditional modeling deliverables.
+if mode == "specialist":
+    required += [f"outputs/runs/{run_id}/logs/ensemble_meta.json"]
+    optional += ["outputs/runs/{run_id}/logs/model_search.json", "outputs/runs/{run_id}/logs/final_model.json"]
+else:  # general
+    required += ["outputs/runs/{run_id}/logs/model_search.json", "outputs/runs/{run_id}/logs/final_model.json"]
+    optional += [f"outputs/runs/{run_id}/logs/ensemble_meta.json"]
 status = {}
 for f in required:
     status[f] = {"exists": Path(f).exists(), "required": True}
@@ -86,8 +113,8 @@ import pandas as pd
 import numpy as np
 from pathlib import Path
 
-spec = json.load(open("outputs/logs/spec_parse.json"))
-sub_val_path = "outputs/logs/submission_validation.json"
+spec = json.load(open("outputs/runs/{run_id}/logs/spec_parse.json"))
+sub_val_path = "outputs/runs/{run_id}/logs/submission_validation.json"
 
 result = {
     "submission_exists": Path("submission.csv").exists(),
@@ -128,11 +155,11 @@ python - <<'EOF'
 import json, pandas as pd, numpy as np
 from pathlib import Path
 
-spec       = json.load(open("outputs/logs/spec_parse.json"))
+spec       = json.load(open("outputs/runs/{run_id}/logs/spec_parse.json"))
 row_id_col = spec.get("row_id_column")
 train_file = spec.get("train_file")
 pred_file  = spec.get("prediction_file")
-ms         = json.load(open("outputs/logs/model_search.json")) if Path("outputs/logs/model_search.json").exists() else {}
+ms         = json.load(open("outputs/runs/{run_id}/logs/model_search.json")) if Path("outputs/runs/{run_id}/logs/model_search.json").exists() else {}
 
 issues = []
 
@@ -199,7 +226,7 @@ Record findings in `supervisor_gatekeeper.json → cv_validation`. If any HIGH-s
 
 ## Step 3 — Prediction sanity checks
 
-Run these checks against the submission predictions, training target distribution, and model logs. Write results to `outputs/logs/prediction_sanity.json`.
+Run these checks against the submission predictions, training target distribution, and model logs. Write results to `outputs/runs/{run_id}/logs/prediction_sanity.json`.
 
 ```bash
 python - <<'EOF'
@@ -209,7 +236,7 @@ import numpy as np
 from pathlib import Path
 from scipy import stats as _stats
 
-spec        = json.load(open("outputs/logs/spec_parse.json"))
+spec        = json.load(open("outputs/runs/{run_id}/logs/spec_parse.json"))
 target_col  = spec.get("target_column")
 task_type   = spec.get("task_type", "regression")
 train_file  = spec.get("train_file") or spec.get("train_target_file")
@@ -324,8 +351,8 @@ if is_reg and train_target is not None and preds.notna().sum() >= 10:
 
 # ── Check 5: Near-perfect validation score (suspicious) ──────────────────────
 mdl = None
-if Path("outputs/logs/model_search.json").exists():
-    mdl = json.load(open("outputs/logs/model_search.json"))
+if Path("outputs/runs/{run_id}/logs/model_search.json").exists():
+    mdl = json.load(open("outputs/runs/{run_id}/logs/model_search.json"))
 if mdl:
     best_val   = mdl.get("best_val_score")
     all_cands  = mdl.get("candidates", []) + mdl.get("baselines", [])
@@ -358,7 +385,7 @@ if mdl:
 
 # ── Check 6: Large train-validation gap on selected model ────────────────────
 if mdl:
-    final_path = "outputs/logs/final_model.json"
+    final_path = "outputs/runs/{run_id}/logs/final_model.json"
     if Path(final_path).exists():
         fm = json.load(open(final_path))
         rel_gap = fm.get("relative_gap")
@@ -408,7 +435,7 @@ result = {
     "summary": summary,
 }
 import os; os.makedirs("outputs/logs", exist_ok=True)
-open("outputs/logs/prediction_sanity.json", "w").write(json.dumps(result, indent=2, default=str))
+open("outputs/runs/{run_id}/logs/prediction_sanity.json", "w").write(json.dumps(result, indent=2, default=str))
 print(json.dumps(result, indent=2, default=str))
 EOF
 ```
@@ -520,7 +547,7 @@ Set `repair_needed: false` if:
 mkdir -p outputs/logs
 ```
 
-Write `outputs/logs/supervisor_gatekeeper.json`:
+Write `outputs/runs/{run_id}/logs/supervisor_gatekeeper.json`:
 
 ```json
 {
@@ -637,10 +664,10 @@ Update `overall_verdict` and `delivery_recommendation` accordingly.
 ## Closed-loop verdict (stage `supervisor`)
 
 `supervisor_gatekeeper.json` is the human-facing review. In addition, emit the
-aggregate release verdict to `outputs/logs/{run_id}_llm_gate_supervisor.json` in
+aggregate release verdict to `outputs/runs/{run_id}/logs/llm_gate_supervisor.json` in
 the shared schema (see CLAUDE.md → "Closed-loop verdict protocol"; schema in
 `src/data_agent/gates.py`). Compute its `status` as the **worst** of every stage verdict written
-so far (`{run_id}_gate_{stage}.json` and any `{run_id}_llm_gate_{stage}.json`),
+so far (`gate_{stage}.json` and any `llm_gate_{stage}.json`),
 and list each stage's reasons. A `fail` is logged and surfaced but **does not
 halt** — recommend `deliver_with_warnings`. Your verdict takes precedence over
 the deterministic aggregate. The `prediction_sanity` verdict you produce in

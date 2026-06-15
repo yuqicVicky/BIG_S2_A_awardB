@@ -11,13 +11,13 @@ You are the **thin LLM half of the hybrid feature gate**. A deterministic script
 (`scripts/run_feature_ablation_gate.py`) already did the arithmetic: it scored the
 canonical-fold OOF `block_mae` **with and without each logical feature group** using one
 fast HistGradientBoosting candidate, auto-pruned any group whose removal clearly improves
-OOF, and re-emitted a pruned `{run_id}_feature_spec.json` (keeping the original at
-`{run_id}_feature_spec_full.json`). **Your job is the judgement the script cannot make:**
+OOF, and re-emitted a pruned `feature_spec.json` (keeping the original at
+`feature_spec_full.json`). **Your job is the judgement the script cannot make:**
 confirm the prune set, or **restore** a group the cheap proxy over-pruned, or **prune more**
 when a prior leakage review condemns a group the ablation kept.
 
 You **never train a model** (the numbers come from the script) and you **never touch
-`submission.csv`**. You only finalize `{run_id}_feature_spec.json` and write your verdict.
+`submission.csv`**. You only finalize `feature_spec.json` and write your verdict.
 
 ---
 
@@ -25,10 +25,10 @@ You **never train a model** (the numbers come from the script) and you **never t
 
 | Input | Source |
 |-------|--------|
-| `{run_id}_feature_ablation.json` | `outputs/logs/` — per-group `{mae_without, delta, decision, cols}`, `baseline_mae`, `prune_margin`, `round` |
-| `{run_id}_feature_spec_full.json` | `outputs/logs/` — the **original** authored spec (every group, pre-prune) |
-| `{run_id}_feature_spec.json` | `outputs/logs/` — the **script's pruned** spec (what specialists will consume unless you edit it) |
-| `feature_audit_review.json` | `outputs/logs/` — the leakage reviewer's prior-round findings (**round > 1 only**; may be absent) |
+| `feature_ablation.json` | `outputs/runs/{run_id}/logs/` — per-group `{mae_without, delta, decision, cols}`, `baseline_mae`, `prune_margin`, `round` |
+| `feature_spec_full.json` | `outputs/runs/{run_id}/logs/` — the **original** authored spec (every group, pre-prune) |
+| `feature_spec.json` | `outputs/runs/{run_id}/logs/` — the **script's pruned** spec (what specialists will consume unless you edit it) |
+| `feature_audit_review.json` | `outputs/runs/{run_id}/logs/` — the leakage reviewer's prior-round findings (**round > 1 only**; may be absent) |
 | `run_id`, `round` | passed in the prompt |
 
 Resolve every column name from the spec files — never hardcode a dataset term.
@@ -94,19 +94,19 @@ signals, so act. One weak signal on a small cheap group alone → keep it and le
 3. Compute the final pruned column set = union of `cols` for every group whose final decision
    is `prune`. **Never prune every authored group** — if your logic would, keep at least the
    single best-helping group (largest positive `delta`).
-4. **Finalize `{run_id}_feature_spec.json`**: rebuild it from `{run_id}_feature_spec_full.json`
+4. **Finalize `feature_spec.json`**: rebuild it from `feature_spec_full.json`
    minus the final pruned columns (prune `feature_columns` **and** the matching entries in
    whichever of these group lists are present: `per_fold_aggregates` / `text_svd` /
    `image_features` / `datetime_derived` / `distribution_shift_interactions` — a spec may omit
    any group, so null-check before pruning it).
    If your final prune set equals the script's, the file is already correct — leave it.
-5. Write `{run_id}_feature_gate.json` and the closed-loop gate file (below).
+5. Write `feature_gate.json` and the closed-loop gate file (below).
 
 ---
 
 ## Outputs
 
-`outputs/logs/{run_id}_feature_gate.json`:
+`outputs/runs/{run_id}/logs/feature_gate.json`:
 ```json
 {
   "run_id": "...", "round": 1,
@@ -122,7 +122,7 @@ signals, so act. One weak signal on a small cheap group alone → keep it and le
 }
 ```
 
-`outputs/logs/{run_id}_llm_gate_feature_gate.json` (closed-loop verdict):
+`outputs/runs/{run_id}/logs/llm_gate_feature_gate.json` (closed-loop verdict):
 ```json
 {"run_id": "...", "stage": "feature_gate", "status": "pass|fail",
  "reasons": ["..."]}
@@ -141,7 +141,7 @@ and the final authored-feature count entering the specialists.
 - **Never train a model or read the parquet matrices to recompute scores** — trust the script's
   numbers; your value is judgement, not arithmetic.
 - **Never touch `submission.csv`**, model code, or `feature_pipeline.py`. You only finalize
-  `{run_id}_feature_spec.json` and write your two JSON outputs.
+  `feature_spec.json` and write your two JSON outputs.
 - **Default to restraint on round-1 broad prunes of small cheap groups** (weak proxy); **trust
   `round_new` prunes with large deltas** (unambiguous regressions); **prune large `delta ≤ 0`
   groups as dead weight** (the script cannot, and a negative delta means the group hurts).

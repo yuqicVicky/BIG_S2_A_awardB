@@ -1,6 +1,6 @@
 ---
 name: analysis-planner
-description: The Step-4 FEATURE-engineering planner. Reads the spec, profile and chosen CV strategy and produces a leakage-aware feature-engineering blueprint — a data-coverage map that confirms EVERY available column is used or justified-excluded, the concrete feature set to build, the modeling_mode the orchestrator branches on, and the dataset's completeness constraints. It does NOT plan model architecture (the model pool is fixed in code) and does NOT execute code, train, or write reports. Writes outputs/logs/analysis_plan.json.
+description: The Step-4 FEATURE-engineering planner. Reads the spec, profile and chosen CV strategy and produces a leakage-aware feature-engineering blueprint — a data-coverage map that confirms EVERY available column is used or justified-excluded, the concrete feature set to build, the modeling_mode the orchestrator branches on, and the dataset's completeness constraints. It does NOT plan model architecture (the model pool is fixed in code) and does NOT execute code, train, or write reports. Writes outputs/runs/{run_id}/logs/analysis_plan.json.
 tools: Read, Write, Grep
 model: claude-sonnet-4-6
 ---
@@ -29,14 +29,14 @@ You produce `analysis_plan.json` with four blocks: `modeling_mode`, `data_covera
 
 | Input | Source |
 |-------|--------|
-| `spec_parse.json` | `outputs/logs/spec_parse.json` — target, row_id, join keys, metric, `file_schemas` (every file's every column), `file_sidecars` (non-tabular modalities, e.g. images), `detected_structure.split_pattern`, `sub_target_candidates` |
-| `data_profile.json` | `outputs/logs/data_profile.json` — per-column dtype/missingness, `text_like_columns`, datetime-parseable columns, target distribution, and **`split_structure`** — read `split_structure.type` (is this time-series / chronological) and `split_structure.train_period_range.n_periods` (the **series length**) to ground lag/rolling-window sizing even when the Step-3c influence file is absent |
-| `validation_strategy.json` | `outputs/logs/validation_strategy.json` — the chosen CV strategy (authoritative; do not re-design CV) |
-| `{run_id}_feature_influence.json` | `outputs/logs/{run_id}_feature_influence.json` — **optional** time-series + influence signal from the data-pattern-analyzer (Step 3c): `is_timeseries`, `time_series_shape.n_periods` (series length), `target_autocorrelation.strongest_lags`, `feature_influence.ranked` (per-feature \|corr\|), and `recommendations_for_planner`. Proceed without it if absent. |
+| `spec_parse.json` | `outputs/runs/{run_id}/logs/spec_parse.json` — target, row_id, join keys, metric, `file_schemas` (every file's every column), `file_sidecars` (non-tabular modalities, e.g. images), `detected_structure.split_pattern`, `sub_target_candidates` |
+| `data_profile.json` | `outputs/runs/{run_id}/logs/data_profile.json` — per-column dtype/missingness, `text_like_columns`, datetime-parseable columns, target distribution, and **`split_structure`** — read `split_structure.type` (is this time-series / chronological) and `split_structure.train_period_range.n_periods` (the **series length**) to ground lag/rolling-window sizing even when the Step-3c influence file is absent |
+| `validation_strategy.json` | `outputs/runs/{run_id}/logs/validation_strategy.json` — the chosen CV strategy (authoritative; do not re-design CV) |
+| `feature_influence.json` | `outputs/runs/{run_id}/logs/feature_influence.json` — **optional** time-series + influence signal from the data-pattern-analyzer (Step 3c): `is_timeseries`, `time_series_shape.n_periods` (series length), `target_autocorrelation.strongest_lags`, `feature_influence.ranked` (per-feature \|corr\|), and `recommendations_for_planner`. Proceed without it if absent. |
 
 Read all three core inputs completely before writing. `spec_parse.json.file_schemas` and
 `detected_structure` / `sub_target_candidates` are the **authoritative source** for the
-coverage map and completeness constraints. When `{run_id}_feature_influence.json` is present, use
+coverage map and completeness constraints. When `feature_influence.json` is present, use
 it to **prioritize** features (see Part 2) — it is advisory for prioritization only and never
 changes the coverage-completeness requirement (every column is still mapped).
 
@@ -110,7 +110,7 @@ applicable family, each **fold-safe**:
 - `imputation` — `{column: strategy}` using training statistics only (e.g. high-missingness
   covariates imputed from training group medians).
 
-**Use `{run_id}_feature_influence.json` to PRIORITIZE (when present).** It does not change coverage
+**Use `feature_influence.json` to PRIORITIZE (when present).** It does not change coverage
 (every column is still mapped) — it tells you *what to emphasize* and *how to size lags*:
 - **Time-series sizing.** Read `is_timeseries` and `time_series_shape.n_periods` (the series
   length). Size `lag_features` / rolling windows to it: lags up to roughly `n_periods/4` are safe;
@@ -167,6 +167,115 @@ record it as `feature_plan.image_features`:
 
 ---
 
+## Part 2.5 — Modeling hints (advisory, dataset-characteristics-driven)
+
+Summarize the dataset properties that the modeling agents need to make informed decisions.
+This block is **advisory only** — modeling agents read it and decide how to act; it does not
+override the fixed model pool or CV strategy. Derive every field from the input JSONs; never
+hardcode domain knowledge.
+
+- **`prefer_regularized`** (`bool`): set `true` when `n_train_rows < 500` OR
+  `total_planned_features / n_train_rows > 0.10`. When true, modeling agents should favor
+  regularized linear models (Ridge, ElasticNet, LogisticRegression) and shallow trees over
+  deep boosting, and should reduce GBDT complexity (fewer leaves/depth).
+- **`reasoning_prefer_regularized`** (`str`): one line showing the numbers that drove this.
+- **`native_missing_handling_preferred`** (`bool`): set `true` when
+  `data_profile.missing_value_counts` has any column with missingness > 5%. When true,
+  modeling agents should prioritize CatBoost or HistGradientBoosting (both handle NaN
+  natively) over models that need imputation.
+- **`apply_log1p_hint`** (`bool`): set `true` when
+  `data_profile.target_distribution.recommend_log_transform == true` OR target skewness > 0.5
+  OR the evaluation metric contains "rmsle"/"rmspe". Derived from `data_profile.json`; do not
+  recompute skewness yourself — read it from the profile.
+- **`apply_log1p_reason`** (`str`): one line citing the source field and value.
+- **`class_balance`** (`dict[str, int]` or `null`): for classification tasks, read the class
+  value counts from `data_profile.json`; set `null` for regression. Modeling agents use this
+  to decide whether class-weight adjustment is needed.
+- **`is_timeseries`** (`bool`): from `feature_influence.json.is_timeseries` when present, else
+  from `data_profile.split_structure.type == "time_series"`.
+- **`n_train_rows`** (`int`): from `data_profile.json`.
+- **`n_features_planned`** (`int`): total count of features in `feature_plan` (direct +
+  all engineered groups); used by modeling agents to calibrate model complexity.
+- **`priority_notes`** (`list[str]`): up to 3 concise plain-English observations that a
+  practitioner would want the modeling agent to know about this specific dataset. Derive from
+  the data only (no domain assumptions); examples: "small dataset — prefer shallow models",
+  "heavily imbalanced classes — weight adjustment likely needed", "high-cardinality categoricals
+  — tree models have a natural advantage here". Do not repeat what is already captured in the
+  boolean fields above.
+- **`model_family_recommendation`** — explicit ranked recommendation derived from data signals:
+
+  | Data signal (from profile / feature_influence) | `primary` | `secondary` |
+  |---|---|---|
+  | n_rows < 500 **or** features/rows > 0.10 | `linear` | `gbdt` |
+  | n_rows ≥ 500, no strong structural signals | `gbdt` | `linear` |
+  | Any column missingness > 5% | `gbdt` | `linear` |
+  | ≥ 2 high-cardinality categoricals (cardinality > 20) | `gbdt` | `linear` |
+  | Strong target autocorrelation (from feature_influence) | `gbdt` | `linear` |
+  | Multiple signals conflict → pick whichever has more evidence | `either` | `either` |
+
+  ```json
+  "model_family_recommendation": {
+    "primary": "linear | gbdt | either",
+    "secondary": "gbdt | linear | none",
+    "rationale": "≤40 words citing the specific data signals (n_rows, ratio, missingness, etc.)",
+    "key_signals": {
+      "n_train_rows": 0,
+      "features_per_row_ratio": 0.0,
+      "has_high_missingness": false,
+      "target_autocorrelation_strength": "none | weak | moderate | strong",
+      "n_high_cardinality_categoricals": 0
+    }
+  }
+  ```
+  Modeling agents read `primary` to prioritize within their search; `secondary` runs after
+  for diversity. This supersedes the `prefer_regularized` boolean (keep both for backward
+  compatibility but derive them consistently).
+
+---
+
+## Part 2.6 — Representation strategy
+
+Decide **how** this dataset's structure is best represented for the fixed ML model pool. This is
+an architectural choice about encoding structural complexity as derived features vs. needing a
+specialist model class the pipeline does not provide. Since the model pool is fixed (GBDT /
+linear / tree ensembles), the decision is not "which model" but "can this structure be
+adequately captured through feature engineering?"
+
+Evaluate in priority order — stop at the first match:
+
+1. **`feature_based_image`** — `spec_parse.json.file_sidecars` is non-empty with image modality.
+   Programmer extracts colormap-inversion scalar summaries (already in Part 2). `capability_gap`
+   if the image data is rich enough that a CNN would likely do better.
+
+2. **`feature_based_text`** — `data_profile.text_like_columns` is non-empty. Programmer applies
+   TF-IDF → SVD (already in Part 2). `capability_gap` if corpus is large (> 10k docs) or
+   semantic similarity matters — embeddings would be superior.
+
+3. **`feature_based_temporal`** — `is_timeseries == true` (from feature_influence or data_profile).
+   Programmer prioritizes lag / rolling / period-rank features as the primary signal (not
+   optional). If `n_periods < 12` or `per_group_series_length.min < 6`: flag all lag features
+   `experimental` (series too short to support deep lags). `capability_gap` when
+   `target_autocorrelation.strength == "strong"` AND `n_periods ≥ 24` — a native TS model
+   (ARIMA / Prophet / LSTM) would likely outperform the feature-based ML approach.
+
+4. **`tabular_ml`** — none of the above. Standard feature engineering; no special structural
+   encoding needed.
+
+Multiple structural signals can coexist (e.g. temporal + image sidecar): choose the primary
+driver and list secondary strategies in `programmer_instructions`.
+
+Output:
+```json
+"representation_strategy": {
+  "chosen": "tabular_ml | feature_based_temporal | feature_based_image | feature_based_text",
+  "rationale": "≤50 words: the specific signals that drove this choice",
+  "capability_gaps": ["optional: what a specialist model outside the pool could do better"],
+  "programmer_instructions": "≤40 words: concrete directive to the programmer about feature emphasis"
+}
+```
+
+---
+
 ## Part 3 — Completeness constraints
 
 Echo the dataset-specific obligations downstream must honor (these are where plan review earns
@@ -209,7 +318,15 @@ Before writing, verify and fix:
    literal), `full_train_refit == true`, missing-value handling flagged when applicable,
    two-column submission asserted, `sub_target_candidates` echoed if present. *(blocking)*
 5. **Overfit guard** — experimental lag/interaction features are flagged for ablation, not assumed
-   beneficial. *(advisory)*
+   beneficial. On non-time-series datasets, also check sample density: if total planned features
+   (direct + all engineered) exceed `n_train_rows / 10`, mark every engineered group
+   (`interactions`, `ratio_features`, `summary_features`, `text_tfidf_svd`) `experimental: true`
+   so the Step-6A′ ablation gate validates them before they reach the model. *(advisory)*
+8. **No duplicate feature entries** — scan every feature block (`interactions`, `ratio_features`,
+   `summary_features`, `lag_features`) for entries that compute the same formula as another entry
+   in any block. Remove all but one canonical instance before writing; record the removal in
+   `critique.fixes_applied`. A `deduplicated_with` annotation is not sufficient — the duplicate
+   entry must be deleted. *(blocking)*
 6. **No hardcoding** — every column/file/count comes from `spec_parse.json` / `data_profile.json`,
    never a literal (incl. colormap names / sidecar paths — read from `file_sidecars`). *(blocking)*
 7. **Sidecars covered** — when `spec_parse.json.file_sidecars` is non-empty, every sidecar appears
@@ -221,7 +338,7 @@ Before writing, verify and fix:
 
 ---
 
-## Output — write `outputs/logs/analysis_plan.json`
+## Output — write `outputs/runs/{run_id}/logs/analysis_plan.json`
 
 Resolve `run_id` from the **prompt** the orchestrator gives you, or the `AWARDB_RUN_ID`
 environment variable. **Never** copy a stale/placeholder `run_id` from `spec_parse.json` and never
@@ -266,6 +383,36 @@ fabricate a `..._000000` timestamp — use the canonical run_id so the field is 
     "exclude_columns": ["..."],
     "rationale": "≤60 words: comprehensive (all signals) yet overfit-guarded (per-fold, lags flagged)"
   },
+  "representation_strategy": {
+    "chosen": "tabular_ml | feature_based_temporal | feature_based_image | feature_based_text",
+    "rationale": "≤50 words citing the signals that drove this choice",
+    "capability_gaps": ["optional: what a specialist model outside the fixed pool could do better"],
+    "programmer_instructions": "≤40 words: concrete directive about feature emphasis for the programmer"
+  },
+  "modeling_hints": {
+    "prefer_regularized": false,
+    "reasoning_prefer_regularized": "n_train=X, total_features=Y, ratio=Z",
+    "native_missing_handling_preferred": false,
+    "apply_log1p_hint": false,
+    "apply_log1p_reason": "target skewness=X from data_profile; recommend_log_transform=false",
+    "class_balance": null,
+    "is_timeseries": false,
+    "n_train_rows": 0,
+    "n_features_planned": 0,
+    "priority_notes": ["≤3 data-driven observations for the modeling agent"],
+    "model_family_recommendation": {
+      "primary": "linear | gbdt | either",
+      "secondary": "gbdt | linear | none",
+      "rationale": "≤40 words citing the specific data signals",
+      "key_signals": {
+        "n_train_rows": 0,
+        "features_per_row_ratio": 0.0,
+        "has_high_missingness": false,
+        "target_autocorrelation_strength": "none | weak | moderate | strong",
+        "n_high_cardinality_categoricals": 0
+      }
+    }
+  },
   "completeness_constraints": {
     "submission_frame_expansion": "<n_pred_rows from file_schemas + how it maps to sample rows>",
     "full_train_refit": true,
@@ -295,10 +442,10 @@ flagged for ablation, and open warnings.
 When the orchestrator passes a `plan_review_{round}.json` path, read its findings and revise
 `analysis_plan.json`:
 
-1. Read `outputs/logs/plan_review_<round>.json`.
+1. Read `outputs/runs/{run_id}/logs/plan_review_<round>.json`.
 2. For every `fail`/`warn` finding: fix the cited location (apply `required_fix` if specific, else
    implement its intent); record in `critique.fixes_applied`.
-3. Re-run the 6 self-critique checks; overwrite `outputs/logs/analysis_plan.json` (canonical path
+3. Re-run the 6 self-critique checks; overwrite `outputs/runs/{run_id}/logs/analysis_plan.json` (canonical path
    unchanged).
 4. Print a ≤80-word summary of what changed and why.
 

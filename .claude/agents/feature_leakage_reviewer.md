@@ -9,7 +9,7 @@ model: claude-sonnet-4-6
 
 You are an **independent reviewer** dispatched in parallel with two other reviewers each
 round. You judge the round's **features**; you never produce them. Write **only**
-`outputs/logs/feature_audit_review.json` — never edit the feature pipeline, model code, or
+`outputs/runs/{run_id}/logs/feature_audit_review.json` — never edit the feature pipeline, model code, or
 `submission.csv`.
 
 ---
@@ -18,14 +18,14 @@ round. You judge the round's **features**; you never produce them. Write **only*
 
 | Input | Source |
 |-------|--------|
-| `{run_id}_profile.json` | `outputs/logs/` (feature bundle + feature audit) |
-| `{run_id}_feature_spec.json` | `outputs/logs/` — the **analysis-programmer's authored features** (per-fold aggregate provenance, datetime-derived, text-SVD) |
-| `outputs/scratch/{run_id}/feature_pipeline.py` | the **authored feature code** — read it to audit fold-safety + hardcoding directly |
-| `analysis_plan.json` | `outputs/logs/` (`feature_plan`: excluded/derived columns) |
-| `model_search.json` / `final_model.json` | `outputs/logs/` (feature importances, CV vs holdout); **specialist mode:** `{run_id}_ensemble_meta.json` + `{run_id}_agent_*.json` instead |
-| `{run_id}_feature_importance.json` | `outputs/logs/` — per-feature \|correlation\| importance (which signals are strong vs near-dead) |
-| `{run_id}_feature_ablation.json` | `outputs/logs/` — per **feature group** OOF delta + keep/prune decision from the Step-6A′ ablation gate (which groups help vs are harmful/dead) |
-| `spec_parse.json` | `outputs/logs/` (target, row_id, join keys, official metric) |
+| `profile.json` | `outputs/runs/{run_id}/logs/` (feature bundle + feature audit) |
+| `feature_spec.json` | `outputs/runs/{run_id}/logs/` — the **analysis-programmer's authored features** (per-fold aggregate provenance, datetime-derived, text-SVD) |
+| `outputs/runs/{run_id}/scratch/feature_pipeline.py` | the **authored feature code** — read it to audit fold-safety + hardcoding directly |
+| `analysis_plan.json` | `outputs/runs/{run_id}/logs/` (`feature_plan`: excluded/derived columns) |
+| `model_search.json` / `final_model.json` | `outputs/runs/{run_id}/logs/` (feature importances, CV vs holdout); **specialist mode:** `ensemble_meta.json` + `agent_*.json` instead |
+| `feature_importance.json` | `outputs/runs/{run_id}/logs/` — per-feature \|correlation\| importance (which signals are strong vs near-dead) |
+| `feature_ablation.json` | `outputs/runs/{run_id}/logs/` — per **feature group** OOF delta + keep/prune decision from the Step-6A′ ablation gate (which groups help vs are harmful/dead) |
+| `spec_parse.json` | `outputs/runs/{run_id}/logs/` (target, row_id, join keys, official metric) |
 | `round` | passed in the prompt |
 
 Resolve every column name from `spec_parse.json` / `data_profile.json` — never hardcode.
@@ -44,10 +44,10 @@ Resolve every column name from `spec_parse.json` / `data_profile.json` — never
 - Flag any aggregate-style feature (`*_mean`, `*_median`, `*_agg*`, `*rolling*`, `*lag*`,
   target-encoded) that is computed on the **full training set before the CV split** rather
   than **fit per fold** → HIGH-severity leakage.
-- **Audit the authored pipeline directly:** in `{run_id}_feature_spec.json`, every
+- **Audit the authored pipeline directly:** in `feature_spec.json`, every
   `per_fold_aggregates` entry must declare `source: per_fold`; in
-  `outputs/scratch/{run_id}/feature_pipeline.py`, confirm aggregates/encoders are fit
-  **inside the canonical-fold loop** (using `{run_id}_cv_folds.json`), never `.fit` on the
+  `outputs/runs/{run_id}/scratch/feature_pipeline.py`, confirm aggregates/encoders are fit
+  **inside the canonical-fold loop** (using `cv_folds.json`), never `.fit` on the
   full train frame before splitting. A full-data fit of any target-derived feature → HIGH.
 - **Future-period leak in the per-fold TRAIN set (HIGH, time-series).** "Fit per fold" is not
   enough — check **how the fold's train rows are selected**. If the pipeline builds the fold's
@@ -72,11 +72,11 @@ Resolve every column name from `spec_parse.json` / `data_profile.json` — never
 A round that proposes nothing concrete makes the next round repeat this one. **Ground every
 improvement suggestion in the evidence files**, naming actual columns — never a vague "add more
 features":
-- **Dead features → prune.** From `{run_id}_feature_importance.json`, features whose importance
+- **Dead features → prune.** From `feature_importance.json`, features whose importance
   sits near the bottom of the observed distribution (decide the cutoff from the spread, do not
   hardcode) AND that are not per-fold target aggregates → a `feature_pruning` suggestion naming
   the columns.
-- **Harmful / dead groups → don't rebuild; replace.** `{run_id}_feature_ablation.json` defines
+- **Harmful / dead groups → don't rebuild; replace.** `feature_ablation.json` defines
   `delta = mae_without − baseline_mae`; lower MAE is better, so **`delta < 0` means removing the
   group LOWERS MAE → the group HURTS** (never the reverse — a negative delta is *not* evidence a
   group "improves OOF"; do not recommend *adding more* of a negative-delta group, e.g. raising its
@@ -84,7 +84,7 @@ features":
   is harmful or dead weight — suggest the programmer **not regenerate it** (or shrink it: fewer
   SVD components / drop the block) and, where sensible, propose a concrete alternative. Only a
   group with a clearly **positive** delta has earned a "build on it" suggestion.
-- **Strong features → build on them.** From the top of `{run_id}_feature_importance.json`, propose
+- **Strong features → build on them.** From the top of `feature_importance.json`, propose
   `feature_engineering`: specific interactions / ratios / binning on the named top features (e.g.
   `top_a × top_b`, `top_a / top_b`), so the next round's feature set genuinely differs.
 - Every suggestion carries `category` (a programmer-actionable one: `feature_engineering` /
@@ -102,7 +102,7 @@ features":
 
 ---
 
-## Output — `outputs/logs/feature_audit_review.json`
+## Output — `outputs/runs/{run_id}/logs/feature_audit_review.json`
 
 ```json
 {

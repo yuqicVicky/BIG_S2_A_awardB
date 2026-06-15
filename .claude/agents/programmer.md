@@ -22,10 +22,10 @@ never write a literal column name, file name, or magic constant into your code.
 
 | Input | Source |
 |-------|--------|
-| `spec_parse.json` | `outputs/logs/` (target, row_id, files, task, structure) |
-| `data_profile.json` | `outputs/logs/` (missing, target_distribution, split_structure) |
-| `analysis_plan.json` | `outputs/logs/` — your **build blueprint**: `feature_plan` (the concrete features to author), `data_coverage` (every column's intended `usage`), `completeness_constraints` (submission-frame expansion, full-train refit, sub-target, missing handling) |
-| `{run_id}_cv_folds.json` | `outputs/logs/` (**canonical shared folds** — used to fit per-fold aggregates leakage-safely) |
+| `spec_parse.json` | `outputs/runs/{run_id}/logs/` (target, row_id, files, task, structure) |
+| `data_profile.json` | `outputs/runs/{run_id}/logs/` (missing, target_distribution, split_structure) |
+| `analysis_plan.json` | `outputs/runs/{run_id}/logs/` — your **build blueprint**: `feature_plan` (the concrete features to author), `data_coverage` (every column's intended `usage`), `completeness_constraints` (submission-frame expansion, full-train refit, sub-target, missing handling) |
+| `cv_folds.json` | `outputs/runs/{run_id}/logs/` (**canonical shared folds** — used to fit per-fold aggregates leakage-safely) |
 | `run_id`, `round`, `repair_mode`, `critical_issues` | from orchestrator |
 
 **Treat `analysis_plan.json.feature_plan` as the build blueprint:** implement each listed feature
@@ -33,9 +33,22 @@ family (direct numeric, categorical encoding, datetime-derived, text TF-IDF→SV
 aggregates, flagged interactions/lags), and materialise every `data_coverage.available_sources`
 column whose `usage` is not `excluded`/`key`/`target`. Honor the `completeness_constraints`
 (expand the prediction frame to the submission rows, refit per-fold transformers on full train
-before inference). Your emitted `{run_id}_feature_spec.json` should be traceable back to the plan's
+before inference). Your emitted `feature_spec.json` should be traceable back to the plan's
 feature groups — the Step-6A′ ablation gate then validates which groups actually earn their place.
 Experimental `lag_features` flagged in the plan are expected to be ablation-tested, not assumed good.
+
+**Read `analysis_plan.json.representation_strategy` before authoring any code.** It tells you
+the architectural emphasis for this dataset:
+- `tabular_ml` — standard feature engineering; no special structural encoding priority.
+- `feature_based_temporal` — lag/rolling/period-rank features are the **primary signal**, not
+  optional extras. Implement them first and with care; implement `programmer_instructions` verbatim.
+- `feature_based_image` — image sidecar extraction (Part 2 image plan) is the primary novel
+  signal; implement it robustly before other engineered groups.
+- `feature_based_text` — TF-IDF→SVD is the primary signal; prioritize it and size components
+  per the plan's `svd_components` guidance.
+
+Also read `capability_gaps` (informational only — no action required, but mention them in the
+feature_spec.json `notes` field so the report can surface them).
 
 When you need the set of categories the submission actually scores (e.g. to build the prediction
 frame), read it from `spec_parse.json.scoring_subset` (`column` + `scoring_values`) when present —
@@ -55,11 +68,11 @@ The floor is the frozen `src/data_agent` pipeline; it is identical every round, 
 AWARDB_RUN_ID="$RUN_ID" AWARDB_SKIP_REPORT=1 python main.py
 ```
 
-`AWARDB_RUN_ID` makes the floor write `{run_id}_*` files matching the orchestrator's run_id;
+`AWARDB_RUN_ID` makes the floor write `*` files matching the orchestrator's run_id;
 `AWARDB_SKIP_REPORT` skips the throwaway floor report (the real report is authored in Step 7).
-This produces `submission.csv` (floor baseline), `{run_id}_model_selection.json`,
-`{run_id}_profile.json`, `{run_id}_cv_folds.json` (if the guardian didn't already), and
-`{run_id}_oof_floor.csv`. **Rounds 2-3:** skip when `{run_id}_model_selection.json` already
+This produces `submission.csv` (floor baseline), `model_selection.json`,
+`profile.json`, `cv_folds.json` (if the guardian didn't already), and
+`oof_floor.csv`. **Rounds 2-3:** skip when `model_selection.json` already
 exists; instead set `AWARDB_KEEP_OUTPUTS=1` if you must re-run so the promoted best survives.
 Do **not** run `scripts/award_a_reference/`.
 
@@ -67,7 +80,7 @@ Do **not** run `scripts/award_a_reference/`.
 
 ## Step A2 — Author the feature pipeline (the real work)
 
-Write `outputs/scratch/{run_id}/feature_pipeline.py` that, resolving all names at runtime:
+Write `outputs/runs/{run_id}/scratch/feature_pipeline.py` that, resolving all names at runtime:
 
 1. Loads train + prediction per `spec_parse.json`.
 
@@ -85,7 +98,7 @@ Write `outputs/scratch/{run_id}/feature_pipeline.py` that, resolving all names a
    **Never leave val period IDs out of PERIOD_RANK** — if they map to -1, every lag/rolling
    feature in the prediction frame will be 100% NaN, causing degenerate predictions.
 2. Builds the features the plan calls for, **leakage-safe**:
-   - **Per-fold aggregates / target encodings:** load `{run_id}_cv_folds.json`
+   - **Per-fold aggregates / target encodings:** load `cv_folds.json`
      (`cv.load_canonical_folds`) and, for each fold, compute the group/target statistic on that
      fold's **train rows only**, filling the fold's val rows from it; fit the full-train version
      for the prediction matrix. **Never** fit a target-derived feature on the full train frame
@@ -132,14 +145,14 @@ Write `outputs/scratch/{run_id}/feature_pipeline.py` that, resolving all names a
        `per_fold_aggregates`; record the columns under a new `image_features` group in the spec.
        Fit any image SVD on fold-train rows only (reproducibility), not the prediction frame.
 3. Writes the feature matrices, **row-aligned**:
-   - `{run_id}_features_train.parquet` — aligned to the **raw train-file row order** (CSV
+   - `features_train.parquet` — aligned to the **raw train-file row order** (CSV
      fallback if pyarrow is unavailable; record which in the spec).
-   - `{run_id}_features_pred.parquet` — aligned to the **sample-submission row order**.
-4. Writes `{run_id}_feature_spec.json`:
+   - `features_pred.parquet` — aligned to the **sample-submission row order**.
+4. Writes `feature_spec.json`:
    ```json
    {"run_id": "...", "format": "parquet|csv",
-    "features_train": "outputs/logs/{run_id}_features_train.parquet",
-    "features_pred": "outputs/logs/{run_id}_features_pred.parquet",
+    "features_train": "outputs/runs/{run_id}/logs/features_train.parquet",
+    "features_pred": "outputs/runs/{run_id}/logs/features_pred.parquet",
     "feature_columns": ["..."],
     "per_fold_aggregates": [{"name": "...", "group_keys": ["..."], "source": "per_fold"}],
     "datetime_derived": ["..."], "text_svd": ["..."],
@@ -165,7 +178,7 @@ matrices + spec:
 ```bash
 python - <<'PY'
 import glob, json
-r = sorted(glob.glob("outputs/logs/analysis_review_*.json"))
+r = sorted(glob.glob("outputs/runs/{run_id}/logs/analysis_review_*.json"))
 if r:
     d = json.load(open(r[-1]))
     high = d.get("merged_high_impact_suggestions") or []
@@ -184,10 +197,10 @@ ensemble suggestions are for `model-search-agent` / `ensemble-meta`, not you). S
 **Also mine the evidence directly — do not just wait for suggestions.** A round that rebuilds the
 identical feature set wastes itself. In rounds > 1, read the prior round's evidence and make the
 feature set **measurably different**:
-- `{run_id}_feature_ablation.json` — for any group with `decision == "prune"` (its removal
+- `feature_ablation.json` — for any group with `decision == "prune"` (its removal
   improved OOF), **do not regenerate that group** (e.g. a regressing lag group); a kept group with
   a near-zero delta is dead weight you may drop or simplify.
-- `{run_id}_feature_importance.json` — on the highest-importance features, add **new** fold-safe
+- `feature_importance.json` — on the highest-importance features, add **new** fold-safe
   constructions the prior round lacked (interactions / ratios / binning of the named top features).
 New constructions are leakage-safe and will be validated by the Step-6A′ ablation gate — so it is
 safe to propose them; the gate prunes any that do not earn their place. The net effect is that
@@ -198,13 +211,13 @@ round N+1's `feature_spec.feature_columns` genuinely differs from round N's.
 ## Repair mode
 
 When `repair_mode == true`: read `critical_issues` and the captured traceback. Fix the issue
-**in `outputs/scratch/{run_id}/feature_pipeline.py`** (your authored runtime code), then
+**in `outputs/runs/{run_id}/scratch/feature_pipeline.py`** (your authored runtime code), then
 re-execute it. Do NOT edit `src/data_agent/` — that is the frozen floor infrastructure.
 
 Repair target hierarchy:
-1. **`outputs/scratch/{run_id}/feature_pipeline.py`** — your feature pipeline: fix shape
+1. **`outputs/runs/{run_id}/scratch/feature_pipeline.py`** — your feature pipeline: fix shape
    mismatches, index alignment, missing-column guards, dtype coercions.
-2. **`outputs/scratch/{run_id}/predict_assemble.py`** — if you authored a separate prediction
+2. **`outputs/runs/{run_id}/scratch/predict_assemble.py`** — if you authored a separate prediction
    assembly script, fix and re-execute it.
 3. **Never touch `src/data_agent/`** — any bug there is floor infrastructure; report it and
    let the checkpoint recovery path handle `submission.csv`.
@@ -225,8 +238,8 @@ import glob, json
 from pathlib import Path
 import pandas as pd
 assert Path("submission.csv").exists(), "missing floor submission.csv"
-sel = sorted(glob.glob("outputs/logs/*_model_selection.json")); assert sel, "no floor model_selection"
-specs = sorted(glob.glob("outputs/logs/*_feature_spec.json"))
+sel = sorted(glob.glob("outputs/runs/{run_id}/logs/*_model_selection.json")); assert sel, "no floor model_selection"
+specs = sorted(glob.glob("outputs/runs/{run_id}/logs/*_feature_spec.json"))
 if specs:
     spec = json.load(open(specs[-1]))
     rd = (lambda p: pd.read_parquet(p) if p.endswith(".parquet") else pd.read_csv(p))
@@ -256,8 +269,8 @@ report to the orchestrator (the floor remains the deliverable). Do not attempt a
 ## Log outputs
 
 After a successful round, confirm these exist:
-- floor (round 1, from A1): `submission.csv` (repo root, baseline) + `{run_id}_model_selection.json`
-  + `{run_id}_oof_floor.csv` + `{run_id}_state.json` + `{run_id}_submission_check.json`
-  + `{run_id}_profile.json` (feature audit).
-- features: `{run_id}_features_train.parquet` / `{run_id}_features_pred.parquet` (or `.csv`),
-  `{run_id}_feature_spec.json`, and `outputs/scratch/{run_id}/feature_pipeline.py`.
+- floor (round 1, from A1): `submission.csv` (repo root, baseline) + `model_selection.json`
+  + `oof_floor.csv` + `state.json` + `submission_check.json`
+  + `profile.json` (feature audit).
+- features: `features_train.parquet` / `features_pred.parquet` (or `.csv`),
+  `feature_spec.json`, and `outputs/runs/{run_id}/scratch/feature_pipeline.py`.

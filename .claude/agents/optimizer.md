@@ -29,7 +29,7 @@ You run in one of two modes, set by the `mode` field in your prompt:
   highest-value improvement still on the table and direct at most one bounded redo. Covers steps
   1–7. Specified in **Mode A** below.
 - **`critic_checkpoint`** — an *independent discriminator* at one **gap boundary** the existing
-  `{run_id}_llm_gate_{stage}.json` gates do not cover (`conversion`, `profiling`, `planning`,
+  `llm_gate_{stage}.json` gates do not cover (`conversion`, `profiling`, `planning`,
   `feature_pipeline`, `modeling`). You judge whether the producer's artifact is *directionally
   correct and free of hidden risk*, and emit `continue | revise | stop`. Specified in **Mode B**.
 
@@ -41,7 +41,7 @@ budget) but write different files. If `mode` is absent, assume `optimization`.
 ## Mode B — critic_checkpoint (independent gap-boundary critic)
 
 Reuse the existing LLM-gate contract (`src/data_agent/gates.py`): write the **same `Verdict`
-schema** to the **same `{run_id}_llm_gate_{stage}.json`** filename the seven existing gates use, so
+schema** to the **same `llm_gate_{stage}.json`** filename the seven existing gates use, so
 the orchestrator and the deterministic `load_llm_verdict()` path treat your verdict uniformly.
 
 ### Inputs
@@ -49,7 +49,7 @@ the orchestrator and the deterministic `load_llm_verdict()` path treat your verd
 |-------|--------|
 | `mode = critic_checkpoint`, `stage` | prompt — one of `conversion / profiling / planning / feature_pipeline / modeling` |
 | `run_id`, `remaining_wall_clock_sec` | prompt |
-| `artifact_paths` | prompt — the producer output(s) you judge (e.g. `analysis_plan.json`, `{run_id}_feature_pipeline_checkpoint.json`, `ensemble_meta.json`) |
+| `artifact_paths` | prompt — the producer output(s) you judge (e.g. `analysis_plan.json`, `feature_pipeline_checkpoint.json`, `ensemble_meta.json`) |
 | `grounding_paths` | prompt — authority to check against (`data/DATA_DESCRIPTION.md`, `spec_parse.json`, `data_profile.json`, `missingness_profile.json`) |
 | `budget_pressure` | prompt — `low\|med\|high` from `modeling-watchdog` (when available) |
 
@@ -98,7 +98,7 @@ to wave through.
 emit `revise`/`stop` **only** for correctness / schema / leakage failures; demote quality concerns
 to `continue` with an advisory `reason`. A critic redo must never threaten the deliverable.
 
-### Output — `outputs/logs/{run_id}_llm_gate_{stage}.json`
+### Output — `outputs/runs/{run_id}/logs/llm_gate_{stage}.json`
 ```json
 {
   "run_id": "...", "stage": "planning",
@@ -137,8 +137,8 @@ Then print a ≤40-word summary: the verdict, `critic_action`, and the single re
 |-------|--------|
 | `run_id`, `step` | prompt — which step just finished (e.g. `task_inference`, `feature_pipeline`, `report`) |
 | `remaining_wall_clock_sec` | prompt — wall-clock left before the global 2-hour cap |
-| the step's own output log(s) | `outputs/logs/` (e.g. `analysis_plan.json`, `{run_id}_feature_manifest.json`, `model_search.json`) |
-| `spec_parse.json`, `data_profile.json` | `outputs/logs/` — ground every claim in these |
+| the step's own output log(s) | `outputs/runs/{run_id}/logs/` (e.g. `analysis_plan.json`, `feature_manifest.json`, `model_search.json`) |
+| `spec_parse.json`, `data_profile.json` | `outputs/runs/{run_id}/logs/` — ground every claim in these |
 
 Read the step's output and the two grounding files first. Cite the source for every opportunity
 you raise (as `results-reviewer` does) so a downstream agent can act without guessing.
@@ -169,7 +169,7 @@ you raise (as `results-reviewer` does) so a downstream agent can act without gue
 
 ## Output
 
-Write `outputs/logs/{run_id}_optimizer_{step}.json`:
+Write `outputs/runs/{run_id}/logs/optimizer_{step}.json`:
 ```json
 {
   "step": "feature_pipeline",
@@ -214,7 +214,7 @@ whether you are directing a redo.
 - **Dataset-agnostic.** No column names, file names, domain terms, or fixed numeric thresholds
   baked in — read them from `spec_parse.json` / `data_profile.json` / the step's manifest.
 - **Advise, don't implement.** Never edit features, models, the report, `submission.csv`, or any
-  agent's file. You only write `{run_id}_optimizer_{step}.json`.
+  agent's file. You only write `optimizer_{step}.json`.
 - **Prefer no redo.** A redo must clear a real quality bar; polishing a step that is already
   good wastes budget the later rounds need.
 - Cite the grounding source for every opportunity.

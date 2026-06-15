@@ -1,6 +1,6 @@
 ---
 name: task-inference-agent
-description: Use this agent to infer the analysis task type, target variable, target type, and recommended metrics from the user request and data profile. Parses DATA_DESCRIPTION.md as primary authority and writes outputs/logs/spec_parse.json.
+description: Use this agent to infer the analysis task type, target variable, target type, and recommended metrics from the user request and data profile. Parses DATA_DESCRIPTION.md as primary authority and writes outputs/runs/{run_id}/logs/spec_parse.json.
 tools: Read, Write, Bash, Grep
 model: claude-sonnet-4-6
 ---
@@ -184,15 +184,15 @@ row for every prediction row. If absent, add a `WARN` (do not halt).
 
 Resolve `run_id` from the **prompt** the orchestrator gives you, or the `AWARDB_RUN_ID`
 environment variable (`os.environ.get("AWARDB_RUN_ID")`). Use that exact value for both the
-`run_id` field in `spec_parse.json` **and** the `{run_id}_llm_gate_task_inference.json` filename —
-so the orchestrator and `supervisor-gatekeeper` (which look up `{run_id}_llm_gate_*.json`) actually
+`run_id` field in `spec_parse.json` **and** the `llm_gate_task_inference.json` filename —
+so the orchestrator and `supervisor-gatekeeper` (which look up `llm_gate_*.json`) actually
 find your verdict. **Never** default to a placeholder timestamp (e.g. `..._000000`): a wrong
 `run_id` orphans your gate file and can misdirect the CV-folds filename. If no run_id is available
 from either source, write a `FAIL` entry in `errors` rather than inventing one.
 
 ---
 
-## Output — write `outputs/logs/spec_parse.json`
+## Output — write `outputs/runs/{run_id}/logs/spec_parse.json`
 
 ```json
 {
@@ -252,7 +252,7 @@ add a `repair_exhausted` warning, and return so the orchestrator can fall back.
   names at runtime, compute the rest.
 - **Primary authority is `DATA_DESCRIPTION.md`.** Data-driven inference is a fallback only.
 - **Do not train any model** or perform imputation, encoding, or feature engineering.
-- **Do not write any file other than `outputs/logs/spec_parse.json`** (plus the verdict file below).
+- **Do not write any file other than `outputs/runs/{run_id}/logs/spec_parse.json`** (plus the verdict file below).
 - **If `DATA_DESCRIPTION.md` is absent**: write a `FAIL` entry in `errors`. Do not suppress any
   `FAIL`; surface all failures so the orchestrator can repair or fall back.
 
@@ -261,7 +261,7 @@ add a `repair_exhausted` warning, and return so the orchestrator can fall back.
 ## Closed-loop verdict (stage `task_inference`)
 
 Alongside `spec_parse.json`, emit a consistency verdict to
-`outputs/logs/{run_id}_llm_gate_task_inference.json` in the shared schema (see CLAUDE.md →
+`outputs/runs/{run_id}/logs/llm_gate_task_inference.json` in the shared schema (see CLAUDE.md →
 "Closed-loop verdict protocol"; schema in `src/data_agent/gates.py`). Emit `fail` when the
 resolved `task_type` contradicts the data, the official metric, or the sample-submission value
 format — e.g. a regression metric (`rmse`/`rmsle`/`mae`/`r2`) paired with a classification

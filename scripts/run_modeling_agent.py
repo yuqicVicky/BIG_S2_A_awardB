@@ -83,6 +83,56 @@ def _append_authored_features(bundle, feature_spec_path: Path) -> list[str]:
         return []
 
 
+def _patch_schema_from_spec_parse(schema, repo: Path, run_id: str) -> None:
+    """Override schema file assignments with spec_parse.json authoritative values.
+
+    discover_schema() uses filename heuristics that can misidentify train/val files
+    (e.g. swapping train.csv / val.csv for Iris-like datasets). spec_parse.json is
+    produced by the task-inference-agent and is the single authority for file roles,
+    target column, and row-id. This function patches SchemaSpec in-place so the bundle
+    is built from the correct files.
+
+    When the primary files change, covariate files are nulled (they were discovered
+    relative to wrong anchors; build_feature_bundle handles None covariates gracefully).
+    """
+    candidates = [
+        repo / "outputs" / "runs" / run_id / "logs" / "spec_parse.json",
+        repo / "outputs" / "logs" / "spec_parse.json",
+    ]
+    spec_path = next((p for p in candidates if p.exists()), None)
+    if spec_path is None:
+        return
+    try:
+        sp = json.loads(spec_path.read_text(encoding="utf-8"))
+    except Exception as exc:
+        print(f"[schema] spec_parse.json unreadable, keeping discover_schema result: {exc}")
+        return
+
+    changed = False
+    if sp.get("train_file"):
+        new_train = str((repo / sp["train_file"]).resolve())
+        if new_train != schema.train_target_file:
+            print(f"[schema] train_target_file: {Path(schema.train_target_file).name} → {sp['train_file']}")
+            schema.train_target_file = new_train
+            changed = True
+    if sp.get("prediction_file"):
+        new_pred = str((repo / sp["prediction_file"]).resolve())
+        if new_pred != schema.sample_submission_file:
+            print(f"[schema] sample_submission_file: {Path(schema.sample_submission_file).name} → {sp['prediction_file']}")
+            schema.sample_submission_file = new_pred
+            changed = True
+    if sp.get("target_column"):
+        schema.target_column = sp["target_column"]
+    # Patch row_id when the field explicitly exists in spec_parse (even if null).
+    # null means positional index (no dedicated row-id column) → "".
+    if "row_id_column" in sp:
+        schema.row_id_column = sp["row_id_column"] or ""
+    if changed:
+        schema.train_covariates_file = None
+        schema.validation_covariates_file = None
+        print("[schema] covariate files nulled (will re-derive from corrected anchors)")
+
+
 def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--approach", default="full", choices=sorted(_APPROACH_FAMILIES))
@@ -118,9 +168,9 @@ def main() -> None:
     # behaviour is unchanged. The orchestrator may pre-set the path; otherwise we
     # default it next to the other run logs so a directly-invoked run still streams.
     role = f"{args.approach}-specialist"
-    logs = repo / "outputs" / "logs"
-    logs.mkdir(parents=True, exist_ok=True)
-    os.environ.setdefault("AWARDB_HEARTBEAT_PATH", str(logs / f"{args.run_id}_{role}_progress.jsonl"))
+    from src.data_agent.paths import run_logs_dir
+    logs = run_logs_dir(repo, args.run_id)  # outputs/runs/<run_id>/logs
+    os.environ.setdefault("AWARDB_HEARTBEAT_PATH", str(logs / f"{role}_progress.jsonl"))
     os.environ.setdefault("AWARDB_ROLE", role)
     os.environ.setdefault("AWARDB_RUN_ID", args.run_id)
 
@@ -135,6 +185,7 @@ def main() -> None:
 
     families = _APPROACH_FAMILIES[args.approach]
     schema = discover_schema(repo / "data")
+    _patch_schema_from_spec_parse(schema, repo, args.run_id)
     bundle = build_feature_bundle(schema)
 
     # Code-enforced leakage floor over the static feature set this candidate trains
@@ -166,14 +217,14 @@ def main() -> None:
         mr.predictions, bundle.sample_submission, schema, desc)
     sub = _build_submission(bundle, schema.row_id_column, schema.target_column, preds, mr.output_kind)
 
-    cand_csv = logs / f"{args.run_id}_cand_{args.approach}.csv"
+    cand_csv = logs / f"cand_{args.approach}.csv"
     sub.to_csv(cand_csv, index=False)
 
     # OOF on the (canonical) folds — train-row aligned, for common-OOF keep-best.
     oof_path = None
     oof_full = (getattr(mr, "holdout_by_model", None) or {}).get(mr.selected_model_name)
     if oof_full is not None:
-        oof_path = logs / f"{args.run_id}_oof_{args.approach}.csv"
+        oof_path = logs / f"oof_{args.approach}.csv"
         write_oof(oof_path, oof_full, scored_mask=scored_mask)
 
     # cv_score must be reported on the SAME footing every other candidate (and the
@@ -227,7 +278,7 @@ def main() -> None:
         "authored_features_used": added_features,
         "monotonic_applied": bool(mono.get("applied")),
     }
-    (logs / f"{args.run_id}_agent_{args.approach}.json").write_text(json.dumps(out, indent=2))
+    (logs / f"agent_{args.approach}.json").write_text(json.dumps(out, indent=2))
     emit("final_done", best_so_far=cv_score)
     print(json.dumps(out))
 

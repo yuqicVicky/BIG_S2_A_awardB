@@ -154,6 +154,18 @@ def _feature_groups(spec: dict, present: set[str]) -> dict[str, list[str]]:
         if members:
             groups[gname] = members
             assigned.update(members)
+    # Also handle feature_groups sub-dict (analysis-programmer may group columns here
+    # under keys like "interactions", "ratio_features", "summary_features", etc.).
+    # Each sub-group is ablated independently, giving finer-grained prune decisions.
+    fg_dict = spec.get("feature_groups") or {}
+    for gname_fg, cols_fg in fg_dict.items():
+        if not isinstance(cols_fg, list):
+            continue
+        members = [c for c in cols_fg if c in present and c not in assigned]
+        if members:
+            groups[gname_fg] = members
+            assigned.update(members)
+
     rest = [c for c in cols if c not in assigned]
     if rest:
         groups["other_features"] = rest
@@ -181,6 +193,15 @@ def _prune_spec(spec: dict, prune_cols: set[str]) -> dict:
     for key in ("text_svd", "image_features", "datetime_derived", "distribution_shift_interactions"):
         if key in spec:
             out[key] = [c for c in spec[key] if c not in prune_cols]
+    # Prune sub-groups inside the feature_groups dict (analysis-programmer structure).
+    if spec.get("feature_groups"):
+        fg = {}
+        for gname, gcols in spec["feature_groups"].items():
+            if isinstance(gcols, list):
+                fg[gname] = [c for c in gcols if c not in prune_cols]
+            else:
+                fg[gname] = gcols
+        out["feature_groups"] = fg
     out["ablation_pruned_columns"] = sorted(prune_cols)
     return out
 
@@ -205,11 +226,11 @@ def main() -> None:
 
     repo = Path(args.repo).resolve()
     sys.path.insert(0, str(repo))
-    logs = repo / "outputs" / "logs"
-    logs.mkdir(parents=True, exist_ok=True)
+    from src.data_agent.paths import run_logs_dir
+    logs = run_logs_dir(repo, args.run_id)  # outputs/runs/<run_id>/logs
     spec_path = Path(args.feature_spec)
     full_path = spec_path.with_name(spec_path.name.replace("feature_spec", "feature_spec_full"))
-    out_json = logs / f"{args.run_id}_feature_ablation.json"
+    out_json = logs / "feature_ablation.json"
 
     def _passthrough(reason: str, extra: dict | None = None) -> None:
         """Leave the spec untouched, log a degraded note, exit 0 (never block)."""
@@ -232,7 +253,7 @@ def main() -> None:
         return _passthrough(f"cv folds absent: {args.cv_folds}")
 
     try:
-        from scripts.run_modeling_agent import _append_authored_features
+        from scripts.run_modeling_agent import _append_authored_features, _patch_schema_from_spec_parse
         from src.data_agent.schema import discover_schema
         from src.data_agent.features import build_feature_bundle
         from src.data_agent.cv import load_canonical_folds
@@ -245,6 +266,7 @@ def main() -> None:
                 prev_full = json.loads(prev_path.read_text(encoding="utf-8"))
 
         schema = discover_schema(repo / "data")
+        _patch_schema_from_spec_parse(schema, repo, args.run_id)
         bundle = build_feature_bundle(schema)
         added = _append_authored_features(bundle, spec_path)
         if not added:

@@ -9,7 +9,7 @@ model: claude-sonnet-4-6
 
 You are an **independent reviewer** dispatched in parallel with two other reviewers each
 round. You judge whether the result will **generalize**; you never produce the analysis.
-Write **only** `outputs/logs/overfitting_leakage_audit.json` — never edit model code or
+Write **only** `outputs/runs/{run_id}/logs/overfitting_leakage_audit.json` — never edit model code or
 `submission.csv`.
 
 ---
@@ -18,11 +18,11 @@ Write **only** `outputs/logs/overfitting_leakage_audit.json` — never edit mode
 
 | Input | Source |
 |-------|--------|
-| `validation_strategy.json` | `outputs/logs/` (the chosen CV strategy) |
-| `model_search.json` / `final_model.json` | `outputs/logs/` (cv_score, holdout_score, train↔val gap); **specialist mode:** `{run_id}_ensemble_meta.json` + `{run_id}_agent_*.json` instead |
-| `prediction_sanity.json` | `outputs/logs/` (the modeling doer's sanity result) |
+| `validation_strategy.json` | `outputs/runs/{run_id}/logs/` (the chosen CV strategy) |
+| `model_search.json` / `final_model.json` | `outputs/runs/{run_id}/logs/` (cv_score, holdout_score, train↔val gap); **specialist mode:** `ensemble_meta.json` + `agent_*.json` instead |
+| `prediction_sanity.json` | `outputs/runs/{run_id}/logs/` (the modeling doer's sanity result) |
 | `submission.csv` | repo root (inspect the final predictions) |
-| `data_profile.json`, `spec_parse.json` | `outputs/logs/` (target distribution, official metric) |
+| `data_profile.json`, `spec_parse.json` | `outputs/runs/{run_id}/logs/` (target distribution, official metric) |
 | `round` | passed in the prompt |
 
 ---
@@ -60,7 +60,7 @@ holdout kept separate? Does it simulate the hidden-evaluation gap?
 
 ---
 
-## Output — `outputs/logs/overfitting_leakage_audit.json`
+## Output — `outputs/runs/{run_id}/logs/overfitting_leakage_audit.json`
 
 ```json
 {

@@ -1,6 +1,6 @@
 ---
 name: validation-and-schema-guardian
-description: Use this agent to choose the validation strategy that best simulates hidden evaluation and to validate the final submission.csv schema, row count, coverage, and prediction quality. Writes outputs/logs/validation_strategy.json and outputs/logs/submission_validation.json.
+description: Use this agent to choose the validation strategy that best simulates hidden evaluation and to validate the final submission.csv schema, row count, coverage, and prediction quality. Writes outputs/runs/{run_id}/logs/validation_strategy.json and outputs/runs/{run_id}/logs/submission_validation.json.
 tools: Read, Bash, Glob, Grep
 model: claude-sonnet-4-6
 ---
@@ -24,8 +24,8 @@ justify it.
 
 | Input | Source |
 |-------|--------|
-| `spec_parse.json` | `outputs/logs/spec_parse.json` |
-| `data_profile.json` | `outputs/logs/data_profile.json` (its `split_structure` is useful in mode 1) |
+| `spec_parse.json` | `outputs/runs/{run_id}/logs/spec_parse.json` |
+| `data_profile.json` | `outputs/runs/{run_id}/logs/data_profile.json` (its `split_structure` is useful in mode 1) |
 | `submission.csv` | Repo root (validation mode only) |
 | `data/sample_submission.*` | resolved from `spec_parse.json` (validation mode) |
 
@@ -97,7 +97,7 @@ correlated with the target (HIGH); target-component columns absent from predicti
 high-cardinality non-datetime IDs in the feature set (MEDIUM); out-of-distribution sub-period
 range and detected distribution shift (LOW).
 
-### Step 4 — Write `outputs/logs/validation_strategy.json`
+### Step 4 — Write `outputs/runs/{run_id}/logs/validation_strategy.json`
 
 **Keys are a contract** — the planner (Step 4) and model-selection (Step 6B) read them verbatim.
 Fill every key from the data; values shown are placeholders, not literals to copy.
@@ -131,7 +131,7 @@ Fill every key from the data; values shown are placeholders, not literals to cop
 ### Step 5 — Emit the canonical shared folds (single CV owner)
 
 You own the one fold assignment every Step-6 candidate scores OOF on. After writing
-`validation_strategy.json`, build and persist `{run_id}_cv_folds.json` with the shared helper —
+`validation_strategy.json`, build and persist `cv_folds.json` with the shared helper —
 do **not** hand-roll folds (use `src/data_agent/cv.build_canonical_folds`, which honors the
 strategy you just chose):
 
@@ -149,8 +149,8 @@ import json, sys; sys.path.insert(0, ".")
 import pandas as pd
 from src.data_agent.cv import (build_canonical_folds, write_cv_folds_json,
                                compute_scoring_row_mask, derive_scoring_subset)
-spec = json.load(open("outputs/logs/spec_parse.json"))
-vs   = json.load(open("outputs/logs/validation_strategy.json"))
+spec = json.load(open("outputs/runs/{run_id}/logs/spec_parse.json"))
+vs   = json.load(open("outputs/runs/{run_id}/logs/validation_strategy.json"))
 run_id = spec.get("run_id") or vs.get("run_id")
 tf = spec["train_file"]
 train = pd.read_csv(tf) if str(tf).endswith(".csv") else pd.read_excel(tf)
@@ -169,16 +169,16 @@ if not ss:
 srm = compute_scoring_row_mask(train, ss)  # None ⇒ no restriction
 fa, scored, desc = build_canonical_folds(train, validation_strategy=vs, target=target,
                                          random_state=42, scoring_row_mask=srm)
-write_cv_folds_json(f"outputs/logs/{run_id}_cv_folds.json", run_id=run_id,
+write_cv_folds_json(f"outputs/runs/{run_id}/logs/cv_folds.json", run_id=run_id,
                     fold_assignment=fa, scored_rows=scored, description=desc)
-print(json.dumps({"cv_folds": f"outputs/logs/{run_id}_cv_folds.json",
+print(json.dumps({"cv_folds": f"outputs/runs/{run_id}/logs/cv_folds.json",
                   "strategy": desc.get("strategy"), "n_folds": desc.get("n_folds"),
                   "n_scored": desc.get("n_scored_rows"),
                   "scoring_restricted": desc.get("scoring_restricted")}))
 PY
 ```
 
-`{run_id}_cv_folds.json` is keyed to **raw train-file row order** (length = full train rows);
+`cv_folds.json` is keyed to **raw train-file row order** (length = full train rows);
 consumers that drop NaN-target rows re-align via `cv.load_canonical_folds(path, valid_mask=...)`.
 On any failure here, log a warning and continue — the floor falls back to its internal CV.
 
@@ -193,7 +193,7 @@ Write Python that reads `submission.csv` and the sample submission (resolved fro
 row count equals the sample; row-id order matches the sample; no duplicate row ids; predictions
 finite (numeric tasks) / non-missing; dtype appropriate to the task. Collect any CRITICAL issues.
 
-### Step 2 — Write `outputs/logs/submission_validation.json`
+### Step 2 — Write `outputs/runs/{run_id}/logs/submission_validation.json`
 
 ```json
 {
@@ -252,10 +252,10 @@ After 2 failed attempts, in schema-review mode write a safe default (`random_hol
 Alongside `validation_strategy.json` / `submission_validation.json`, emit a verdict in the shared
 schema (CLAUDE.md → "Closed-loop verdict protocol"; schema in `src/data_agent/gates.py`):
 
-- **Schema-review mode → stage `schema`**, `outputs/logs/{run_id}_llm_gate_schema.json`. Emit
+- **Schema-review mode → stage `schema`**, `outputs/runs/{run_id}/logs/llm_gate_schema.json`. Emit
   `fail` when no usable sample submission is resolved, or the row-id/target column is missing
   where it must appear. Loud failure, no auto-fix.
-- **Validation mode → stage `submission`**, `outputs/logs/{run_id}_llm_gate_submission.json`.
+- **Validation mode → stage `submission`**, `outputs/runs/{run_id}/logs/llm_gate_submission.json`.
   Emit `fail` when columns, row count, row-id alignment, finiteness, or dtype checks fail. A
   hard failure routes to the deterministic submission fallback.
 

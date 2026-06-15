@@ -186,7 +186,7 @@ for item in converted:
 
 ## Step 5 — Write conversion log
 
-Create `outputs/logs/` if it does not exist, then write `outputs/logs/data_conversion.json`:
+Create `outputs/runs/{run_id}/logs/` if it does not exist, then write `outputs/runs/{run_id}/logs/data_conversion.json`:
 
 ```json
 {
@@ -216,7 +216,7 @@ Create `outputs/logs/` if it does not exist, then write `outputs/logs/data_conve
 ## Success criteria
 
 - Every tabular file has a corresponding `.csv` version in the same directory.
-- `outputs/logs/data_conversion.json` is written with at least `already_csv` populated.
+- `outputs/runs/{run_id}/logs/data_conversion.json` is written with at least `already_csv` populated.
 - No column names were renamed during conversion.
 - No data rows were silently dropped (row count in log matches source).
 - If any file could not be converted, it is listed in `errors` with the exception message.

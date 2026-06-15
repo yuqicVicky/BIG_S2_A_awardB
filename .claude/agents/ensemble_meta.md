@@ -14,18 +14,18 @@ prediction to propose to the `supervisor-gatekeeper`. You **keep-best** — you 
 below the floor.
 
 ## Inputs
-- `outputs/logs/{run_id}_oof_*.csv` — each candidate's **OOF predictions on the canonical
-  folds** (floor + gbdt/linear specialists). Plus matching `{run_id}_cand_*.csv` (test).
-- `outputs/logs/{run_id}_model_selection.json` — the official metric + direction.
-- `outputs/logs/{run_id}_cv_folds.json` — the canonical folds (defines the OOF row order).
-- `outputs/logs/spec_parse.json` — target, row_id, files, sample submission.
+- `outputs/runs/{run_id}/logs/oof_*.csv` — each candidate's **OOF predictions on the canonical
+  folds** (floor + gbdt/linear specialists). Plus matching `cand_*.csv` (test).
+- `outputs/runs/{run_id}/logs/model_selection.json` — the official metric + direction.
+- `outputs/runs/{run_id}/logs/cv_folds.json` — the canonical folds (defines the OOF row order).
+- `outputs/runs/{run_id}/logs/spec_parse.json` — target, row_id, files, sample submission.
 
 ## Procedure — common-OOF NNLS among specialists only
 
 ### Why the floor is excluded from NNLS
 
 The floor (`main.py`) trains on its **own internal CV folds** and reports a `selection_score`
-(e.g. 0.878) on those folds. Specialists train on the **canonical folds** (`{run_id}_cv_folds.json`)
+(e.g. 0.878) on those folds. Specialists train on the **canonical folds** (`cv_folds.json`)
 and also report canonical OOF scores (e.g. 1.654). When the floor's OOF predictions are
 re-scored on canonical folds the score degrades by ~1.5–2× — not because the floor is worse,
 but because it was **trained on different folds** and its out-of-distribution evaluation is
@@ -42,15 +42,15 @@ import os, json, glob, numpy as np, pandas as pd
 from src.data_agent.cv import nnls_keep_best
 
 run_id = "<run_id>"
-spec   = json.load(open("outputs/logs/spec_parse.json"))
+spec   = json.load(open("outputs/runs/{run_id}/logs/spec_parse.json"))
 train  = pd.read_csv(spec["train_file"])
 y_true = pd.to_numeric(train[spec["target_column"]], errors="coerce").to_numpy()
 
-ms = json.load(open(sorted(glob.glob("outputs/logs/*_model_selection.json"))[-1]))
+ms = json.load(open(sorted(glob.glob("outputs/runs/{run_id}/logs/*_model_selection.json"))[-1]))
 
 # Specialists only — explicitly exclude the floor OOF
 specialist_cands = []
-for oof_csv in sorted(glob.glob(f"outputs/logs/{run_id}_oof_*.csv")):
+for oof_csv in sorted(glob.glob(f"outputs/runs/{run_id}/logs/oof_*.csv")):
     name = oof_csv.split("_oof_")[-1].rsplit(".", 1)[0]
     if name == "floor":
         continue                    # floor is the baseline, not a competitor
@@ -73,6 +73,31 @@ res = nnls_keep_best(
 restricts to scored categories when `scoring_restricted=true`. `chosen_score` is the canonical
 OOF metric of the best specialist or specialist blend.
 
+### Step 1b — materialize the chosen blend to `meta_choice.csv`
+
+`res["chosen_test"]` is the sum-to-one NNLS blend (or best single) applied to the candidates' test
+predictions. **You must persist it now** — every later reference (`chosen_submission` in Step 3,
+the promotion copy in the keep-best block) reads `meta_choice.csv`, so the promotion is
+broken if this file is never written.
+
+```python
+sub = pd.read_csv(spec["sample_submission_file"])   # row order is authoritative
+row_id = spec["row_id_column"]; target = spec["target_column"]   # resolve at runtime, never literal
+
+chosen = res.get("chosen_test")
+if chosen is None or len(chosen) != len(sub):
+    # No usable specialist candidate (or length mismatch) — do NOT write a partial file and
+    # force promote=False below so the floor's submission.csv stays untouched.
+    meta_choice_ready = False
+else:
+    out = pd.DataFrame({row_id: sub[row_id].to_numpy(), target: np.asarray(chosen, dtype=float)})
+    out.to_csv(f"outputs/runs/{run_id}/logs/meta_choice.csv", index=False)
+    meta_choice_ready = True
+```
+
+Resolve `sample_submission_file` / `row_id_column` / `target_column` from `spec_parse.json`. If
+`meta_choice_ready` is `False`, set `promote = False` in Step 2 regardless of the score comparison.
+
 ### Step 2 — floor self-score as the promotion threshold
 
 ```python
@@ -81,7 +106,7 @@ floor_self_score = ms.get("selection_score") or ms.get("cv_score")
 threshold_source = "floor_self_reported"
 
 # Record floor's canonical OOF for transparency only (NOT used as threshold)
-floor_oof_csv = f"outputs/logs/{run_id}_oof_floor.csv"
+floor_oof_csv = f"outputs/runs/{run_id}/logs/oof_floor.csv"
 floor_canonical_oof = None
 if os.path.exists(floor_oof_csv):
     from src.data_agent.cv import _score as _cv_score
@@ -103,7 +128,7 @@ if floor_self_score is None:
 ```python
 greater_is_better = bool(ms.get("greater_is_better", False))
 promote = False
-if res.get("chosen_score") is not None and floor_self_score is not None:
+if meta_choice_ready and res.get("chosen_score") is not None and floor_self_score is not None:
     promote = (
         res["chosen_score"] > floor_self_score if greater_is_better
         else res["chosen_score"] < floor_self_score
@@ -131,7 +156,7 @@ prevents false promotion caused by protocol-mismatch inflation of the floor's ca
   "promote": false,
   "promotion_threshold": 0.878,
   "promotion_threshold_source": "floor_self_reported",
-  "chosen_submission": "outputs/logs/{run_id}_meta_choice.csv"
+  "chosen_submission": "outputs/runs/{run_id}/logs/meta_choice.csv"
 }
 ```
 
@@ -140,10 +165,10 @@ scored categories). `floor_self_reported` may cover a different or broader categ
 is intentional. The conservative direction (specialist must beat floor on floor's easier metric)
 protects against false promotion.
 
-Also emit **`outputs/logs/{run_id}_model_stability_by_split.json`** so the
+Also emit **`outputs/runs/{run_id}/logs/model_stability_by_split.json`** so the
 model-performance-reviewer has a real generalization signal (its absence left
 `train_val_gap` null in a prior run). Aggregate each specialist's `cv_stability` from its
-`{run_id}_agent_<fam>.json` (`{split_scores, cv_mae_mean, cv_mae_std, relative_stability}`):
+`agent_<fam>.json` (`{split_scores, cv_mae_mean, cv_mae_std, relative_stability}`):
 ```json
 {"run_id": "{run_id}",
  "per_model": [
@@ -153,22 +178,23 @@ model-performance-reviewer has a real generalization signal (its absence left
  "chosen": "<the promoted choice>", "metric": "block_mae"}
 ```
 A high `relative_stability` (cv_std/cv_mean) or wide `split_scores` spread flags an unstable /
-overfit-prone model. Read each `{run_id}_agent_*.json`; skip any missing `cv_stability` gracefully.
+overfit-prone model. Read each `agent_*.json`; skip any missing `cv_stability` gracefully.
 
 ## Promote to submission.csv (keep-best + rollback) — you own this write
 
 You own the repo-root `submission.csv` promotion in specialist mode. Always copy the current
-`submission.csv` to `{run_id}_prior_best.csv` before any write (rollback guarantee).
+`submission.csv` to `prior_best.csv` before any write (rollback guarantee).
 
 **Promotion condition (from Step 2 above):** `promote == True` — i.e. the winning specialist's
 canonical OOF strictly beats `floor_self_score` (the floor's self-reported CV score from
 `model_selection.json`). If `promote == False`, leave `submission.csv` as-is (the floor's
 submission remains the final prediction).
 
-When promoting: overwrite `submission.csv` with `{run_id}_meta_choice.csv`. Every
-sample-submission row id must be present, in order, with finite values.
+When promoting: overwrite `submission.csv` with `meta_choice.csv` — written in Step 1b,
+so it is guaranteed to exist whenever `promote == True` (`promote` is forced `False` when the file
+was not materialized). Every sample-submission row id must be present, in order, with finite values.
 
-Write `{run_id}_promotion.json`:
+Write `promotion.json`:
 ```json
 {
   "round": 1,
@@ -184,15 +210,15 @@ Write `{run_id}_promotion.json`:
 }
 ```
 
-Record `submission_cv_score` + `overwrote_submission` + `promote` in `{run_id}_ensemble_meta.json`.
+Record `submission_cv_score` + `overwrote_submission` + `promote` in `ensemble_meta.json`.
 
 If a Step-6C reviewer flags the promoted candidate HIGH leakage/overfit, the lead sets
-`revert_promotion` — the orchestrator restores `{run_id}_prior_best.csv` and passes a
+`revert_promotion` — the orchestrator restores `prior_best.csv` and passes a
 `blacklist_candidate` to exclude next round. The `supervisor-gatekeeper` re-checks in Step 8.
 
 ## Prediction sanity — you own this in specialist mode
 Because you own the final `submission.csv` in specialist mode, after promoting it write the
-full human-readable result to `outputs/logs/prediction_sanity.json`:
+full human-readable result to `outputs/runs/{run_id}/logs/prediction_sanity.json`:
 `{"verdict": "PASS|WARN|FAIL", "high_overfitting_risk": bool, "checks": [{"name": ...,
 "verdict": ..., "detail": ...}]}` covering finite values, non-constant predictions, a
 plausible range vs the training target, and a train↔prediction distribution check. The
