@@ -108,13 +108,14 @@ def _jsonable(obj: Any) -> Any:
 
 
 def write_verdict(verdict: Verdict, logs_dir: str | Path, run_id: str) -> dict:
-    """Persist a verdict to ``{run_id}_gate_{stage}.json`` (+ a fixed-name alias
-    for the stages the inspection checklist names explicitly)."""
+    """Persist a verdict to ``gate_{stage}.json`` (+ a fixed-name alias for the
+    stages the inspection checklist names explicitly). ``logs_dir`` is already the
+    per-run dir (``outputs/runs/<run_id>/logs``), so no run_id prefix is needed."""
     logs_dir = Path(logs_dir)
     logs_dir.mkdir(parents=True, exist_ok=True)
     verdict.run_id = verdict.run_id or run_id
     payload = verdict.to_dict()
-    _dump(payload, logs_dir / f"{run_id}_gate_{verdict.stage}.json")
+    _dump(payload, logs_dir / f"gate_{verdict.stage}.json")
     alias = STAGE_ALIASES.get(verdict.stage)
     if alias:
         _dump(payload, logs_dir / alias)
@@ -130,11 +131,11 @@ def load_llm_verdict(logs_dir: str | Path, run_id: str, stage: str) -> Verdict |
     """Load an LLM critic's verdict for ``stage`` if one was written.
 
     The Claude-driven path lets a critic subagent drop a verdict file named
-    ``{run_id}_llm_gate_{stage}.json`` (same schema). When present it overrides
-    the deterministic verdict. Returns ``None`` when absent or unreadable, so the
-    headless deterministic path is unaffected.
+    ``llm_gate_{stage}.json`` in the run dir (same schema). When present it
+    overrides the deterministic verdict. Returns ``None`` when absent or
+    unreadable, so the headless deterministic path is unaffected.
     """
-    path = Path(logs_dir) / f"{run_id}_llm_gate_{stage}.json"
+    path = Path(logs_dir) / f"llm_gate_{stage}.json"
     if not path.exists():
         return None
     try:

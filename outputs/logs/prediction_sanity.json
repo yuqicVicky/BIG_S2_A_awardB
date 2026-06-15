@@ -1,7 +1,7 @@
 {
-  "run_id": "20260614_224500",
-  "checked_at": "2026-06-14T16:13:40.162952Z",
-  "overall_verdict": "WARN",
+  "run_id": "20260616_004306",
+  "checked_at": "2026-06-15T17:18:49.597061Z",
+  "overall_verdict": "PASS",
   "high_overfitting_risk": false,
   "checks": [
     {
@@ -9,54 +9,55 @@
       "check_name": "near_constant_predictions",
       "verdict": "PASS",
       "severity": "LOW",
-      "detail": "CV=0.6987 reasonable",
+      "detail": "3 unique class values predicted \u2014 non-constant.",
       "evidence": {
-        "cv": 0.6986560564477405
+        "unique_values": 3
       }
     },
     {
       "check_id": 2,
-      "check_name": "aggressive_clipping",
+      "check_name": "valid_class_labels",
       "verdict": "PASS",
       "severity": "LOW",
-      "detail": "Clipping=0.2%",
+      "detail": "All predicted classes {0, 1, 2} are valid subsets of training classes {0, 1, 2}.",
       "evidence": {}
     },
     {
       "check_id": 3,
-      "check_name": "unrealistic_prediction_range",
+      "check_name": "classification_distribution_shift",
       "verdict": "PASS",
       "severity": "LOW",
-      "detail": "outlier_frac=0.7%",
-      "evidence": {}
-    },
-    {
-      "check_id": 4,
-      "check_name": "prediction_distribution_shift",
-      "verdict": "WARN",
-      "severity": "MEDIUM",
-      "detail": "KS=0.539, mean_ratio=1.004",
+      "detail": "Predicted label distribution consistent with training (max_diff=6.7%).",
       "evidence": {
-        "ks_statistic": 0.5390742155448037,
-        "mean_ratio": 1.0039670840179848
+        "max_class_distribution_diff": 0.06666666666666671
       }
     },
     {
-      "check_id": 6,
-      "check_name": "large_train_val_gap",
+      "check_id": 4,
+      "check_name": "missing_predictions",
       "verdict": "PASS",
       "severity": "LOW",
-      "detail": "GBDT OOF=1.6536 vs floor=1.7002, rel_gap=0.027 well within 0.50",
+      "detail": "All 30 predictions are present and non-null.",
+      "evidence": {}
+    },
+    {
+      "check_id": 5,
+      "check_name": "oof_holdout_gap",
+      "verdict": "PASS",
+      "severity": "LOW",
+      "detail": "OOF f1_macro=0.9750, holdout f1_macro=0.9327, gap=0.0423 (4.3% relative). Acceptable for 120-row dataset.",
       "evidence": {
-        "gbdt_oof": 1.653602,
-        "floor_oof": 1.700229
+        "oof_score": 0.974996,
+        "holdout_score": 0.93266,
+        "absolute_gap": 0.04233599999999993,
+        "relative_gap": 0.0434
       }
     }
   ],
   "summary": {
     "total": 5,
-    "passed": 4,
-    "warned": 1,
+    "passed": 5,
+    "warned": 0,
     "failed": 0
   }
 }

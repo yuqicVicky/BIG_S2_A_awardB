@@ -1,0 +1,75 @@
+{
+  "run_id": "20260616_004306",
+  "status": "ok",
+  "round": 1,
+  "metric_name": "block_mae",
+  "ablation_model": "hist_gradient_boosting",
+  "baseline_mae": 0.016963,
+  "prune_margin": 0.00016963,
+  "per_group": {
+    "direct_numeric": {
+      "mae_without": 0.016963,
+      "delta": 0.0,
+      "decision": "keep",
+      "n_cols": 4,
+      "cols": [
+        "sepal length (cm)",
+        "sepal width (cm)",
+        "petal length (cm)",
+        "petal width (cm)"
+      ]
+    },
+    "interactions": {
+      "mae_without": 0.000304,
+      "delta": -0.016659,
+      "decision": "prune",
+      "n_cols": 4,
+      "cols": [
+        "petal_width_x_petal_length",
+        "petal_length_x_sepal_length",
+        "petal_width_x_sepal_length",
+        "sepal_length_x_sepal_width"
+      ]
+    },
+    "ratio_features": {
+      "mae_without": 0.016963,
+      "delta": 0.0,
+      "decision": "keep",
+      "n_cols": 4,
+      "cols": [
+        "petal_length_to_width_ratio",
+        "sepal_length_to_width_ratio",
+        "petal_to_sepal_length_ratio",
+        "petal_to_sepal_width_ratio"
+      ]
+    },
+    "summary_features": {
+      "mae_without": 0.016963,
+      "delta": 0.0,
+      "decision": "keep",
+      "n_cols": 2,
+      "cols": [
+        "sepal_minus_petal_length",
+        "sepal_minus_petal_width"
+      ]
+    }
+  },
+  "pruned_groups": [
+    "interactions"
+  ],
+  "kept_groups": [
+    "direct_numeric",
+    "ratio_features",
+    "summary_features"
+  ],
+  "pruned_columns": [
+    "petal_length_x_sepal_length",
+    "petal_width_x_petal_length",
+    "petal_width_x_sepal_length",
+    "sepal_length_x_sepal_width"
+  ],
+  "n_pruned_columns": 4,
+  "feature_spec_full": "outputs/logs/20260616_004306_feature_spec_full.json",
+  "feature_spec_pruned": "outputs/logs/20260616_004306_feature_spec.json",
+  "determinism_seed": 42
+}

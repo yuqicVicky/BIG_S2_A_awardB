@@ -2,30 +2,66 @@
   "round": 1,
   "reviewer": "plan-reviewer",
   "overall_verdict": "warn",
+  "independent_assessment": {
+    "practitioner_view": "Plan is sound: 4 clean numeric features, species correctly excluded as leakage, no temporal structure, no missing values. Engineered features are static transforms with zero fold-safety risk. Conservative experimental flagging is appropriate. One arithmetic slip in the overfit-guard trigger count and a bare literal in submission_frame_expansion are the only concerns; neither corrupts training or the submission.",
+    "concerns_beyond_rules": [
+      {
+        "concern": "Overfit-guard feature count in rationale is wrong: planner writes ~14 but actual count is 11 (4+3+2+2). 11 < 12 threshold so the guard is not technically triggered, yet all engineered groups are marked experimental=true. Outcome is safe (conservative direction) but the stated justification is numerically incorrect.",
+        "candidate_severity": "warn",
+        "reasoning": "Wrong count means the experimental flags rest on a false premise. If downstream logic gates on the stated count rather than re-counting, it could misclassify the feature budget. Conservative direction means no training corruption, but the record is misleading."
+      },
+      {
+        "concern": "submission_frame_expansion embeds the literal '30 rows' rather than referencing spec_parse.json.file_schemas[prediction_file].n_rows dynamically.",
+        "candidate_severity": "warn",
+        "reasoning": "A bare literal in a constraint field risks staleness if the prediction file changes; policy requires counts be read from spec_parse at runtime. Does not break the current submission but violates the no-hardcoding principle."
+      }
+    ]
+  },
   "findings": [
     {
-      "criterion": "Criterion B — Feature reasonableness",
-      "verdict": "warn",
-      "location": "data_coverage.target_aggregate_keys[3] — [\"jurisdiction\", \"period_rank_bin\"]",
-      "finding": "data_coverage.target_aggregate_keys includes [\"jurisdiction\", \"period_rank_bin\"] which groups by a temporal bin. This group_key appears in the coverage metadata but NOT in feature_plan.per_fold_target_aggregates. If the programmer implements this aggregate it would average same-period-bin rows and create contemporaneous temporal leakage. The feature_plan.per_fold_target_aggregates section (which the programmer should follow) correctly omits it, but the dangling entry in data_coverage.target_aggregate_keys is an inconsistency that could mislead the programmer.",
-      "required_fix": "Remove [\"jurisdiction\", \"period_rank_bin\"] from data_coverage.target_aggregate_keys OR add a note that this entry must NOT be implemented as a per_fold_target_aggregate due to temporal leakage risk. The feature_plan.per_fold_target_aggregates list is the authoritative implementation spec."
+      "criterion": "Criterion A — Data coverage",
+      "verdict": "pass",
+      "location": "data_coverage.available_sources + uncovered_columns",
+      "finding": "All 12 column-file pairs (6 from data/train.csv, 6 from data/val.csv) are present in available_sources. uncovered_columns is empty. species excluded with concrete leakage justification. val.csv label excluded with correct ground-truth-only justification. No text or datetime columns exist to exploit.",
+      "required_fix": "None."
     },
     {
       "criterion": "Criterion B — Feature reasonableness",
       "verdict": "warn",
-      "location": "feature_plan — missing sub_target_modeling block",
-      "finding": "spec_parse.detected_structure.split_pattern.sub_target_candidates is non-empty (5 candidates: benzodiazepine, cocaine, fentanyl, methamphetamine, heroin) and completeness_constraints.sub_target_decomposition echoes them. However feature_plan contains no sub_target_modeling block with concrete per-fold training steps for using these auxiliary categories (e.g. how to construct cross-category lag/aggregate features from sub-target rows, whether separate sub-target models are trained and summed, etc.). A bare reference in completeness_constraints is insufficient.",
-      "required_fix": "Add a feature_plan.sub_target_modeling block describing concretely: (1) how sub-target category rows are used as auxiliary feature sources (cross-category lag/pivot features); (2) whether separate per-category models are trained; (3) how sub-target predictions are handled relative to the 3 scored categories. Even if sub-targets inform only lag/aggregate features, the block must state that explicitly."
+      "location": "feature_plan.rationale and critique.advisory_issues — overfit guard trigger count",
+      "finding": "The rationale states '~14: 4 direct + 3 interactions + 2 ratios + 2 diffs' but 4+3+2+2=11, not 14. The overfit-guard threshold is n_train_rows/10 = 120/10 = 12. The actual feature count (11) is below the threshold so the guard is not formally triggered. All engineered groups are flagged experimental=true anyway (conservative, not harmful), but the stated justification is numerically incorrect and the self-critique repeats the wrong count.",
+      "required_fix": "Correct the feature count in rationale and critique.advisory_issues to 11. Note that experimental flags are applied conservatively even though 11 < 12 threshold. No structural change to feature_plan is required."
+    },
+    {
+      "criterion": "Criterion B — Feature reasonableness",
+      "verdict": "pass",
+      "location": "feature_plan — fold safety and leakage",
+      "finding": "No target column in features; species excluded; no raw row_id or datetime strings; no per_fold_target_aggregates; all engineered features are static arithmetic transforms requiring no per-fold fitting. No temporal structure detected (time_columns=[], panel_structure=false), so contemporaneous-leakage check is not applicable.",
+      "required_fix": "None."
+    },
+    {
+      "criterion": "Criterion B — Feature reasonableness",
+      "verdict": "pass",
+      "location": "feature_plan — duplicate entries across blocks",
+      "finding": "Checked all formula pairs across interactions, ratio_features, and summary_features. Each formula is unique: products in interactions, division in ratio_features, subtraction in summary_features. No deduplicated_with annotations masking retained duplicates.",
+      "required_fix": "None."
     },
     {
       "criterion": "Criterion C — Completeness constraints",
       "verdict": "warn",
-      "location": "completeness_constraints.submission_frame_expansion — literal count '918'",
-      "finding": "The expansion description uses the literal '918 rows' and '6 periods x 51 jurisdictions x 3 scoring categories'. The row count 918 is consistent with spec_parse.file_schemas[\"data/sample_submission.csv\"].n_rows but is expressed as a hardcoded literal rather than referencing the schema field. At runtime the programmer should read this from spec_parse, not embed a literal.",
-      "required_fix": "Revise the expansion description to specify that the row count must be read from spec_parse.file_schemas[\"data/sample_submission.csv\"].n_rows at runtime, not assumed to be 918."
+      "location": "completeness_constraints.submission_frame_expansion",
+      "finding": "The field contains the bare literal '30 rows' rather than a dynamic reference to spec_parse.json.file_schemas['data/val.csv'].n_rows. Policy requires the count be derived from spec_parse at runtime. The mapping description (1:1 positional to val.csv) is present and the source file is named, so submission construction is unambiguous for this run, but the literal violates the no-hardcoding constraint.",
+      "required_fix": "Restate as: 'row count read from spec_parse.json.file_schemas[prediction_file].n_rows (currently 30); submission maps 1:1 to val.csv rows by positional index.' Do not embed the integer as a fixed planning constraint."
+    },
+    {
+      "criterion": "Criterion C — Completeness constraints",
+      "verdict": "pass",
+      "location": "completeness_constraints — full_train_refit, missing_value_handling_required, two_column_submission, sub_target_decomposition",
+      "finding": "full_train_refit=true; missing_value_handling_required=false confirmed correct (data_profile shows zero missing values in both train and val across all columns); two_column_submission=true; sub_target_candidates=[] in spec_parse so sub_target_decomposition=[] is correct.",
+      "required_fix": "None."
     }
   ],
-  "summary": "No FAIL findings. Three WARNs: (1) data_coverage.target_aggregate_keys contains a period_rank_bin temporal grouping absent from feature_plan but could mislead the programmer into creating a leaky same-period aggregate; (2) no concrete sub_target_modeling block in feature_plan despite non-empty sub_target_candidates; (3) submission row count expressed as literal 918 rather than a runtime spec_parse reference. Plan is approvable as-is; WARNs should be addressed in revision.",
+  "summary": "Zero FAIL findings; two WARNs only. (1) Overfit-guard rationale miscounts features as ~14 when actual is 11 — experimental flags are applied conservatively in the right direction but rest on a wrong premise. (2) submission_frame_expansion embeds a bare '30 rows' literal instead of referencing spec_parse dynamically. Coverage is complete, species and val-label leakage are correctly handled, all engineered features are fold-safe static transforms, and remaining completeness constraints are sound.",
   "approved": true,
   "next_action": "accept_plan"
 }

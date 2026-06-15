@@ -93,9 +93,11 @@ STATIC_TERMS: dict[str, list[str]] = {
 # ── paths configuration ───────────────────────────────────────────────────────
 
 # Directories/files to scan (relative to repo root, as strings to match).
-# outputs/scratch/ holds LLM-authored runtime scripts (e.g. programmer_pipeline.py);
-# they must obey the same no-hardcoding rules as the committed pipeline.
-SCAN_TARGETS = ["src/", "main.py", "scripts/", "outputs/scratch/"]
+# outputs/runs/<run_id>/scratch/ holds LLM-authored runtime scripts (e.g.
+# feature_pipeline.py); they must obey the same no-hardcoding rules as the
+# committed pipeline. (Only SCANNABLE_EXTENSIONS files are collected, so the run
+# dirs' JSON logs are skipped automatically.)
+SCAN_TARGETS = ["src/", "main.py", "scripts/", "outputs/runs/"]
 
 # Paths that make every finding in them acceptable regardless of content
 ALWAYS_ACCEPTABLE_PATH_FRAGMENTS = [
@@ -283,7 +285,7 @@ def extract_dynamic_terms(data_dir: Path) -> dict[str, list[str]]:
 def write_audit_log(result: AuditResult, logs_dir: Path) -> Path:
     """Serialise the AuditResult to JSON and return the written path."""
     logs_dir.mkdir(parents=True, exist_ok=True)
-    path = logs_dir / f"hardcoding_audit_{result.phase}_{result.run_id}.json"
+    path = logs_dir / f"hardcoding_audit_{result.phase}.json"
     path.write_text(json.dumps(result.to_dict(), indent=2, ensure_ascii=False), encoding="utf-8")
     return path
 

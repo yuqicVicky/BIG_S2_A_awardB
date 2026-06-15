@@ -1,51 +1,44 @@
 {
   "round": 1,
   "reviewer": "model-performance-reviewer",
-  "current_best_cv_score": 1.653602,
-  "metric": "block_mae",
-  "baseline_cv_score": 1.700229,
-  "improvement_vs_baseline_pct": 2.74,
-  "train_val_gap": null,
-  "cv_relative_stability": 0.0,
-  "overfit_risk": "moderate",
-  "notes": "GBDT specialist (stack: tuned-catboost + hgb_log + catboost_log) beats floor OOF by 2.7% (1.654 vs 1.700). However, GBDT stability is 0.0/single-split — the specialist scored only one aggregate OOF, not 5-fold per-candidate, making stability unassessable. Residual analysis shows strong heteroscedasticity (corr=0.616): Q4 mean_abs_residual=3.34 vs Q1=0.67 — high-value observations drive error. Linear scored 3.68 (NNLS weight 0.012, near-dead weight). Pred mean=12.73 vs train mean=6.35 (ratio 2.0) is elevated but passes sanity. tune_iter=null in gbdt agent suggests no randomized hyperparameter search was logged.",
+  "current_best_cv_score": 0.974996,
+  "metric": "f1_macro",
+  "baseline_cv_score": 0.08333,
+  "improvement_vs_baseline_pct": 1069.9,
+  "train_val_gap": 0.0423,
+  "cv_relative_stability": 0.021018,
+  "overfit_risk": "low",
   "suggestions": [
     {
       "priority": "high",
-      "category": "target_transform",
-      "suggestion": "Heteroscedasticity corr=0.616 with Q4 mean_abs_residual=3.34 (5x Q1). Apply log1p to the target in the specialist pipeline to compress the right tail and reduce absolute error at high values. The floor already uses _log variants and they outperform raw models.",
+      "category": "feature_engineering",
+      "suggestion": "The `label` column is the target variable (per spec_parse.json target_column='label'); it must never appear in any feature set. The floor's state.json used petal_width as target and included `label` as a feature (r=0.9453 with petal_width). Verify feature_pipeline.py excludes `label` from X_train and X_pred for all specialists.",
       "expected_impact": "high",
-      "implementation_hint": "In feature_pipeline.py / specialist training, train on log1p(target) and predict back via expm1. The floor's lightgbm_log already does this and scores 0.882 OOF — ensure the GBDT specialist's tuned-catboost also uses log1p target consistently."
-    },
-    {
-      "priority": "high",
-      "category": "hyperparameter_tuning",
-      "suggestion": "GBDT agent reports tune_iter=null — no randomized search budget was consumed. Run at least 30 Optuna/random-search iterations on catboost/LightGBM (learning_rate in [0.01,0.1], num_leaves in [63,255], min_child_samples in [5,50], subsample/colsample in [0.6,1.0]) on canonical 5-folds to replace the default single-configuration run.",
-      "expected_impact": "high",
-      "implementation_hint": "Set tune_iter=30 in the gbdt-specialist prompt; use optuna or RandomizedSearchCV with cv=canonical_folds; early_stopping_rounds=50."
+      "implementation_hint": "In feature_pipeline.py and any authored pipeline, assert `label` not in feature columns before fitting; also exclude `species` (direct label encoding, flagged in spec_parse.json warnings)."
     },
     {
       "priority": "medium",
       "category": "ensemble",
-      "suggestion": "Linear family (NNLS weight 0.012) is near-dead weight. Drop it from next-round NNLS pool to save 854s of training time. The gap vs floor (3.68 vs 1.70) is too large to recover via blending.",
-      "expected_impact": "medium",
-      "implementation_hint": "Blacklist linear in next round; redirect its wall-clock budget to deeper GBDT search or seed-averaging."
+      "suggestion": "GBDT achieved OOF f1_macro=0.9583 vs linear=0.9750; NNLS weight 0 for gbdt is justified. On this small dataset (120 train rows), a seed-averaged LogisticRegression with C tuned over [0.01, 0.1, 1, 10, 100] could marginally push closer to ceiling. No family diversity gain expected by adding trees given gbdt already underperformed linear.",
+      "expected_impact": "low",
+      "implementation_hint": "Add C grid search in linear specialist; average predictions across 5 random seeds for variance reduction."
     },
     {
       "priority": "medium",
-      "category": "feature_engineering",
-      "suggestion": "Prediction mean (12.73) is 2x training mean (6.35) — the test period likely contains higher-rate observations. Add a jurisdiction-level trend feature (target_roll12_mean / target_lag12 ratio or linear slope over last 12 periods per jurisdiction-category) to help the model extrapolate rising trends rather than regressing to mean.",
+      "category": "hyperparameter_tuning",
+      "suggestion": "Linear specialist split scores show perfect 1.0 on 2 of 5 folds and ~0.958 on the other 3 (stability_by_split). The 0.958 folds may have a trickier versicolor/virginica boundary; try polynomial features (degree=2) on petal_length and petal_width to capture the nonlinear boundary.",
       "expected_impact": "medium",
-      "implementation_hint": "In feature_pipeline.py, per (jurisdiction, overdose_category) group compute slope = polyfit(ordinal_rank[-12:], target[-12:], deg=1)[0] fitted on training data only; join to both train and pred sets."
+      "implementation_hint": "Add PolynomialFeatures(degree=2, interaction_only=False) on [petal_length_cm, petal_width_cm] before LogisticRegression in the linear specialist pipeline."
     },
     {
       "priority": "low",
       "category": "model_selection",
-      "suggestion": "The floor stack (lightgbm_log + catboost_log weights 0.455/0.545) scores 0.878 on the floor's internal CV but the canonical OOF is 1.700. Verify the floor stack's OOF was computed on the same canonical 5-folds as specialists to ensure apples-to-apples comparison; the note in ensemble_meta.json acknowledges the protocol difference.",
+      "suggestion": "At n_train=120 with 4 clean numeric features, a SVM with RBF kernel is a strong alternative to logistic regression for the versicolor/virginica boundary and may push f1_macro above 0.975. Could replace or augment linear family.",
       "expected_impact": "low",
-      "implementation_hint": "Cross-check floor OOF CSV (oof_floor.csv) against cv_folds.json period assignments; if the floor used a different holdout, re-score floor predictions on canonical fold assignments before NNLS blending."
+      "implementation_hint": "Add SVC(kernel='rbf', C=10, gamma='scale', probability=True) as a candidate in the linear-family specialist search."
     }
   ],
   "do_not_repeat": [],
-  "partial_verdict": "warn"
+  "partial_verdict": "pass",
+  "notes": "Linear specialist dominates strongly (OOF f1_macro=0.9750 vs floor=0.0833 — floor was broken due to wrong target in state.json). Actual task: predict label (0/1/2) from sepal/petal measurements; spec_parse.json is correct. Train-val gap 0.0423 is acceptable on 30-row val set. CRITICAL: verify `label` and `species` are excluded from all feature sets as both are target-leakage on the train file."
 }

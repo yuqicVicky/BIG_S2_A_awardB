@@ -69,7 +69,8 @@ def main() -> int:
 
     repo_root = Path(args.repo_root).resolve()
     run_id = args.run_id or datetime.datetime.utcnow().strftime("%Y%m%d_%H%M%S") + "_manual"
-    logs_dir = repo_root / "outputs" / "logs"
+    from src.data_agent.paths import run_logs_dir
+    logs_dir = run_logs_dir(repo_root, run_id)  # outputs/runs/<run_id>/logs
 
     print(f"[audit] repo_root = {repo_root}")
     print(f"[audit] phase     = {args.phase}")

@@ -1,0 +1,19 @@
+{
+  "run_id": "20260616_004306",
+  "selected_model": "baseline_category_mode",
+  "metric": "f1_macro",
+  "primary_holdout_score": null,
+  "stability": {},
+  "assessment": "high_variance",
+  "leakage_risk": "high",
+  "leakage_approved": false,
+  "leakage_suspected_columns": [
+    {
+      "column": "petal length (cm)",
+      "pattern_matched": "corr>0.95",
+      "check": 1,
+      "verdict": "FAIL",
+      "reason": "Correlation with target = 0.960 (> 0.95)."
+    }
+  ]
+}

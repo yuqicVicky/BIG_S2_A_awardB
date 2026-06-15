@@ -1,0 +1,67 @@
+{
+  "run_id": "20260616_004306",
+  "submission_path": "/Users/yuqic/Documents/Claude/Projects/STAI-X challenge/award-b-repo/submission.csv",
+  "report_path": null,
+  "schema": {
+    "data_dir": "/Users/yuqic/Documents/Claude/Projects/STAI-X challenge/award-b-repo/data",
+    "description_path": "/Users/yuqic/Documents/Claude/Projects/STAI-X challenge/award-b-repo/data/DATA_DESCRIPTION.md",
+    "train_target_file": "/Users/yuqic/Documents/Claude/Projects/STAI-X challenge/award-b-repo/data/val.csv",
+    "train_covariates_file": null,
+    "validation_covariates_file": null,
+    "sample_submission_file": "/Users/yuqic/Documents/Claude/Projects/STAI-X challenge/award-b-repo/data/train.csv",
+    "row_id_column": "sepal length (cm)",
+    "target_column": "petal width (cm)",
+    "join_keys": [
+      "sepal width (cm)",
+      "petal length (cm)",
+      "label",
+      "species"
+    ],
+    "time_column": null,
+    "category_column": "label",
+    "block_column": "label",
+    "inferred_notes": [
+      "train_target_file: val.csv",
+      "sample_submission_file: train.csv"
+    ]
+  },
+  "summary": {
+    "run_id": "20260616_004306",
+    "task_type": "multiclass_classification",
+    "selected_model": "baseline_category_mode",
+    "metric": "f1_macro",
+    "output_kind": "label",
+    "submission_valid": true,
+    "report_review": "SKIPPED"
+  },
+  "submission_check": {
+    "expected_columns": [
+      "sepal length (cm)",
+      "petal width (cm)"
+    ],
+    "actual_columns": [
+      "sepal length (cm)",
+      "petal width (cm)"
+    ],
+    "output_kind": "label",
+    "n_rows_sample": 120,
+    "n_rows_submission": 120,
+    "columns_ok": true,
+    "row_count_ok": true,
+    "row_id_alignment_ok": true,
+    "missing_predictions": 0,
+    "all_finite": true,
+    "dtype_ok": true,
+    "distinct_predicted_labels": [
+      0.2,
+      1.0,
+      1.8
+    ],
+    "labels_subset_of_sample": true
+  },
+  "artifacts": {
+    "confusion_matrix_plot": "/Users/yuqic/Documents/Claude/Projects/STAI-X challenge/award-b-repo/outputs/artifacts/20260616_004306_confusion_matrix.png",
+    "feature_importance_plot": "/Users/yuqic/Documents/Claude/Projects/STAI-X challenge/award-b-repo/outputs/artifacts/20260616_004306_feature_importance.png"
+  },
+  "state_path": "/Users/yuqic/Documents/Claude/Projects/STAI-X challenge/award-b-repo/outputs/logs/20260616_004306_state.json"
+}

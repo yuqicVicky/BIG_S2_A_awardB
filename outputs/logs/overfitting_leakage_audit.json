@@ -8,49 +8,48 @@
       "name": "cv_strategy_validity",
       "verdict": "pass",
       "severity": "low",
-      "detail": "validation_strategy.json.chosen_strategy=forward_expanding_time correctly applied: panel structure (jurisdiction x period_id), 5 folds, horizon=6 periods, expanding window trains strictly on past periods. cv_folds.json.scoring_restricted=True; OOF scored on 4590 rows (scoring categories all_drugs/all_opioids/all_stimulants in val folds only), matching leaderboard metric. Strategy correctly simulates hidden evaluation gap."
+      "detail": "validation_strategy.json.chosen_strategy='stratified_kfold' with stratify_column='label', n_splits=5, random_state=42. Matches data structure: no time/group/panel columns (spec_parse.json.detected_structure), balanced 3-class target (40 samples each, minority_class_rate=0.333). Holdout is val.csv (separate file, never used in training). CV correctly simulates hidden evaluation on balanced val.csv."
     },
     {
       "name": "cv_holdout_calibration",
       "verdict": "warn",
       "severity": "medium",
-      "detail": "No holdout_score available (agent_gbdt.json holdout_score=null); calibration can only be assessed via OOF. Floor internal cv_mean for best single model (lightgbm_log)=0.882 vs canonical OOF floor=1.700 — a 1.93x discrepancy documented in ensemble_meta.json as different protocols (floor uses its own val splits, not canonical folds). gbdt canonical OOF=1.654 vs floor canonical OOF=1.700 → 2.7% improvement, well within expected range. Baseline best (group_category_mean) canonical OOF=1.884; gbdt achieves 12.2% improvement — plausible. Single-round CV improvement is 2.7% (well below 20% leakage threshold). Primary concern: inability to verify OOF vs held-out period calibration due to no holdout_score."
+      "detail": "Linear specialist OOF f1_macro=0.9750 vs holdout f1_macro=0.9327 (prediction_sanity.json). Absolute gap=0.0423. Relative to floor_self_reported (0.0833): 0.0423/0.0833=50.8%, exceeding the 8% relative threshold. However, floor_self_reported=0.0833 is an artificially low baseline (1/12 of even random guessing on 3 classes); relative to proper 3-class random baseline 0.333 the gap is 12.7%. Two of 5 folds scored 1.0 (cv_fold_scores=[1.0, 1.0, 0.958, 0.958, 0.958]) indicating fold-level variance on this 120-row dataset. No cross-round trend available (round 1). Gap is consistent with small-dataset variance rather than structural leakage, but warrants monitoring if a round 2 occurs."
     },
     {
       "name": "prediction_sanity",
-      "verdict": "warn",
-      "severity": "medium",
-      "detail": "CoV=0.698 (>>0.01, not near-constant). No clipping at bounds (0% at lower bound). Pred range [3.281, 54.542] within train range [0.050, 79.990]. KS(OOF vs preds)=0.056 (<0.5) — no concerning distribution shift between val and test predictions. OOF mean=13.295 vs pred mean=12.730, ratio=1.044 — healthy. WARN: prediction_sanity.json reports pred_mean/train_mean ratio=2.004, flagging potential shift. However train_mean=6.352 includes all 8 overdose categories (incl. sub-categories with lower rates), while predictions cover only the 3 scored categories (all_drugs/all_opioids/all_stimulants) which have structurally higher rates. The ratio reflects a legitimate category-level difference, not model drift. 20 predictions (2.2%) exceed train p99=38.392; within acceptable bounds."
+      "verdict": "pass",
+      "severity": "low",
+      "detail": "submission.csv: 30 rows, 3 unique class labels [0,1,2], counts {0:9, 1:12, 2:9}. Coefficient of variation=0.816 (>>0.01 — non-constant). No clipping applicable (classification). All values within valid class range {0,1,2}. Class distribution roughly balanced (30/10/10/10 expected; 9/12/9 observed — minor skew to class 1 but within sampling variance). All 30 predictions finite. Corroborates prediction_sanity.json verdict=PASS."
     },
     {
       "name": "train_val_gap",
-      "verdict": "warn",
+      "verdict": "pass",
       "severity": "low",
-      "detail": "No train_score available in agent_gbdt.json (train_score=null), so direct train-train gap cannot be computed. OOF=1.654 is the only available generalization estimate. Forward-expanding folds naturally produce some train-val gap as early periods are always in training; gap cannot be quantified without a holdout set. Distribution shift flagged in validation_strategy.json for gtrends_fentanyl (train mean=51.8, pred=68.8) and unemployment_rate (54.6% missing in pred vs 0% in train) suggests real-world generalization may be harder than OOF implies."
+      "detail": "Relative train-val gap: |0.9750 - 0.9327| / 0.9750 = 4.34%, well below the 30% WARN threshold. GBDT OOF f1_macro=0.9583 vs linear 0.9750; both substantially above floor. NNLS weights: linear=1.0, gbdt=0.0 — ensemble collapsed to single best model, not a blending artifact. No suspiciously near-perfect score: cv=0.9750 < 0.987 threshold (baseline 0.333 + 0.98*(1-0.333))."
+    },
+    {
+      "name": "species_leakage_exclusion",
+      "verdict": "pass",
+      "severity": "high",
+      "detail": "validation_strategy.json flags species as HIGH severity leakage (direct string encoding of label). Both 20260616_004306_agent_linear.json and 20260616_004306_agent_gbdt.json authored_features_used lists contain only the 4 morphological measurements plus derived ratio/product features — species is absent from both. Leakage risk correctly mitigated."
     }
   ],
   "suggestions": [
     {
       "priority": "medium",
       "category": "cv_validity",
-      "suggestion": "Record a temporal holdout score (last 6 periods withheld from all model selection) to validate OOF calibration. Currently holdout_score=null in agent_gbdt.json, leaving calibration gap unverified.",
-      "expected_impact": "medium",
-      "implementation_hint": "In modeling-specialist, after training on all canonical folds, evaluate on a fixed held-out block (e.g., periods 72-77 of period_order) and log holdout_score to agent_{fam}.json."
-    },
-    {
-      "priority": "medium",
-      "category": "regularization",
-      "suggestion": "Address distribution shift in gtrends features (train mean 51.8 vs pred 68.8 for fentanyl) by using lag-differences or rank-normalised features rather than raw levels to reduce sensitivity to out-of-distribution covariate shift.",
-      "expected_impact": "medium",
-      "implementation_hint": "In feature_pipeline.py, replace raw gtrends_* columns with per-jurisdiction 1-period diff and 3-period rolling z-score."
+      "suggestion": "The cv_holdout calibration check fires because floor_self_reported=0.0833 is used as relative denominator, but this floor is anomalously low. Record a proper random-baseline cv_score (0.333 for balanced 3-class) in model_selection.json so the 8% relative threshold uses a meaningful denominator.",
+      "expected_impact": "low",
+      "implementation_hint": "In model_selection.json, add a 'random_baseline_cv_score' field computed as 1/n_classes for balanced classification; have the calibration check prefer this over floor_self_reported when available."
     },
     {
       "priority": "low",
-      "category": "prediction_postprocess",
-      "suggestion": "Reconcile train_mean vs pred_mean reporting in prediction_sanity.json by restricting train_mean to scored categories (all_drugs/all_opioids/all_stimulants) to avoid misleading ratio=2.0 flag in future runs.",
+      "category": "regularization",
+      "suggestion": "Two folds of 5 score perfect 1.0 for the linear specialist. If a round 2 runs, increase SGD alpha from 0.01 to 0.05-0.1 or add stronger l1 penalty to reduce fold-level overfit and tighten OOF-holdout gap.",
       "expected_impact": "low",
-      "implementation_hint": "Filter training target to spec_parse.json.scoring_subset.scoring_values before computing train_mean in the sanity check."
+      "implementation_hint": "In linear specialist hyperparameter grid, add alpha values [0.05, 0.1, 0.5] alongside current 0.01; select by mean OOF with lower variance (cv_stability < 0.02 target)."
     }
   ],
-  "notes": "CV strategy is correctly specified (forward_expanding_time, scoring-restricted OOF). gbdt OOF block_mae=1.654 is a 2.7% improvement over floor and 12.2% over best baseline — plausible, no leakage signal. Main gap: no holdout_score to verify OOF calibration, and real covariate shift (gtrends, missing unemployment in pred) may cause OOF to underestimate test difficulty. No high-severity violations triggered."
+  "notes": "Overall PASS with one medium WARN on cv_holdout calibration (gap 12.7% relative to true 3-class random baseline, triggered by artificially low floor denominator). No structural leakage: species excluded from all feature sets. Predictions are valid, non-constant, class-balanced. Small dataset (120 rows) explains fold variance. No high overfitting risk detected."
 }

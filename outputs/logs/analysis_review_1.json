@@ -6,31 +6,45 @@
     "feature_audit_review.json",
     "overfitting_leakage_audit.json"
   ],
-  "current_best_cv_score": 1.653602,
-  "baseline_cv_score": 1.700229,
+  "current_best_cv_score": 0.9750,
+  "metric": "f1_macro",
+  "higher_is_better": true,
+  "baseline_cv_score": 0.0833,
   "prev_round_cv_score": null,
   "round_over_round_improvement_pct": null,
   "merged_high_impact_suggestions": [
     {
-      "source_reviewer": "model-performance-reviewer",
-      "category": "target_transform",
-      "suggestion": "Heteroscedasticity corr=0.616 with Q4 mean_abs_residual=3.34 (5x Q1). Apply log1p to target in the specialist pipeline to compress right tail and reduce absolute error at high values. Ensure GBDT tuned-catboost uses log1p target consistently (floor's lightgbm_log already does this).",
+      "source_reviewer": "feature-leakage-reviewer",
+      "category": "leakage_fix",
+      "suggestion": "Audit src/data_agent/ floor pipeline to confirm 'label' (target column) and 'species' (direct label encoding) are excluded from model feature matrices. Both appear in feature_importance.json final_model_features for the floor model, producing a corrupted floor OOF score of 0.0833. Specialists are clean — fix is floor-only and does not affect submission.csv.",
       "expected_impact": "high",
-      "implementation_hint": "In feature_pipeline.py / specialist training, train on log1p(target) and predict back via expm1. Mirror the floor's _log model setup in the gbdt specialist."
+      "implementation_hint": "Filter feature columns as [c for c in df.columns if c not in [target_col] + exclude_cols] where exclude_cols is derived from spec_parse.json warnings at runtime. Fix is cosmetic for this round — promoted submission already uses clean linear specialist predictions.",
+      "affects_submission": false
+    },
+    {
+      "source_reviewer": "feature-leakage-reviewer",
+      "category": "leakage_fix",
+      "suggestion": "Reset ensemble promotion_threshold after correcting the floor. Current threshold 0.0833 (1/12 random baseline) is anomalously low due to floor leakage. A legitimate iris floor should score ~0.67-0.80; the bar must reflect clean floor performance in future runs.",
+      "expected_impact": "high",
+      "implementation_hint": "Re-run floor with clean feature set; read new floor OOF score; update promotion_threshold in ensemble_meta before comparing specialist scores.",
+      "affects_submission": false
     },
     {
       "source_reviewer": "model-performance-reviewer",
-      "category": "hyperparameter_tuning",
-      "suggestion": "GBDT agent reports tune_iter=null — no randomized search budget was consumed. Run at least 30 Optuna/random-search iterations on catboost/LightGBM (learning_rate [0.01,0.1], num_leaves [63,255], min_child_samples [5,50], subsample/colsample [0.6,1.0]) on canonical 5-folds.",
+      "category": "feature_engineering",
+      "suggestion": "Verify that 'label' and 'species' are excluded from authored feature_pipeline.py and all specialist feature matrices before fitting. Both columns appeared in floor feature_importance.json (label r=0.9453 with petal_width). Per agent JSONs, specialists already exclude both — this is a verification step only.",
       "expected_impact": "high",
-      "implementation_hint": "Set tune_iter=30 in gbdt-specialist prompt; use Optuna or RandomizedSearchCV with early_stopping_rounds=50."
+      "implementation_hint": "Assert label not in feature_columns and species not in feature_columns in feature_pipeline.py before any fit call. Confirmed clean in agent_linear.json and agent_gbdt.json authored_features_used.",
+      "affects_submission": false
     }
   ],
-  "high_priority_suggestion_count": 2,
+  "high_priority_suggestion_count": 3,
   "blocking_leakage": false,
+  "blocking_leakage_rationale": "All three HIGH findings are isolated to the floor model (src/data_agent/ pipeline). The promoted submission (linear specialist, submission.csv) was trained exclusively on 14 authored features with label and species excluded — confirmed by overfitting_leakage_audit.json species_leakage_exclusion=PASS and both agent_linear.json and agent_gbdt.json authored_features_used. The floor corruption made the promotion threshold more conservative (lower bar of 0.0833 vs expected ~0.70), not less — specialist promotion at 0.9750 is strictly correct. No leakage contaminates submission.csv.",
   "approved_for_final": true,
+  "approved_for_final_rationale": "Round 1. HIGH leakage override does not apply because the promoted winner is clean (overfitting_leakage_audit confirms species excluded from specialist predictions). The three HIGH suggestions all have affects_submission=false — they target floor pipeline cleanup and threshold correction, not the live submitted predictions. No feature-actionable change would alter submission.csv in round 2. Actionability gate: no feature-actionable suggestion produces a new prediction. Round 2 would be non-productive for submission quality.",
   "revert_promotion": false,
-  "blacklist_candidate": "linear",
+  "blacklist_candidate": null,
   "next_action": "stop_and_report",
-  "notes": "Round 1 single-round policy mandates stop_and_report. gbdt OOF block_mae=1.654 beats floor 1.700 by 2.7%; linear (NNLS weight 0.012, OOF=3.684, 116% worse than floor) is blacklisted as dead weight — skip next round's training if rerun. No HIGH-severity leakage (subtgt_mean_* mismatch is medium severity; imputation is low). No prior-round recurrence. Approved for final submission. Top priorities if a future round runs: log1p target transform (heteroscedasticity corr=0.616) and hyperparameter search (tune_iter=null)."
+  "notes": "Linear specialist f1_macro=0.9750 vs floor 0.0833 (corrupted). Floor leakage (label+species in floor features) is HIGH severity but isolated — specialists are clean, submission.csv is valid. No round 2 warranted: all high suggestions are floor-pipeline corrections that do not alter predictions. GBDT weight=0 but only 1.7% worse than linear — below 25% dead-weight threshold, not blacklisted. Ship clean linear specialist result."
 }

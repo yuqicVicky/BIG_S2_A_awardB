@@ -1,7 +1,7 @@
 """Shared analysis state threaded through the orchestrated pipeline.
 
 `AnalysisState` is the single object every stage reads from and writes to, and is
-persisted to ``outputs/logs/{run_id}_state.json`` after each stage. The field set
+persisted to ``outputs/runs/<run_id>/logs/state.json`` after each stage. The field set
 covers every ``state.*`` reference in the `.claude/` agent and skill definitions;
 where the docs use two names for the same concept, a canonical field is backed by a
 read-only property alias (e.g. ``state.task`` -> ``task_spec``).
@@ -128,6 +128,6 @@ class AnalysisState(BaseModel):
     def persist(self, logs_dir: str | Path) -> Path:
         logs_dir = Path(logs_dir)
         logs_dir.mkdir(parents=True, exist_ok=True)
-        path = logs_dir / f"{self.run_id}_state.json"
+        path = logs_dir / "state.json"
         path.write_text(self.to_json(), encoding="utf-8")
         return path

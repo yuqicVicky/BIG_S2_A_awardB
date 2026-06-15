@@ -1,37 +1,3 @@
 {
-  "columns": {
-    "temp_avg_f": {
-      "strategy": "median_per_fold",
-      "found_in": [
-        "train_covariates",
-        "prediction"
-      ]
-    },
-    "precip_in": {
-      "strategy": "median_per_fold",
-      "found_in": [
-        "train_covariates",
-        "prediction"
-      ]
-    },
-    "state_doh_release": {
-      "strategy": "mode",
-      "found_in": [
-        "train_covariates",
-        "prediction"
-      ]
-    },
-    "unemployment_rate": {
-      "strategy": "median_per_fold",
-      "found_in": [
-        "prediction"
-      ]
-    },
-    "labor_force": {
-      "strategy": "median_per_fold",
-      "found_in": [
-        "prediction"
-      ]
-    }
-  }
+  "columns": {}
 }

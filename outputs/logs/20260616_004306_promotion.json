@@ -1,0 +1,18 @@
+{
+  "round": 1,
+  "promoted_choice": "linear",
+  "promoted_cv_score": 0.974996,
+  "prior_best_choice": "floor",
+  "prior_best_cv_score": 0.08333333333333333,
+  "prior_best_cv_score_source": "floor_self_reported",
+  "floor_canonical_oof": null,
+  "promote": true,
+  "nnls_weights": {
+    "gbdt": 0.0,
+    "linear": 1.0
+  },
+  "oof_scores": {
+    "gbdt": 0.958327,
+    "linear": 0.974996
+  }
+}

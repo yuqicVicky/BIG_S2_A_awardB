@@ -5,7 +5,7 @@ specialists, and the model-search agent) must score its out-of-fold (OOF)
 predictions on the SAME fold assignment so keep-best comparisons are valid
 (apples-to-apples). That assignment is derived ONCE from the LLM-chosen
 ``validation_strategy.json`` (structure-aware: within-period / group-time / time /
-group / stratified / random) and persisted to ``{run_id}_cv_folds.json``.
+group / stratified / random) and persisted to the run dir's ``cv_folds.json``.
 
 The fold file is indexed by **raw train-file row order** (length = full train rows).
 A consumer that drops rows (e.g. ``models._train_regression`` filters NaN targets)
@@ -416,7 +416,7 @@ def write_cv_folds_json(
 
 
 def load_canonical_folds(path: str | Path, *, valid_mask: np.ndarray | None = None) -> CanonicalFolds:
-    """Reconstruct ``CanonicalFolds`` from ``{run_id}_cv_folds.json``. When the
+    """Reconstruct ``CanonicalFolds`` from the run dir's ``cv_folds.json``. When the
     consumer filtered rows (e.g. dropped NaN targets), pass ``valid_mask`` (a bool
     array over the FULL train rows) so the folds re-align to the filtered frame."""
     data = json.loads(Path(path).read_text(encoding="utf-8"))

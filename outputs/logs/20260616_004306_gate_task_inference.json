@@ -1,0 +1,15 @@
+{
+  "stage": "task_inference",
+  "run_id": "20260616_004306",
+  "status": "pass",
+  "reasons": [
+    "task_type=multiclass_classification consistent with DATA_DESCRIPTION.md explicit statement and target label having 3 unique integer values (0/1/2).",
+    "evaluation_metric=accuracy consistent with balanced 3-class classification; macro-F1 noted as secondary metric.",
+    "output_format=class_label consistent with integer label target.",
+    "species column flagged as leakage (direct string encoding of label); must be excluded from features.",
+    "No sample_submission.csv present; row_id is positional \u2014 submission must preserve val.csv row order."
+  ],
+  "suggested_corrections": {},
+  "checked": {},
+  "critic": "llm:task_inference"
+}

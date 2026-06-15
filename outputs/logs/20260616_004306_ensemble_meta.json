@@ -1,0 +1,22 @@
+{
+  "run_id": "20260616_004306",
+  "oof_cv_scores": {
+    "floor_self_reported": 0.08333333333333333,
+    "floor_canonical_oof": null,
+    "gbdt": 0.958327,
+    "linear": 0.974996
+  },
+  "floor_canonical_note": "Floor OOF file absent for this run; floor_self_reported (0.0833) is the authoritative baseline from model_selection.json.",
+  "nnls_weights": {
+    "gbdt": 0.0,
+    "linear": 1.0
+  },
+  "choice": "linear",
+  "chosen_cv_score": 0.974996,
+  "promote": true,
+  "promotion_threshold": 0.08333333333333333,
+  "promotion_threshold_source": "floor_self_reported",
+  "chosen_submission": "outputs/logs/20260616_004306_meta_choice.csv",
+  "submission_cv_score": 0.974996,
+  "overwrote_submission": true
+}

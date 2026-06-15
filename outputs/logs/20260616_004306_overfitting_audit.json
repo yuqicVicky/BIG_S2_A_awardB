@@ -1,0 +1,8 @@
+{
+  "run_id": "20260616_004306",
+  "selected_model": "baseline_category_mode",
+  "metric": "f1_macro",
+  "primary_holdout_score": null,
+  "stability": {},
+  "assessment": "high_variance"
+}

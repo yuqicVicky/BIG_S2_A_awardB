@@ -277,7 +277,7 @@ def run_modeling_group(
 
     ``best_modeling`` is either the floor (unchanged) or a specialist that strictly
     beat it on cross-validated score. Always writes
-    ``outputs/logs/{run_id}_ensemble_meta.json``. Never raises.
+    the run dir's ``ensemble_meta.json``. Never raises.
     """
     floor_mr = floor_modeling.model_result_obj
     greater = bool(floor_mr.greater_is_better)
@@ -297,7 +297,7 @@ def run_modeling_group(
         if note:
             meta["note"] = note
         try:
-            _write_json(meta, logs_dir / f"{run_id}_ensemble_meta.json")
+            _write_json(meta, logs_dir / "ensemble_meta.json")
         except Exception:
             pass
         return best_modeling, meta
@@ -360,7 +360,7 @@ def run_modeling_group(
                 cand_sub = _build_submission(
                     bundle, schema.row_id_column, schema.target_column,
                     cand_preds, cand_mr.output_kind)
-                cand_csv = logs_dir / f"{run_id}_cand_{fam}.csv"
+                cand_csv = logs_dir / f"cand_{fam}.csv"
                 cand_sub.to_csv(cand_csv, index=False)
                 entry["candidate_submission"] = str(cand_csv)
             except Exception:
@@ -402,7 +402,7 @@ def run_modeling_group(
                     bundle, schema.row_id_column, schema.target_column,
                     blended_modeling.model_result_obj.predictions,
                     blended_modeling.model_result_obj.output_kind)
-                bsub.to_csv(logs_dir / f"{run_id}_cand_blend.csv", index=False)
+                bsub.to_csv(logs_dir / "cand_blend.csv", index=False)
             except Exception:
                 pass
 

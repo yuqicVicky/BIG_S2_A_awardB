@@ -1,0 +1,89 @@
+{"event": "start", "family": "gbdt", "elapsed": 9.417533874511719e-05}
+{"event": "data_loaded", "n_train": 120, "n_pred": 30, "n_features": 14, "elapsed": 0.041320085525512695}
+{"event": "libraries", "lgbm": true, "xgb": true, "cat": true, "elapsed": 1.1803650856018066}
+{"event": "lgbm_tuning_start", "elapsed": 1.1805789470672607}
+{"event": "lgbm_trial", "trial": 0, "f1_macro": 0.9583268218992552, "params": {"n_estimators": 500, "learning_rate": 0.2, "num_leaves": 15, "min_child_samples": 20, "subsample": 0.8927975767245621, "colsample_bytree": 0.8394633936788146, "reg_alpha": 0.1, "reg_lambda": 0.01}, "elapsed": 1.2556579113006592}
+{"event": "lgbm_trial", "trial": 1, "f1_macro": 0.9583268218992552, "params": {"n_estimators": 500, "learning_rate": 0.1, "num_leaves": 63, "min_child_samples": 20, "subsample": 0.9464704583099741, "colsample_bytree": 0.8404460046972835, "reg_alpha": 0.1, "reg_lambda": 0.01}, "elapsed": 1.323782205581665}
+{"event": "lgbm_trial", "trial": 2, "f1_macro": 0.9583268218992552, "params": {"n_estimators": 200, "learning_rate": 0.05, "num_leaves": 127, "min_child_samples": 10, "subsample": 0.6849356442713105, "colsample_bytree": 0.6727299868828402, "reg_alpha": 0.0, "reg_lambda": 0.0}, "elapsed": 1.5898501873016357}
+{"event": "lgbm_trial", "trial": 3, "f1_macro": 0.9583268218992552, "params": {"n_estimators": 800, "learning_rate": 0.05, "num_leaves": 31, "min_child_samples": 5, "subsample": 0.7727780074568463, "colsample_bytree": 0.7164916560792167, "reg_alpha": 0.1, "reg_lambda": 0.1}, "elapsed": 1.7624859809875488}
+{"event": "lgbm_trial", "trial": 4, "f1_macro": 0.9583268218992552, "params": {"n_estimators": 300, "learning_rate": 0.2, "num_leaves": 127, "min_child_samples": 20, "subsample": 0.7824279936868144, "colsample_bytree": 0.9140703845572055, "reg_alpha": 0.1, "reg_lambda": 1.0}, "elapsed": 1.8178820610046387}
+{"event": "lgbm_trial", "trial": 5, "f1_macro": 0.9583268218992552, "params": {"n_estimators": 500, "learning_rate": 0.2, "num_leaves": 127, "min_child_samples": 5, "subsample": 0.6185801650879991, "colsample_bytree": 0.8430179407605753, "reg_alpha": 0.0, "reg_lambda": 0.0}, "elapsed": 1.9523272514343262}
+{"event": "lgbm_trial", "trial": 6, "f1_macro": 0.9583268218992552, "params": {"n_estimators": 500, "learning_rate": 0.05, "num_leaves": 127, "min_child_samples": 5, "subsample": 0.9862528132298237, "colsample_bytree": 0.9233589392465844, "reg_alpha": 0.0, "reg_lambda": 0.01}, "elapsed": 2.0818259716033936}
+{"event": "lgbm_trial", "trial": 7, "f1_macro": 0.9583268218992552, "params": {"n_estimators": 200, "learning_rate": 0.05, "num_leaves": 127, "min_child_samples": 20, "subsample": 0.8733054075301833, "colsample_bytree": 0.8439986631130484, "reg_alpha": 0.1, "reg_lambda": 0.1}, "elapsed": 2.198122978210449}
+{"event": "lgbm_trial", "trial": 8, "f1_macro": 0.9583268218992552, "params": {"n_estimators": 300, "learning_rate": 0.01, "num_leaves": 127, "min_child_samples": 10, "subsample": 0.8650089137415928, "colsample_bytree": 0.7246844304357644, "reg_alpha": 0.01, "reg_lambda": 0.01}, "elapsed": 2.52870512008667}
+{"event": "lgbm_trial", "trial": 9, "f1_macro": 0.9583268218992552, "params": {"n_estimators": 300, "learning_rate": 0.2, "num_leaves": 31, "min_child_samples": 5, "subsample": 0.9878338511058234, "colsample_bytree": 0.9100531293444458, "reg_alpha": 0.01, "reg_lambda": 0.01}, "elapsed": 2.583467960357666}
+{"event": "lgbm_trial", "trial": 10, "f1_macro": 0.9583268218992552, "params": {"n_estimators": 300, "learning_rate": 0.2, "num_leaves": 31, "min_child_samples": 20, "subsample": 0.9687496940092467, "colsample_bytree": 0.6353970008207678, "reg_alpha": 0.1, "reg_lambda": 1.0}, "elapsed": 2.6389951705932617}
+{"event": "lgbm_trial", "trial": 11, "f1_macro": 0.9583268218992552, "params": {"n_estimators": 200, "learning_rate": 0.05, "num_leaves": 127, "min_child_samples": 5, "subsample": 0.7554709158757927, "colsample_bytree": 0.7085396127095583, "reg_alpha": 0.0, "reg_lambda": 1.0}, "elapsed": 2.8258070945739746}
+{"event": "lgbm_trial", "trial": 12, "f1_macro": 0.9583268218992552, "params": {"n_estimators": 300, "learning_rate": 0.01, "num_leaves": 127, "min_child_samples": 5, "subsample": 0.6563696899899051, "colsample_bytree": 0.9208787923016158, "reg_alpha": 0.0, "reg_lambda": 0.0}, "elapsed": 3.8459582328796387}
+{"event": "lgbm_trial", "trial": 13, "f1_macro": 0.9583268218992552, "params": {"n_estimators": 500, "learning_rate": 0.01, "num_leaves": 127, "min_child_samples": 5, "subsample": 0.6794862726136689, "colsample_bytree": 0.602208846849441, "reg_alpha": 0.1, "reg_lambda": 0.1}, "elapsed": 4.323969125747681}
+{"event": "lgbm_trial", "trial": 14, "f1_macro": 0.9583268218992552, "params": {"n_estimators": 200, "learning_rate": 0.2, "num_leaves": 63, "min_child_samples": 20, "subsample": 0.9085081386743783, "colsample_bytree": 0.6296178606936361, "reg_alpha": 0.1, "reg_lambda": 0.01}, "elapsed": 4.3809990882873535}
+{"event": "lgbm_trial", "trial": 15, "f1_macro": 0.9583268218992552, "params": {"n_estimators": 200, "learning_rate": 0.2, "num_leaves": 63, "min_child_samples": 5, "subsample": 0.8493192507310232, "colsample_bytree": 0.7323592099410596, "reg_alpha": 0.1, "reg_lambda": 0.1}, "elapsed": 4.448610067367554}
+{"event": "lgbm_trial", "trial": 16, "f1_macro": 0.9583268218992552, "params": {"n_estimators": 300, "learning_rate": 0.2, "num_leaves": 15, "min_child_samples": 20, "subsample": 0.8365191150830908, "colsample_bytree": 0.7098887171960256, "reg_alpha": 0.1, "reg_lambda": 0.0}, "elapsed": 4.4978039264678955}
+{"event": "lgbm_trial", "trial": 17, "f1_macro": 0.9583268218992552, "params": {"n_estimators": 500, "learning_rate": 0.01, "num_leaves": 63, "min_child_samples": 10, "subsample": 0.9395655297064336, "colsample_bytree": 0.8886918084659493, "reg_alpha": 0.1, "reg_lambda": 0.1}, "elapsed": 5.005738973617554}
+{"event": "lgbm_trial", "trial": 18, "f1_macro": 0.9583268218992552, "params": {"n_estimators": 300, "learning_rate": 0.1, "num_leaves": 63, "min_child_samples": 5, "subsample": 0.884265155874315, "colsample_bytree": 0.6443563283247326, "reg_alpha": 0.0, "reg_lambda": 0.1}, "elapsed": 5.096545934677124}
+{"event": "lgbm_trial", "trial": 19, "f1_macro": 0.9583268218992552, "params": {"n_estimators": 500, "learning_rate": 0.2, "num_leaves": 63, "min_child_samples": 5, "subsample": 0.7257423924305306, "colsample_bytree": 0.8034282764658811, "reg_alpha": 0.01, "reg_lambda": 0.0}, "elapsed": 5.145539045333862}
+{"event": "xgb_tuning_start", "elapsed": 5.145628213882446}
+{"event": "xgb_trial", "trial": 0, "f1_macro": 0.9497877272490493, "elapsed": 5.616888999938965}
+{"event": "xgb_trial", "trial": 1, "f1_macro": 0.9414371636593858, "elapsed": 5.846101999282837}
+{"event": "xgb_trial", "trial": 2, "f1_macro": 0.9497877272490493, "elapsed": 6.264165163040161}
+{"event": "xgb_trial", "trial": 3, "f1_macro": 0.9497877272490493, "elapsed": 6.62670111656189}
+{"event": "xgb_trial", "trial": 4, "f1_macro": 0.9497877272490493, "elapsed": 6.799722909927368}
+{"event": "xgb_trial", "trial": 5, "f1_macro": 0.9497877272490493, "elapsed": 6.947721242904663}
+{"event": "xgb_trial", "trial": 6, "f1_macro": 0.9497877272490493, "elapsed": 7.1643712520599365}
+{"event": "xgb_trial", "trial": 7, "f1_macro": 0.9497877272490493, "elapsed": 7.900245904922485}
+{"event": "xgb_trial", "trial": 8, "f1_macro": 0.9497877272490493, "elapsed": 8.187721252441406}
+{"event": "xgb_trial", "trial": 9, "f1_macro": 0.9497877272490493, "elapsed": 8.681231021881104}
+{"event": "cat_tuning_start", "elapsed": 8.681326150894165}
+{"event": "cat_trial_error", "trial": 0, "error": "catboost/private/libs/options/catboost_options.cpp:795: Error: default bootstrap type (bayesian) doesn't support 'subsample' option", "elapsed": 8.697862148284912}
+{"event": "cat_trial_error", "trial": 1, "error": "catboost/private/libs/options/catboost_options.cpp:795: Error: default bootstrap type (bayesian) doesn't support 'subsample' option", "elapsed": 8.698734998703003}
+{"event": "cat_trial_error", "trial": 2, "error": "catboost/private/libs/options/catboost_options.cpp:795: Error: default bootstrap type (bayesian) doesn't support 'subsample' option", "elapsed": 8.699053049087524}
+{"event": "cat_trial_error", "trial": 3, "error": "catboost/private/libs/options/catboost_options.cpp:795: Error: default bootstrap type (bayesian) doesn't support 'subsample' option", "elapsed": 8.699358940124512}
+{"event": "cat_trial_error", "trial": 4, "error": "catboost/private/libs/options/catboost_options.cpp:795: Error: default bootstrap type (bayesian) doesn't support 'subsample' option", "elapsed": 8.699623107910156}
+{"event": "cat_trial_error", "trial": 5, "error": "catboost/private/libs/options/catboost_options.cpp:795: Error: default bootstrap type (bayesian) doesn't support 'subsample' option", "elapsed": 8.699891090393066}
+{"event": "tuning_done", "best_model": "lgbm", "best_f1": 0.9583268218992552, "n_trials": 30, "elapsed": 8.699930191040039}
+{"event": "final_eval", "oof_f1_macro": 0.9583268218992552, "oof_accuracy": 0.9583333333333334, "cv_std": 0.02677171608964413, "elapsed": 8.747550249099731}
+{"event": "start", "family": "gbdt", "elapsed": 4.2438507080078125e-05}
+{"event": "data_loaded", "n_train": 120, "n_pred": 30, "n_features": 14, "elapsed": 0.04420924186706543}
+{"event": "libraries", "lgbm": true, "xgb": true, "cat": true, "elapsed": 0.865199089050293}
+{"event": "lgbm_tuning_start", "elapsed": 0.8654110431671143}
+{"event": "lgbm_trial", "trial": 0, "f1_macro": 0.9583268218992552, "elapsed": 0.9480969905853271}
+{"event": "lgbm_trial", "trial": 1, "f1_macro": 0.9583268218992552, "elapsed": 1.0039663314819336}
+{"event": "lgbm_trial", "trial": 2, "f1_macro": 0.9583268218992552, "elapsed": 1.2313930988311768}
+{"event": "lgbm_trial", "trial": 3, "f1_macro": 0.9583268218992552, "elapsed": 1.3743581771850586}
+{"event": "lgbm_trial", "trial": 4, "f1_macro": 0.9583268218992552, "elapsed": 1.434173345565796}
+{"event": "lgbm_trial", "trial": 5, "f1_macro": 0.9583268218992552, "elapsed": 1.5673353672027588}
+{"event": "lgbm_trial", "trial": 6, "f1_macro": 0.9583268218992552, "elapsed": 1.6940171718597412}
+{"event": "lgbm_trial", "trial": 7, "f1_macro": 0.9583268218992552, "elapsed": 1.812981128692627}
+{"event": "lgbm_trial", "trial": 8, "f1_macro": 0.9583268218992552, "elapsed": 2.1457412242889404}
+{"event": "lgbm_trial", "trial": 9, "f1_macro": 0.9583268218992552, "elapsed": 2.313108205795288}
+{"event": "lgbm_trial", "trial": 10, "f1_macro": 0.9583268218992552, "elapsed": 2.4676830768585205}
+{"event": "lgbm_trial", "trial": 11, "f1_macro": 0.9583268218992552, "elapsed": 2.861358165740967}
+{"event": "lgbm_trial", "trial": 12, "f1_macro": 0.9583268218992552, "elapsed": 4.274359226226807}
+{"event": "lgbm_trial", "trial": 13, "f1_macro": 0.9583268218992552, "elapsed": 4.8227152824401855}
+{"event": "lgbm_trial", "trial": 14, "f1_macro": 0.9583268218992552, "elapsed": 4.869215250015259}
+{"event": "lgbm_trial", "trial": 15, "f1_macro": 0.9583268218992552, "elapsed": 4.921157121658325}
+{"event": "lgbm_trial", "trial": 16, "f1_macro": 0.9583268218992552, "elapsed": 4.959122180938721}
+{"event": "lgbm_trial", "trial": 17, "f1_macro": 0.9583268218992552, "elapsed": 5.33525824546814}
+{"event": "lgbm_trial", "trial": 18, "f1_macro": 0.9583268218992552, "elapsed": 5.398808240890503}
+{"event": "lgbm_trial", "trial": 19, "f1_macro": 0.9583268218992552, "elapsed": 5.443849325180054}
+{"event": "xgb_tuning_start", "elapsed": 5.444031238555908}
+{"event": "xgb_trial", "trial": 0, "f1_macro": 0.9497877272490493, "elapsed": 5.783141136169434}
+{"event": "xgb_trial", "trial": 1, "f1_macro": 0.9414371636593858, "elapsed": 5.949754238128662}
+{"event": "xgb_trial", "trial": 2, "f1_macro": 0.9497877272490493, "elapsed": 6.171521186828613}
+{"event": "xgb_trial", "trial": 3, "f1_macro": 0.9497877272490493, "elapsed": 6.581195116043091}
+{"event": "xgb_trial", "trial": 4, "f1_macro": 0.9497877272490493, "elapsed": 6.817410230636597}
+{"event": "xgb_trial", "trial": 5, "f1_macro": 0.9497877272490493, "elapsed": 6.9668800830841064}
+{"event": "xgb_trial", "trial": 6, "f1_macro": 0.9497877272490493, "elapsed": 7.212217092514038}
+{"event": "xgb_trial", "trial": 7, "f1_macro": 0.9497877272490493, "elapsed": 8.212792158126831}
+{"event": "xgb_trial", "trial": 8, "f1_macro": 0.9497877272490493, "elapsed": 8.670044183731079}
+{"event": "xgb_trial", "trial": 9, "f1_macro": 0.9497877272490493, "elapsed": 9.071822166442871}
+{"event": "cat_tuning_start", "elapsed": 9.07192325592041}
+{"event": "cat_trial_error", "trial": 0, "error": "catboost/private/libs/options/catboost_options.cpp:795: Error: default bootstrap type (bayesian) doesn't support 'subsample' option", "elapsed": 9.088505268096924}
+{"event": "cat_trial_error", "trial": 1, "error": "catboost/private/libs/options/catboost_options.cpp:795: Error: default bootstrap type (bayesian) doesn't support 'subsample' option", "elapsed": 9.089563131332397}
+{"event": "cat_trial_error", "trial": 2, "error": "catboost/private/libs/options/catboost_options.cpp:795: Error: default bootstrap type (bayesian) doesn't support 'subsample' option", "elapsed": 9.090267181396484}
+{"event": "cat_trial_error", "trial": 3, "error": "catboost/private/libs/options/catboost_options.cpp:795: Error: default bootstrap type (bayesian) doesn't support 'subsample' option", "elapsed": 9.090704202651978}
+{"event": "cat_trial_error", "trial": 4, "error": "catboost/private/libs/options/catboost_options.cpp:795: Error: default bootstrap type (bayesian) doesn't support 'subsample' option", "elapsed": 9.091044187545776}
+{"event": "cat_trial_error", "trial": 5, "error": "catboost/private/libs/options/catboost_options.cpp:795: Error: default bootstrap type (bayesian) doesn't support 'subsample' option", "elapsed": 9.091363191604614}
+{"event": "tuning_done", "best_model": "lgbm", "best_f1": 0.9583268218992552, "n_trials": 30, "elapsed": 9.091406106948853}
+{"event": "final_eval", "oof_f1_macro": 0.9583268218992552, "oof_accuracy": 0.9583333333333334, "cv_std": 0.02677171608964413, "elapsed": 9.128536224365234}
+{"event": "done", "cv_score": 0.9583268218992552, "model": "lgbm", "elapsed": 9.131232023239136}

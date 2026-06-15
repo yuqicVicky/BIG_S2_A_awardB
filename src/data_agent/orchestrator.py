@@ -34,6 +34,7 @@ from .gates import (
     run_stage_with_gate,
     write_verdict,
 )
+from .paths import run_logs_dir, run_scratch_dir
 from .pattern_analysis import run_pattern_analysis
 from .runner import (
     _build_submission,
@@ -104,7 +105,7 @@ def run_orchestrated_analysis(
 ) -> dict[str, Any]:
     repo_root = Path(repo_root).resolve()
     run_id = _run_id(repo_root)
-    logs_dir = repo_root / "outputs" / "logs"
+    logs_dir = run_logs_dir(repo_root, run_id)  # outputs/runs/<run_id>/logs (per-run isolated)
     artifacts_dir = repo_root / "outputs" / "artifacts"
     for directory in (logs_dir, artifacts_dir, repo_root / "outputs" / "reports"):
         directory.mkdir(parents=True, exist_ok=True)
@@ -117,7 +118,7 @@ def run_orchestrated_analysis(
             # AWARDB_SKIP_FLOOR=1: if the floor OOF already exists for this run_id,
             # skip the full main.py run — useful when restarting after a crash or
             # when the orchestrator calls main.py again in rounds 2-3.
-            floor_oof = logs_dir / f"{run_id}_oof_floor.csv"
+            floor_oof = logs_dir / "oof_floor.csv"
             if os.environ.get("AWARDB_SKIP_FLOOR") and floor_oof.exists():
                 print(f"[orchestrator] floor already seeded ({floor_oof.name}); "
                       f"skipping full run (AWARDB_SKIP_FLOOR=1)")
@@ -128,9 +129,9 @@ def run_orchestrated_analysis(
     except Exception as exc:  # safety net — never lose the deliverable
         print(f"[orchestrator] staged run failed ({type(exc).__name__}: {exc})")
         # ── Phase-1 recovery: if training already completed, a predictions
-        # checkpoint exists in outputs/scratch/{run_id}/.  Reuse it to write
+        # checkpoint exists in outputs/runs/{run_id}/scratch/.  Reuse it to write
         # submission.csv without retraining (seconds, not minutes).
-        _scratch_dir = repo_root / "outputs" / "scratch" / _run_id(repo_root)
+        _scratch_dir = run_scratch_dir(repo_root, _run_id(repo_root))
         _ckpt_preds = _load_predictions_checkpoint(_scratch_dir)
         if _ckpt_preds is not None:
             try:
@@ -177,7 +178,7 @@ def _clip_fraction(mr) -> float | None:
 
 def _emit_gate(logs_dir, run_id, stage, det_verdict):
     """Persist the effective verdict for a stage, preferring an LLM critic's
-    verdict (``{run_id}_llm_gate_{stage}.json``) over the deterministic one when
+    verdict (the run dir's ``llm_gate_{stage}.json``) over the deterministic one when
     the Claude-driven path produced one. The headless path simply uses the
     deterministic verdict. Returns the effective verdict."""
     llm = load_llm_verdict(logs_dir, run_id, stage)
@@ -203,7 +204,7 @@ def _run_award_b(repo_root, run_id, logs_dir, artifacts_dir, goal, random_state)
 
     # Stage 1 — schema + intake
     schema = discover_schema(data_dir)
-    write_schema_json(schema, logs_dir / f"{run_id}_schema.json")
+    write_schema_json(schema, logs_dir / f"schema.json")
     bundle = build_feature_bundle(schema)
     train_df = bundle.train_df
     state.load_metadata = {
@@ -223,12 +224,12 @@ def _run_award_b(repo_root, run_id, logs_dir, artifacts_dir, goal, random_state)
     state.persist(logs_dir)
 
     # Stage 1b — data pattern analysis (deep EDA). Reuse the Step-3c
-    # data-pattern-analyzer artifact ({run_id}_feature_influence.json — a superset of
+    # data-pattern-analyzer artifact (feature_influence.json — a superset of
     # this report, with the opaque-period time fix + series-length/autocorrelation)
     # when present, so the floor and the planner-facing analysis never diverge; else
     # compute it here as before.
     try:
-        _fi_path = logs_dir / f"{run_id}_feature_influence.json"
+        _fi_path = logs_dir / f"feature_influence.json"
         _fi = None
         if _fi_path.exists():
             try:
@@ -439,10 +440,10 @@ def _run_award_b(repo_root, run_id, logs_dir, artifacts_dir, goal, random_state)
             if _srm is not None:
                 print(f"[cv] scoring restricted to submission subset: "
                       f"{int(np.asarray(_srm).sum())}/{len(_srm)} train rows in scope")
-            write_cv_folds_json(logs_dir / f"{run_id}_cv_folds.json", run_id=run_id,
+            write_cv_folds_json(logs_dir / f"cv_folds.json", run_id=run_id,
                                 fold_assignment=_fa, scored_rows=_scored, description=_desc)
             _valid_mask = pd.to_numeric(bundle.target, errors="coerce").notna().to_numpy()
-            _cf = load_canonical_folds(logs_dir / f"{run_id}_cv_folds.json", valid_mask=_valid_mask)
+            _cf = load_canonical_folds(logs_dir / f"cv_folds.json", valid_mask=_valid_mask)
             if _cf.folds:
                 _canon_folds, _scored_mask = _cf.folds, _cf.scored_mask
                 print(f"[cv] canonical folds: {_cf.strategy} n_folds={_cf.n_folds} "
@@ -499,7 +500,7 @@ def _run_award_b(repo_root, run_id, logs_dir, artifacts_dir, goal, random_state)
     _scratch_dir = repo_root / "outputs" / "scratch" / run_id
     try:
         _save_predictions_checkpoint(mr.predictions, _scratch_dir)
-        print(f"[checkpoint] predictions saved → outputs/scratch/{run_id}/predictions_checkpoint.npy")
+        print(f"[checkpoint] predictions saved → outputs/runs/{run_id}/scratch/predictions_checkpoint.npy")
     except Exception as _ck_err:
         print(f"[checkpoint] skipped ({_ck_err})")
 
@@ -522,7 +523,7 @@ def _run_award_b(repo_root, run_id, logs_dir, artifacts_dir, goal, random_state)
         _sel = mr.selected_model_name
         _oof_full = (getattr(mr, "holdout_by_model", None) or {}).get(_sel)
         if _oof_full is not None:
-            _write_oof_floor(logs_dir / f"{run_id}_oof_floor.csv", _oof_full, scored_mask=_scored_mask)
+            _write_oof_floor(logs_dir / f"oof_floor.csv", _oof_full, scored_mask=_scored_mask)
     except Exception as _oof_exc:
         print(f"[cv] floor OOF not written ({type(_oof_exc).__name__}: {_oof_exc})")
     try:
@@ -551,7 +552,7 @@ def _run_award_b(repo_root, run_id, logs_dir, artifacts_dir, goal, random_state)
         print(f"[modeling-group] skipped ({type(_mg_exc).__name__}: {_mg_exc}); keeping floor")
 
     # Write validation_strategy.json
-    _write_json(mr.holdout_strategy, logs_dir / f"{run_id}_validation_strategy.json")
+    _write_json(mr.holdout_strategy, logs_dir / f"validation_strategy.json")
 
     # Write model_stability_by_split.json and overfitting_audit.json
     stability = mr.holdout_strategy.get("stability", {})
@@ -561,7 +562,7 @@ def _run_award_b(repo_root, run_id, logs_dir, artifacts_dir, goal, random_state)
         "primary_split_type": mr.holdout_strategy.get("type"),
         "stability": stability,
         "n_splits_evaluated": len(stability.get("split_scores", [])) if stability else 0,
-    }, logs_dir / f"{run_id}_model_stability_by_split.json")
+    }, logs_dir / f"model_stability_by_split.json")
 
     # Write overfitting_audit.json: primary holdout score vs additional splits
     _overfit_audit = {
@@ -578,7 +579,7 @@ def _run_award_b(repo_root, run_id, logs_dir, artifacts_dir, goal, random_state)
             "high_variance"
         ),
     }
-    _write_json(_overfit_audit, logs_dir / f"{run_id}_overfitting_audit.json")
+    _write_json(_overfit_audit, logs_dir / f"overfitting_audit.json")
     # Phase-9 combined overfitting + leakage audit (named by the inspection
     # checklist). Generic: merges the stability assessment with the leakage gate.
     _write_json({
@@ -586,7 +587,7 @@ def _run_award_b(repo_root, run_id, logs_dir, artifacts_dir, goal, random_state)
         "leakage_risk": (state.leakage_audit or {}).get("leakage_risk"),
         "leakage_approved": (state.leakage_audit or {}).get("approved"),
         "leakage_suspected_columns": (state.leakage_audit or {}).get("suspected_columns", []),
-    }, logs_dir / f"{run_id}_overfitting_leakage_audit.json")
+    }, logs_dir / f"overfitting_leakage_audit.json")
 
     state.persist(logs_dir)
 
@@ -626,10 +627,10 @@ def _run_award_b(repo_root, run_id, logs_dir, artifacts_dir, goal, random_state)
         "invariant_check": {
             "importance_subset_of_model": all(f in bundle.feature_columns for f in importances),
         },
-    }, logs_dir / f"{run_id}_feature_importance.json")
+    }, logs_dir / f"feature_importance.json")
 
     # Write _profile.json (feature_audit) — required by verification script
-    _write_json(bundle.profile, logs_dir / f"{run_id}_profile.json")
+    _write_json(bundle.profile, logs_dir / f"profile.json")
 
     state.persist(logs_dir)
 
@@ -638,7 +639,7 @@ def _run_award_b(repo_root, run_id, logs_dir, artifacts_dir, goal, random_state)
     mr.predictions, _mono = apply_monotonic_constraints(
         mr.predictions, bundle.sample_submission, schema, description)
     if _mono.get("applied"):
-        _write_json(_mono, logs_dir / f"{run_id}_monotonic_constraints.json")
+        _write_json(_mono, logs_dir / f"monotonic_constraints.json")
         print(f"[monotonic] {_mono['parent']} >= children; rows adjusted: {_mono['rows_adjusted']}")
 
     # Build + validate submission (proven path)
@@ -657,7 +658,7 @@ def _run_award_b(repo_root, run_id, logs_dir, artifacts_dir, goal, random_state)
     except Exception as _sub_exc:
         write_verdict(Verdict(stage="submission", status=FAIL, reasons=[str(_sub_exc)], run_id=run_id), logs_dir, run_id)
         raise
-    _write_json(submission_check, logs_dir / f"{run_id}_submission_check.json")
+    _write_json(submission_check, logs_dir / f"submission_check.json")
     print(f"Submission written: {submission_path}")
 
     # Write prediction_distribution.json
@@ -690,7 +691,7 @@ def _run_award_b(repo_root, run_id, logs_dir, artifacts_dir, goal, random_state)
                 }
         except Exception:
             pass
-        _write_json(_pred_dist, logs_dir / f"{run_id}_prediction_distribution.json")
+        _write_json(_pred_dist, logs_dir / f"prediction_distribution.json")
     except Exception:
         pass
 
@@ -724,20 +725,20 @@ def _run_award_b(repo_root, run_id, logs_dir, artifacts_dir, goal, random_state)
         "report_review": state.report_review["verdict"],
     }
     state.summary = summary
-    _write_json(_model_selection_log(mr), logs_dir / f"{run_id}_model_selection.json")
+    _write_json(_model_selection_log(mr), logs_dir / f"model_selection.json")
     manifest = {
         "run_id": run_id, "submission_path": str(submission_path), "report_path": state.report_path,
         "schema": schema.to_dict(), "summary": summary, "submission_check": submission_check,
-        "artifacts": state.artifacts, "state_path": str(logs_dir / f"{run_id}_state.json"),
+        "artifacts": state.artifacts, "state_path": str(logs_dir / f"state.json"),
     }
-    _write_json(manifest, logs_dir / f"{run_id}_manifest.json")
+    _write_json(manifest, logs_dir / f"manifest.json")
 
     # Final supervisor gate — aggregate every stage verdict into one release
     # judgement (supervisor_gatekeeper.json). Per the contract a FAIL is logged
     # and surfaced but does not halt: the deliverable is always produced.
     _stage_verdicts = []
     for _st in ("schema", "task_inference", "leakage", "prediction_sanity", "submission", "report"):
-        _p = logs_dir / f"{run_id}_gate_{_st}.json"
+        _p = logs_dir / f"gate_{_st}.json"
         if _p.exists():
             try:
                 _stage_verdicts.append(json.loads(_p.read_text(encoding="utf-8")))
@@ -802,8 +803,8 @@ def _run_generic(repo_root, run_id, logs_dir, artifacts_dir, goal, file_path, ra
     state.report_review = review_report(state=state)
     state.persist(logs_dir)
     manifest = {"run_id": run_id, "report_path": state.report_path, "report_format": report_out["report_format"],
-                "task_type": spec.task_type, "state_path": str(logs_dir / f"{run_id}_state.json")}
-    _write_json(manifest, logs_dir / f"{run_id}_manifest.json")
+                "task_type": spec.task_type, "state_path": str(logs_dir / f"state.json")}
+    _write_json(manifest, logs_dir / f"manifest.json")
     print("=== Analysis complete ===")
     return manifest
 

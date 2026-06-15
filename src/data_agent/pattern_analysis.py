@@ -35,7 +35,7 @@ def run_pattern_analysis(
     description's date table); ``None`` falls back to date-parsing. ``group_keys``
     are the panel keys (e.g. jurisdiction × category) used for series-length and
     autocorrelation diagnostics. ``out_name`` overrides the output filename
-    (default ``{run_id}_data_pattern_report.json``)."""
+    (default ``data_pattern_report.json`` in the run's logs dir)."""
     train_df: pd.DataFrame = bundle.train_df
     predict_df: pd.DataFrame = bundle.predict_df
     target_col: str = schema.target_column
@@ -134,9 +134,9 @@ def run_pattern_analysis(
         train_df, target_col, group_keys, ts_time_col, period_rank)
 
     # ── Write ────────────────────────────────────────────────────────────────
-    logs_dir = repo_root / "outputs" / "logs"
-    logs_dir.mkdir(parents=True, exist_ok=True)
-    out_path = logs_dir / (out_name or f"{run_id}_data_pattern_report.json")
+    from .paths import run_logs_dir
+    logs_dir = run_logs_dir(repo_root, run_id)
+    out_path = logs_dir / (out_name or "data_pattern_report.json")
     out_path.write_text(
         json.dumps(report, indent=2, default=_json_default), encoding="utf-8"
     )

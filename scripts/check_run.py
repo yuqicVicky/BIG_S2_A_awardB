@@ -36,22 +36,41 @@ MARK = {OK: "OK   ", INVALID: "INVAL", MISSING: "MISS ", NA: "--   ", INFO: "inf
 
 
 # ── artifact resolution ──────────────────────────────────────────────────────
+# Two on-disk layouts are supported: the current per-run directory
+# ``outputs/runs/<rid>/{logs,scratch}`` with UNPREFIXED filenames, and the legacy
+# ``outputs/logs/<rid>_X`` + ``outputs/scratch/<rid>/`` layout. Resolution tries the
+# new layout first and falls back to the legacy one so old runs stay inspectable.
+def _bare(name: str, rid: str) -> str:
+    """Logical name with any ``{rid}_`` template/prefix stripped to the bare name."""
+    return name.format(rid=rid).replace(f"{rid}_", "")
+
+
+def _scratch_dirs(rid: str) -> list[Path]:
+    return [REPO / "outputs" / "runs" / rid / "scratch",   # new
+            REPO / "outputs" / "scratch" / rid]            # legacy
+
+
 def _candidates(name: str, rid: str, logs: Path, loc: str) -> list[Path]:
-    """All on-disk paths a logical artifact name could resolve to."""
+    """All on-disk paths a logical artifact name could resolve to (new + legacy)."""
     if loc == "root":
         return [REPO / name]
     if loc == "reports":
         return [REPO / "outputs" / "reports" / name.format(rid=rid)]
     if loc == "scratch":
-        return [REPO / "outputs" / "scratch" / rid / name]
-    # default: outputs/logs
-    if "{rid}" in name:
-        pat = name.format(rid=rid)
-        if "*" in pat:
-            return [Path(p) for p in glob.glob(str(logs / pat))]
-        return [logs / pat]
-    # bare name → accept both prefixed and unprefixed (naming-drift tolerant)
-    return [logs / f"{rid}_{name}", logs / name]
+        return [d / name for d in _scratch_dirs(rid)]
+    # default: logs. ``logs`` is already the per-run dir when it exists.
+    bare = _bare(name, rid)
+    legacy = REPO / "outputs" / "logs"
+    # new layout (unprefixed in run dir) → legacy prefixed → legacy bare.
+    plan = [(logs, bare), (legacy, name.format(rid=rid)),
+            (legacy, f"{rid}_{bare}"), (legacy, bare)]
+    out: list[Path] = []
+    for base, fname in plan:
+        if "*" in fname:
+            out += [Path(p) for p in glob.glob(str(base / fname))]
+        else:
+            out.append(base / fname)
+    return out
 
 
 def _valid(path: Path) -> bool:
@@ -108,7 +127,8 @@ def detect_mode(rid: str, logs: Path) -> str:
             pass
     # infer from produced files
     if (resolve("{rid}_ensemble_meta.json", rid, logs, "logs")[0] == OK
-            or glob.glob(str(logs / f"{rid}_cand_*.csv"))):
+            or glob.glob(str(logs / "cand_*.csv"))
+            or glob.glob(str(REPO / "outputs" / "logs" / f"{rid}_cand_*.csv"))):
         return "specialist"
     if (resolve("model_search.json", rid, logs, "logs")[0] == OK
             or resolve("final_model.json", rid, logs, "logs")[0] == OK):
@@ -167,8 +187,11 @@ def build_checks(mode: str):
 
 # ── gate + watchdog summaries ────────────────────────────────────────────────
 def gate_summary(rid: str, logs: Path):
-    files = sorted(set(glob.glob(str(logs / f"{rid}_gate_*.json"))
-                       + glob.glob(str(logs / f"{rid}_llm_gate_*.json"))))
+    legacy = REPO / "outputs" / "logs"
+    files = sorted(set(glob.glob(str(logs / "gate_*.json"))
+                       + glob.glob(str(logs / "llm_gate_*.json"))
+                       + glob.glob(str(legacy / f"{rid}_gate_*.json"))
+                       + glob.glob(str(legacy / f"{rid}_llm_gate_*.json"))))
     rows = []
     for f in files:
         try:
@@ -182,7 +205,10 @@ def gate_summary(rid: str, logs: Path):
 
 def watchdog_summary(rid: str, logs: Path):
     rows = []
-    for f in sorted(glob.glob(str(logs / f"{rid}_*-specialist_watchdog.json"))):
+    legacy = REPO / "outputs" / "logs"
+    files = sorted(set(glob.glob(str(logs / "*-specialist_watchdog.json"))
+                       + glob.glob(str(legacy / f"{rid}_*-specialist_watchdog.json"))))
+    for f in files:
         try:
             d = json.loads(Path(f).read_text(encoding="utf-8"))
             rows.append((d.get("role", Path(f).stem), d.get("killed"),
@@ -194,17 +220,26 @@ def watchdog_summary(rid: str, logs: Path):
 
 # ── main ─────────────────────────────────────────────────────────────────────
 def latest_run_id(logs: Path) -> str | None:
-    anchors = []
+    candidates: list[tuple[float, str]] = []  # (mtime, rid)
+    # new layout: outputs/runs/<rid>/logs/
+    runs_root = REPO / "outputs" / "runs"
+    if runs_root.is_dir():
+        for d in runs_root.iterdir():
+            if d.is_dir() and (d / "logs").is_dir():
+                candidates.append((d.stat().st_mtime, d.name))
+    # legacy layout: flat outputs/logs/<rid>_<anchor>
     for suf in ("_state.json", "_manifest.json", "_feature_spec.json", "_model_selection.json"):
-        anchors += glob.glob(str(logs / f"*{suf}"))
-    if not anchors:
+        for p in glob.glob(str(logs / f"*{suf}")):
+            candidates.append((os.path.getmtime(p), Path(p).name[: -len(suf)]))
+    if not candidates:
         return None
-    newest = max(anchors, key=os.path.getmtime)
-    name = Path(newest).name
-    for suf in ("_state.json", "_manifest.json", "_feature_spec.json", "_model_selection.json"):
-        if name.endswith(suf):
-            return name[: -len(suf)]
-    return None
+    return max(candidates)[1]
+
+
+def _effective_logs(rid: str, cli_logs: Path) -> Path:
+    """Per-run dir when present (new layout), else the CLI/legacy logs dir."""
+    run_logs = REPO / "outputs" / "runs" / rid / "logs"
+    return run_logs if run_logs.is_dir() else cli_logs
 
 
 def main() -> int:
@@ -214,15 +249,18 @@ def main() -> int:
     ap.add_argument("--logs", default="outputs/logs", help="logs dir (default outputs/logs)")
     args = ap.parse_args()
 
-    logs = (REPO / args.logs).resolve() if not os.path.isabs(args.logs) else Path(args.logs)
+    cli_logs = (REPO / args.logs).resolve() if not os.path.isabs(args.logs) else Path(args.logs)
     rid = args.run_id
     if args.latest or not rid:
-        rid = latest_run_id(logs)
+        rid = latest_run_id(cli_logs)
         if not rid:
-            print(f"no run found under {logs} (need a *_state.json / *_manifest.json anchor)")
+            print(f"no run found under outputs/runs/ or {cli_logs} "
+                  f"(need a run dir or *_state.json anchor)")
             return 1
         print(f"[--latest] using run_id = {rid}")
 
+    # Prefer the per-run directory (new layout); fall back to the flat logs dir.
+    logs = _effective_logs(rid, cli_logs)
     if not logs.is_dir():
         print(f"logs dir not found: {logs}")
         return 1

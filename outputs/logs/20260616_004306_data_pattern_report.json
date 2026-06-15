@@ -1,0 +1,137 @@
+{
+  "run_id": "20260616_004306",
+  "schema_comparison": {
+    "n_train_rows": 30,
+    "n_predict_rows": 120,
+    "train_only_columns": [],
+    "predict_only_columns": [],
+    "shared_columns": [
+      "label",
+      "petal length (cm)",
+      "sepal length (cm)",
+      "sepal width (cm)",
+      "species"
+    ],
+    "note": "0 column(s) only in training data (may include target components); 0 column(s) only in prediction data."
+  },
+  "time_coverage": {
+    "has_time": false
+  },
+  "target_distribution": {
+    "count": 30,
+    "mean": 1.1766666666666665,
+    "std": 0.7731187772122476,
+    "min": 0.2,
+    "max": 2.4,
+    "skewness": -0.13883562888316764,
+    "kurtosis": -1.4017356967772934,
+    "zero_fraction": 0.0,
+    "near_zero_fraction": 0.0,
+    "quantiles": {
+      "p0": 0.2,
+      "p5": 0.2,
+      "p10": 0.2,
+      "p25": 0.2,
+      "p50": 1.4,
+      "p75": 1.8,
+      "p90": 2.2,
+      "p95": 2.255,
+      "p100": 2.4
+    },
+    "is_non_negative": true,
+    "is_right_skewed": false,
+    "interpretation": "approximately symmetric"
+  },
+  "target_by_time_features": {},
+  "target_by_categorical": {
+    "species": {
+      "n_groups": 3,
+      "target_mean_range": 1.76,
+      "target_mean_std_across_groups": 0.8927,
+      "is_predictive": true,
+      "top_groups": [
+        {
+          "group": "virginica",
+          "mean": 1.97,
+          "count": 10
+        },
+        {
+          "group": "versicolor",
+          "mean": 1.35,
+          "count": 10
+        },
+        {
+          "group": "setosa",
+          "mean": 0.21,
+          "count": 10
+        }
+      ]
+    }
+  },
+  "feature_target_correlations": {
+    "top_positive": [
+      {
+        "feature": "petal length (cm)",
+        "pearson_r": 0.9595,
+        "abs_r": 0.9595
+      },
+      {
+        "feature": "label",
+        "pearson_r": 0.9453,
+        "abs_r": 0.9453
+      }
+    ],
+    "top_negative": [
+      {
+        "feature": "sepal width (cm)",
+        "pearson_r": -0.4975,
+        "abs_r": 0.4975
+      }
+    ],
+    "n_features_computed": 3
+  },
+  "distribution_shift": {
+    "shifted_features": [],
+    "n_features_with_shift": 0,
+    "has_notable_shift": false
+  },
+  "high_cardinality_risk": [
+    {
+      "feature": "petal length (cm)",
+      "n_unique": 21,
+      "cardinality_fraction": 0.7,
+      "risk": "high \u2014 likely an ID column; remove from feature set"
+    }
+  ],
+  "target_component_analysis": {
+    "components": [],
+    "note": "No train-only columns to analyze."
+  },
+  "cross_feature_target_patterns": {
+    "top_interactions": [],
+    "n_interactions_tested": 0,
+    "note": "Top interaction effects between time features and low-cardinality features. interaction_strength = max_level_time_range - min_level_time_range; level_spread = max_level_mean - min_level_mean."
+  },
+  "validation_implications": {
+    "recommended_strategy": "random_holdout",
+    "recommendations": []
+  },
+  "is_timeseries": false,
+  "time_series_shape": {
+    "available": true,
+    "n_periods": 18,
+    "rows_per_period": 1.67,
+    "group_keys": [
+      "species"
+    ],
+    "per_group_series_length": {
+      "min": 7,
+      "median": 7.0,
+      "max": 9,
+      "n_groups": 3
+    }
+  },
+  "target_autocorrelation": {
+    "available": false
+  }
+}

@@ -1,51 +1,12 @@
 {
   "train": {
     "role": "train",
-    "n_rows": 31416,
+    "n_rows": 120,
     "columns": {}
-  },
-  "train_covariates": {
-    "role": "train_covariates",
-    "n_rows": 3927,
-    "columns": {
-      "temp_avg_f": {
-        "missing_count": 231,
-        "missing_rate": 0.0588
-      },
-      "precip_in": {
-        "missing_count": 231,
-        "missing_rate": 0.0588
-      },
-      "state_doh_release": {
-        "missing_count": 1162,
-        "missing_rate": 0.2959
-      }
-    }
   },
   "prediction": {
     "role": "prediction",
-    "n_rows": 357,
-    "columns": {
-      "unemployment_rate": {
-        "missing_count": 195,
-        "missing_rate": 0.5462
-      },
-      "labor_force": {
-        "missing_count": 207,
-        "missing_rate": 0.5798
-      },
-      "temp_avg_f": {
-        "missing_count": 7,
-        "missing_rate": 0.0196
-      },
-      "precip_in": {
-        "missing_count": 21,
-        "missing_rate": 0.0588
-      },
-      "state_doh_release": {
-        "missing_count": 115,
-        "missing_rate": 0.3221
-      }
-    }
+    "n_rows": 30,
+    "columns": {}
   }
 }

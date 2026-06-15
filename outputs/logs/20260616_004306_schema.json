@@ -1,0 +1,23 @@
+{
+  "data_dir": "/Users/yuqic/Documents/Claude/Projects/STAI-X challenge/award-b-repo/data",
+  "description_path": "/Users/yuqic/Documents/Claude/Projects/STAI-X challenge/award-b-repo/data/DATA_DESCRIPTION.md",
+  "train_target_file": "/Users/yuqic/Documents/Claude/Projects/STAI-X challenge/award-b-repo/data/val.csv",
+  "train_covariates_file": null,
+  "validation_covariates_file": null,
+  "sample_submission_file": "/Users/yuqic/Documents/Claude/Projects/STAI-X challenge/award-b-repo/data/train.csv",
+  "row_id_column": "sepal length (cm)",
+  "target_column": "petal width (cm)",
+  "join_keys": [
+    "sepal width (cm)",
+    "petal length (cm)",
+    "label",
+    "species"
+  ],
+  "time_column": null,
+  "category_column": "label",
+  "block_column": "label",
+  "inferred_notes": [
+    "train_target_file: val.csv",
+    "sample_submission_file: train.csv"
+  ]
+}

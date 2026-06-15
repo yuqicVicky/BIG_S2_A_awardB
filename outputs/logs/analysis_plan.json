@@ -1,526 +1,190 @@
 {
-  "run_id": "20260614_224500",
-  "planned_at": "2026-06-14T22:50:00Z",
+  "run_id": "20260616_004306",
+  "planned_at": "2026-06-16T00:43:06Z",
   "modeling_mode": "specialist",
   "data_coverage": {
     "available_sources": [
       {
-        "source": "data/train/dose_sys_train.csv",
-        "column": "period_id",
-        "dtype": "object",
-        "usage": "key",
-        "justification": "Opaque chronological join key; resolved to ordinal rank (period_rank) for feature derivation; raw string never a model feature."
-      },
-      {
-        "source": "data/train/dose_sys_train.csv",
-        "column": "jurisdiction",
-        "dtype": "object",
-        "usage": "key",
-        "justification": "Group join key for covariate join and target aggregates; encoded via target_enc_per_fold as direct categorical feature."
-      },
-      {
-        "source": "data/train/dose_sys_train.csv",
-        "column": "overdose_category",
-        "dtype": "object",
-        "usage": "direct_feature",
-        "justification": "8-category label with strong target signal (mean range 22.8 all_drugs vs 1.3 heroin); target-encode per fold; sub-categories (benzodiazepine/cocaine/fentanyl/heroin/methamphetamine) used as auxiliary lag/aggregate sources."
-      },
-      {
-        "source": "data/train/dose_sys_train.csv",
-        "column": "rate_per_10000_ed_visits",
-        "dtype": "float64",
-        "usage": "target",
-        "justification": "Prediction target; strong right skew (skewness=2.70) warrants log1p transform."
-      },
-      {
-        "source": "data/train/covariates.csv",
-        "column": "period_id",
-        "dtype": "object",
-        "usage": "key",
-        "justification": "Join key to link covariates to train rows; same ordinal rank derivation."
-      },
-      {
-        "source": "data/train/covariates.csv",
-        "column": "jurisdiction",
-        "dtype": "object",
-        "usage": "key",
-        "justification": "Join key for covariate merge."
-      },
-      {
-        "source": "data/train/covariates.csv",
-        "column": "unemployment_rate",
+        "source": "data/train.csv",
+        "column": "sepal length (cm)",
         "dtype": "float64",
         "usage": "direct_feature",
-        "justification": "Low abs_corr=0.027 but economically meaningful; 54.6% missing in pred — impute from jurisdiction-level train median."
+        "justification": "Numeric morphological measurement; abs_corr=0.7922 with label; no missingness."
       },
       {
-        "source": "data/train/covariates.csv",
-        "column": "labor_force",
+        "source": "data/train.csv",
+        "column": "sepal width (cm)",
         "dtype": "float64",
         "usage": "direct_feature",
-        "justification": "abs_corr=0.049 (negative); 58% missing in pred — impute jurisdiction-level train median."
+        "justification": "Numeric morphological measurement; abs_corr=0.3976 with label; no missingness."
       },
       {
-        "source": "data/train/covariates.csv",
-        "column": "temp_avg_f",
+        "source": "data/train.csv",
+        "column": "petal length (cm)",
         "dtype": "float64",
         "usage": "direct_feature",
-        "justification": "abs_corr=0.034; 5.9% missing in train covariates — impute training group median."
+        "justification": "Numeric morphological measurement; abs_corr=0.9510 with label; top-2 correlated feature; no missingness."
       },
       {
-        "source": "data/train/covariates.csv",
-        "column": "precip_in",
+        "source": "data/train.csv",
+        "column": "petal width (cm)",
         "dtype": "float64",
         "usage": "direct_feature",
-        "justification": "abs_corr=0.059 (highest weather signal); 5.9% missing in train — impute group median."
+        "justification": "Numeric morphological measurement; abs_corr=0.9595 with label; top-1 correlated feature; no missingness."
       },
       {
-        "source": "data/train/covariates.csv",
-        "column": "gtrends_overdose",
-        "dtype": "float64",
-        "usage": "direct_feature",
-        "justification": "Highest influence abs_corr=0.258; also used for lag/rolling and per-fold target aggregates."
-      },
-      {
-        "source": "data/train/covariates.csv",
-        "column": "gtrends_fentanyl",
-        "dtype": "float64",
-        "usage": "direct_feature",
-        "justification": "abs_corr=0.162; distribution shift (train mean 51.8, pred mean 68.8) — emphasize lag/diff features over raw level."
-      },
-      {
-        "source": "data/train/covariates.csv",
-        "column": "gtrends_naloxone",
-        "dtype": "float64",
-        "usage": "direct_feature",
-        "justification": "abs_corr=0.163; distribution shift (train 47.0, pred 64.2) — emphasize lag/diff features."
-      },
-      {
-        "source": "data/train/covariates.csv",
-        "column": "gtrends_opioid",
-        "dtype": "float64",
-        "usage": "direct_feature",
-        "justification": "abs_corr=0.185; third-highest influence; include raw + lag features."
-      },
-      {
-        "source": "data/train/covariates.csv",
-        "column": "gtrends_methamphetamine",
-        "dtype": "float64",
-        "usage": "direct_feature",
-        "justification": "abs_corr=0.226; second-highest influence; include raw + lag features."
-      },
-      {
-        "source": "data/train/covariates.csv",
-        "column": "state_doh_release",
-        "dtype": "object",
-        "usage": "text_svd",
-        "justification": "Free-text public health release notes; data_profile identifies as text_like; TF-IDF -> SVD to extract policy-signal components."
-      },
-      {
-        "source": "data/val/covariates.csv",
-        "column": "period_id",
-        "dtype": "object",
-        "usage": "key",
-        "justification": "Join key for prediction frame covariate merge."
-      },
-      {
-        "source": "data/val/covariates.csv",
-        "column": "jurisdiction",
-        "dtype": "object",
-        "usage": "key",
-        "justification": "Join key for prediction frame covariate merge."
-      },
-      {
-        "source": "data/val/covariates.csv",
-        "column": "unemployment_rate",
-        "dtype": "float64",
-        "usage": "direct_feature",
-        "justification": "Prediction-frame covariate; 54.6% missing — impute with jurisdiction-level train median."
-      },
-      {
-        "source": "data/val/covariates.csv",
-        "column": "labor_force",
-        "dtype": "float64",
-        "usage": "direct_feature",
-        "justification": "Prediction-frame covariate; 58% missing — impute jurisdiction-level train median."
-      },
-      {
-        "source": "data/val/covariates.csv",
-        "column": "temp_avg_f",
-        "dtype": "float64",
-        "usage": "direct_feature",
-        "justification": "Prediction-frame covariate; 2% missing — impute from train group median."
-      },
-      {
-        "source": "data/val/covariates.csv",
-        "column": "precip_in",
-        "dtype": "float64",
-        "usage": "direct_feature",
-        "justification": "Prediction-frame covariate; 5.9% missing — impute group median."
-      },
-      {
-        "source": "data/val/covariates.csv",
-        "column": "gtrends_overdose",
-        "dtype": "float64",
-        "usage": "direct_feature",
-        "justification": "Prediction-frame covariate; no missing; primary influence signal."
-      },
-      {
-        "source": "data/val/covariates.csv",
-        "column": "gtrends_fentanyl",
-        "dtype": "float64",
-        "usage": "direct_feature",
-        "justification": "Prediction-frame covariate; distribution shift — lag features preferred."
-      },
-      {
-        "source": "data/val/covariates.csv",
-        "column": "gtrends_naloxone",
-        "dtype": "float64",
-        "usage": "direct_feature",
-        "justification": "Prediction-frame covariate; distribution shift — lag features preferred."
-      },
-      {
-        "source": "data/val/covariates.csv",
-        "column": "gtrends_opioid",
-        "dtype": "float64",
-        "usage": "direct_feature",
-        "justification": "Prediction-frame covariate; high influence."
-      },
-      {
-        "source": "data/val/covariates.csv",
-        "column": "gtrends_methamphetamine",
-        "dtype": "float64",
-        "usage": "direct_feature",
-        "justification": "Prediction-frame covariate; second-highest influence."
-      },
-      {
-        "source": "data/val/covariates.csv",
-        "column": "state_doh_release",
-        "dtype": "object",
-        "usage": "text_svd",
-        "justification": "Prediction-frame text covariate; same TF-IDF->SVD pipeline fit on train fold only."
-      },
-      {
-        "source": "data/sample_submission.csv",
-        "column": "row_id",
+        "source": "data/train.csv",
+        "column": "label",
         "dtype": "int64",
-        "usage": "key",
-        "justification": "Submission row identifier; used for output ordering only, never a model feature."
-      },
-      {
-        "source": "data/sample_submission.csv",
-        "column": "period_id",
-        "dtype": "object",
-        "usage": "key",
-        "justification": "Join key in submission frame; resolved to ordinal rank."
-      },
-      {
-        "source": "data/sample_submission.csv",
-        "column": "jurisdiction",
-        "dtype": "object",
-        "usage": "key",
-        "justification": "Join key in submission frame."
-      },
-      {
-        "source": "data/sample_submission.csv",
-        "column": "overdose_category",
-        "dtype": "object",
-        "usage": "direct_feature",
-        "justification": "Defines scoring subset (all_drugs/all_opioids/all_stimulants); target-encode per fold."
-      },
-      {
-        "source": "data/sample_submission.csv",
-        "column": "rate_per_10000_ed_visits",
-        "dtype": "float64",
         "usage": "target",
-        "justification": "Placeholder zeros in submission frame; this is what we predict."
+        "justification": "Target column (multiclass 0/1/2); excluded from features."
+      },
+      {
+        "source": "data/train.csv",
+        "column": "species",
+        "dtype": "object",
+        "usage": "excluded",
+        "justification": "Direct string encoding of target label — inclusion causes complete leakage; confirmed by validation_strategy.json leakage_risks and spec_parse.json warnings."
+      },
+      {
+        "source": "data/val.csv",
+        "column": "sepal length (cm)",
+        "dtype": "float64",
+        "usage": "direct_feature",
+        "justification": "Same morphological measurement as in train; used as prediction-frame feature."
+      },
+      {
+        "source": "data/val.csv",
+        "column": "sepal width (cm)",
+        "dtype": "float64",
+        "usage": "direct_feature",
+        "justification": "Same morphological measurement as in train; used as prediction-frame feature."
+      },
+      {
+        "source": "data/val.csv",
+        "column": "petal length (cm)",
+        "dtype": "float64",
+        "usage": "direct_feature",
+        "justification": "Same morphological measurement as in train; used as prediction-frame feature."
+      },
+      {
+        "source": "data/val.csv",
+        "column": "petal width (cm)",
+        "dtype": "float64",
+        "usage": "direct_feature",
+        "justification": "Same morphological measurement as in train; used as prediction-frame feature."
+      },
+      {
+        "source": "data/val.csv",
+        "column": "label",
+        "dtype": "int64",
+        "usage": "excluded",
+        "justification": "Ground-truth label in held-out val.csv; used for evaluation only, never as a model feature (spec_parse.json: treat val labels as ground truth only, exclude from features)."
+      },
+      {
+        "source": "data/val.csv",
+        "column": "species",
+        "dtype": "object",
+        "usage": "excluded",
+        "justification": "Leakage: direct string encoding of target label — excluded from prediction frame features."
       }
     ],
     "uncovered_columns": [],
-    "text_columns_exploited": ["state_doh_release"],
-    "datetime_sources": ["period_id"],
-    "target_aggregate_keys": [
-      ["jurisdiction", "overdose_category"],
-      ["jurisdiction"],
-      ["overdose_category"],
-      ["jurisdiction", "period_rank_bin"]
-    ],
-    "image_sidecars": [
-      {
-        "source": "data/train/images/mat_density",
-        "modality": "image",
-        "key_columns": ["jurisdiction", "period_id"],
-        "usage": "image",
-        "justification": "PNG colormap (viridis) heatmaps keyed by (jurisdiction, period_id); 100% coverage in train and pred; planned for colormap-inversion scalar summary extraction."
-      }
-    ]
+    "text_columns_exploited": [],
+    "datetime_sources": [],
+    "target_aggregate_keys": [],
+    "image_sidecars": []
   },
   "feature_plan": {
     "direct_numeric": [
-      "unemployment_rate",
-      "labor_force",
-      "temp_avg_f",
-      "precip_in",
-      "gtrends_overdose",
-      "gtrends_fentanyl",
-      "gtrends_naloxone",
-      "gtrends_opioid",
-      "gtrends_methamphetamine"
+      "sepal length (cm)",
+      "sepal width (cm)",
+      "petal length (cm)",
+      "petal width (cm)"
     ],
-    "categorical_encoding": [
-      {
-        "column": "overdose_category",
-        "strategy": "target_enc_per_fold"
-      },
-      {
-        "column": "jurisdiction",
-        "strategy": "target_enc_per_fold"
-      }
-    ],
-    "datetime_derived": [
-      "period_id__ordinal_rank",
-      "period_id__month_sin",
-      "period_id__month_cos",
-      "period_id__month",
-      "period_id__quarter",
-      "period_id__year",
-      "period_id__is_q1",
-      "period_id__is_q4"
-    ],
-    "text_tfidf_svd": [
-      {
-        "column": "state_doh_release",
-        "svd_components": 8,
-        "experimental": true
-      }
-    ],
-    "per_fold_target_aggregates": [
-      {
-        "name": "tgt_mean_jurisdiction_category",
-        "group_keys": ["jurisdiction", "overdose_category"]
-      },
-      {
-        "name": "tgt_mean_jurisdiction",
-        "group_keys": ["jurisdiction"]
-      },
-      {
-        "name": "tgt_mean_category",
-        "group_keys": ["overdose_category"]
-      },
-      {
-        "name": "tgt_std_jurisdiction_category",
-        "group_keys": ["jurisdiction", "overdose_category"]
-      },
-      {
-        "name": "tgt_median_jurisdiction",
-        "group_keys": ["jurisdiction"]
-      },
-      {
-        "name": "tgt_mean_gtrends_overdose_bin_category",
-        "group_keys": ["gtrends_overdose_bin", "overdose_category"]
-      },
-      {
-        "name": "tgt_mean_gtrends_methamphetamine_bin_category",
-        "group_keys": ["gtrends_methamphetamine_bin", "overdose_category"]
-      }
-    ],
+    "categorical_encoding": [],
+    "datetime_derived": [],
+    "text_tfidf_svd": [],
+    "per_fold_target_aggregates": [],
     "interactions": [
-      "gtrends_overdose_x_category_enc",
-      "gtrends_methamphetamine_x_category_enc",
-      "gtrends_opioid_x_jurisdiction_enc",
-      "unemployment_rate_x_jurisdiction_enc"
-    ],
-    "lag_features": [
       {
-        "name": "target_lag1",
-        "group_keys": ["jurisdiction", "overdose_category"],
-        "lag": 1,
-        "experimental": false
-      },
-      {
-        "name": "target_lag3",
-        "group_keys": ["jurisdiction", "overdose_category"],
-        "lag": 3,
-        "experimental": false
-      },
-      {
-        "name": "target_lag6",
-        "group_keys": ["jurisdiction", "overdose_category"],
-        "lag": 6,
-        "experimental": false
-      },
-      {
-        "name": "target_lag12",
-        "group_keys": ["jurisdiction", "overdose_category"],
-        "lag": 12,
-        "experimental": false
-      },
-      {
-        "name": "target_roll3_mean",
-        "group_keys": ["jurisdiction", "overdose_category"],
-        "window": 3,
-        "stat": "mean",
-        "experimental": false
-      },
-      {
-        "name": "target_roll6_mean",
-        "group_keys": ["jurisdiction", "overdose_category"],
-        "window": 6,
-        "stat": "mean",
-        "experimental": false
-      },
-      {
-        "name": "target_roll12_mean",
-        "group_keys": ["jurisdiction", "overdose_category"],
-        "window": 12,
-        "stat": "mean",
-        "experimental": false
-      },
-      {
-        "name": "target_roll3_std",
-        "group_keys": ["jurisdiction", "overdose_category"],
-        "window": 3,
-        "stat": "std",
+        "name": "petal_width_x_petal_length",
+        "formula": "petal width (cm) * petal length (cm)",
+        "rationale": "Both top-correlated features (|r|>0.95); product sharpens class boundary near the petal plane.",
         "experimental": true
       },
       {
-        "name": "target_roll6_std",
-        "group_keys": ["jurisdiction", "overdose_category"],
-        "window": 6,
-        "stat": "std",
+        "name": "petal_length_x_sepal_length",
+        "formula": "petal length (cm) * sepal length (cm)",
+        "rationale": "Moderate collinearity; interaction may separate class 1/2 boundary.",
         "experimental": true
       },
       {
-        "name": "gtrends_overdose_lag1",
-        "group_keys": ["jurisdiction"],
-        "lag": 1,
-        "experimental": false
-      },
-      {
-        "name": "gtrends_fentanyl_lag1",
-        "group_keys": ["jurisdiction"],
-        "lag": 1,
-        "experimental": false
-      },
-      {
-        "name": "gtrends_fentanyl_lag3",
-        "group_keys": ["jurisdiction"],
-        "lag": 3,
-        "experimental": false
-      },
-      {
-        "name": "gtrends_naloxone_lag1",
-        "group_keys": ["jurisdiction"],
-        "lag": 1,
-        "experimental": false
-      },
-      {
-        "name": "gtrends_naloxone_lag3",
-        "group_keys": ["jurisdiction"],
-        "lag": 3,
-        "experimental": false
-      },
-      {
-        "name": "gtrends_methamphetamine_lag1",
-        "group_keys": ["jurisdiction"],
-        "lag": 1,
-        "experimental": false
-      },
-      {
-        "name": "gtrends_fentanyl_diff1",
-        "group_keys": ["jurisdiction"],
-        "lag": 1,
-        "stat": "diff",
-        "experimental": true
-      },
-      {
-        "name": "gtrends_naloxone_diff1",
-        "group_keys": ["jurisdiction"],
-        "lag": 1,
-        "stat": "diff",
+        "name": "petal_width_x_sepal_length",
+        "formula": "petal width (cm) * sepal length (cm)",
+        "rationale": "Cross-organ interaction of top-1 and secondary correlated features.",
         "experimental": true
       }
     ],
-    "imputation": {
-      "temp_avg_f": "jurisdiction_period_group_median_train",
-      "precip_in": "jurisdiction_period_group_median_train",
-      "unemployment_rate": "jurisdiction_last_known_then_median_train",
-      "labor_force": "jurisdiction_last_known_then_median_train",
-      "state_doh_release": "empty_string_then_tfidf_handles_missing"
-    },
-    "image_features": {
-      "source_sidecar": "data/train/images/mat_density",
-      "source_sidecar_pred": "data/val/images/mat_density",
-      "join_keys": ["jurisdiction", "period_id"],
-      "filename_pattern": "{jurisdiction}_{period_id}.png",
-      "colormap": "viridis",
-      "method": "colormap_inversion_summary",
-      "colormap_inversion_detail": "Build 256-entry RGB LUT for the colormap named in file_sidecars[0].colormap (viridis); map each pixel to nearest LUT index to recover scalar in [0,1]; mask background pixels where nearest-LUT distance exceeds threshold.",
-      "summary_stats": [
-        "mean",
-        "std",
-        "p10",
-        "p50",
-        "p90",
-        "high_frac",
-        "cover",
-        "cmass_x",
-        "cmass_y",
-        "quadrant_mean_tl",
-        "quadrant_mean_tr",
-        "quadrant_mean_bl",
-        "quadrant_mean_br"
-      ],
-      "optional_svd": {
-        "on": "grayscale_downsample_32x32",
-        "n_components": 8,
-        "experimental": true,
-        "fit_on": "fold_train_unique_images_only"
+    "ratio_features": [
+      {
+        "name": "petal_length_to_width_ratio",
+        "formula": "petal length (cm) / (petal width (cm) + 1e-6)",
+        "rationale": "Petal aspect ratio is a compact species discriminator; epsilon avoids division by zero.",
+        "experimental": true
       },
-      "missing_fill": "train_median",
-      "degraded_if_no_pillow": true,
-      "leakage_note": "Images are static per (jurisdiction, period_id) — not target-derived; scalar summaries extracted once per unique image; SVD fit on fold-train unique images only for reproducibility. If images are jurisdction-level trend signals, the Step-6A ablation gate decides whether they earn their columns."
-    },
-    "exclude_columns": [
-      "row_id"
+      {
+        "name": "sepal_length_to_width_ratio",
+        "formula": "sepal length (cm) / (sepal width (cm) + 1e-6)",
+        "rationale": "Sepal aspect ratio captures organ shape independent of scale.",
+        "experimental": true
+      }
     ],
-    "rationale": "Comprehensive: all covariates used, text SVD extracted, period ordinal and seasonality derived, lag 1/3/6/12 supported by autocorrelation (0.42-0.56) and 77-period length, image scalar summaries from viridis inversion. Overfit-guarded: target-enc and aggregates per fold, image SVD and rolling-std flagged experimental for Step-6A ablation, raw period_id/jurisdiction strings excluded."
+    "summary_features": [
+      {
+        "name": "petal_length_minus_petal_width",
+        "formula": "petal length (cm) - petal width (cm)",
+        "rationale": "Petal dimension difference; adds linear combination not captured by direct features alone.",
+        "experimental": true
+      },
+      {
+        "name": "sepal_length_minus_sepal_width",
+        "formula": "sepal length (cm) - sepal width (cm)",
+        "rationale": "Sepal dimension difference; complements sepal ratio feature with an additive signal.",
+        "experimental": true
+      }
+    ],
+    "lag_features": [],
+    "imputation": {},
+    "exclude_columns": [
+      "species",
+      "label"
+    ],
+    "rationale": "Four direct numeric features cover all measured signals; petal features dominate (|r|>0.95). Interactions and ratios add non-linear separability for the class 1/2 boundary. No groups, no time, no text/images. All engineered groups flagged experimental (14 total features vs 120/10=12 threshold) for Step-6A ablation; no per-fold target leakage possible."
   },
   "completeness_constraints": {
-    "submission_frame_expansion": "data/val/covariates.csv has 357 rows (7 periods x 51 jurisdictions). sample_submission.csv has 918 rows = 6 periods x 51 jurisdictions x 3 scoring categories (all_drugs, all_opioids, all_stimulants). The 7th pred period (if5b8Sut) appears in covariates but may not appear in the submission; submission frame is the authoritative output roster. Expand predictions by joining prediction covariates to the (period_id, jurisdiction, overdose_category) keys in sample_submission.csv.",
+    "submission_frame_expansion": "data/val.csv has 30 rows (from spec_parse.json file_schemas); submission maps 1:1 to those 30 rows identified by positional index (row_id_column is null); no period/group cross-join expansion required.",
     "full_train_refit": true,
-    "sub_target_decomposition": [
-      "overdose_category=benzodiazepine",
-      "overdose_category=cocaine",
-      "overdose_category=fentanyl",
-      "overdose_category=methamphetamine",
-      "overdose_category=heroin"
-    ],
-    "missing_value_handling_required": true,
-    "two_column_submission": true,
-    "scoring_subset_note": "MAE scored only on overdose_category in {all_drugs, all_opioids, all_stimulants}; CV must filter to these 3 categories to match leaderboard."
+    "sub_target_decomposition": [],
+    "missing_value_handling_required": false,
+    "two_column_submission": true
   },
   "critique": {
     "verdict": "WARN",
-    "checks_performed": [1, 2, 3, 4, 5, 6, 7],
+    "checks_performed": [1, 2, 3, 4, 5, 6, 7, 8],
     "blocking_issues": [],
     "advisory_issues": [
-      "Interaction features (gtrends_overdose_x_category_enc etc.) are not marked experimental — if target-enc leaks between interaction partners the Step-6A gate must catch this; programmer should treat interactions as experimental if target-enc is involved.",
-      "state_doh_release has 29.6% missing in train covariates and 32% in pred; empty-string imputation before TF-IDF is the safest fallback but may produce a sparse zero row — programmer should confirm this does not create an all-zero SVD component."
+      "Check 5 (overfit guard): total planned features (~14: 4 direct + 3 interactions + 2 ratios + 2 diffs) exceeds n_train_rows/10 threshold (120/10=12). All engineered groups marked experimental=true for Step-6A ablation gate validation."
     ],
     "fixes_applied": [
-      "Ensured all columns from all four file_schemas entries are covered (no uncovered_columns).",
-      "period_id mapped to key + datetime_derived (ordinal rank + seasonal) — never raw string.",
-      "Lag and rolling-std features: rolling-std flagged experimental; target lags unsupported by <3x lag well-satisfied (min_len=77 >= 36=3x12).",
-      "image_sidecars block added for mat_density sidecar with colormap inversion plan.",
-      "submission_frame_expansion derived from file_schemas n_rows, not hardcoded.",
-      "sub_target_decomposition echoed from spec_parse.detected_structure."
+      "Marked all engineered feature groups (interactions, ratio_features, summary_features) experimental=true due to feature-density overfit guard (14 features > 12 threshold for 120 training rows).",
+      "val.csv label column placed as excluded (ground-truth evaluation only) rather than target to prevent prediction-frame feature leakage.",
+      "Verified no duplicate feature entries across interactions/ratio_features/summary_features blocks — each formula is unique."
     ]
   },
   "plan_warnings": [
-    "unemployment_rate (54.6% missing) and labor_force (58% missing) in pred frame — jurisdiction-level imputation is the only safe strategy; if jurisdiction has no training data for these covariates, global median fallback is required.",
-    "gtrends_fentanyl and gtrends_naloxone show distribution shift; lag/diff features reduce but do not eliminate this risk.",
-    "sample_submission.csv shows 918 rows = 6 periods x 51 x 3 but val/covariates.csv has 7 pred periods — programmer must join on sample_submission keys, not all covariates rows.",
-    "Sub-target categories (benzodiazepine etc.) are absent from prediction frame and sample_submission; they are auxiliary lag/aggregate sources only, not direct model targets."
+    "val.csv contains ground-truth labels — exclude from all feature sets; use for held-out evaluation only.",
+    "One duplicate row in train.csv (data_profile.json); negligible at n=120 but noted.",
+    "Total engineered features (~14) slightly exceeds n_train_rows/10 safety threshold; Step-6A ablation gate is the enforcement point."
   ]
 }

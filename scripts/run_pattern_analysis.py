@@ -124,9 +124,9 @@ def main() -> None:
 
     repo = Path(args.repo).resolve()
     sys.path.insert(0, str(repo))
-    logs = repo / "outputs" / "logs"
-    logs.mkdir(parents=True, exist_ok=True)
-    out_name = args.out or f"{args.run_id}_feature_influence.json"
+    from src.data_agent.paths import run_logs_dir
+    logs = run_logs_dir(repo, args.run_id)  # outputs/runs/<run_id>/logs
+    out_name = args.out or "feature_influence.json"
     out_path = logs / out_name
 
     def _degraded(reason: str) -> None:

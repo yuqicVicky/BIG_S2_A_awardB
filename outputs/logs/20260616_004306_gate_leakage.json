@@ -1,0 +1,24 @@
+{
+  "stage": "leakage",
+  "run_id": "20260616_004306",
+  "status": "warn",
+  "reasons": [
+    "Target Variable in Feature Set: Correlation with target = 0.960 (> 0.95).",
+    "auto-dropped leakage-suspected columns before modeling: ['petal length (cm)']"
+  ],
+  "suggested_corrections": {
+    "drop_columns": [
+      "petal length (cm)"
+    ]
+  },
+  "checked": {
+    "leakage_risk": "high",
+    "dropped": [
+      "petal length (cm)"
+    ],
+    "suspects": [
+      "petal length (cm)"
+    ]
+  },
+  "critic": "deterministic"
+}

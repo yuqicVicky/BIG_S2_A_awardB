@@ -1,0 +1,12 @@
+{
+  "run_id": "20260616_004306",
+  "stage": "schema",
+  "status": "pass",
+  "reasons": [
+    "target_column 'label' resolved from spec_parse.json",
+    "no sample_submission.csv (expected per task spec); submission format inferred as positional index + label",
+    "stratified_kfold strategy chosen: 3 balanced classes, no time/group dimensions",
+    "cv_folds written covering all 120 train rows, 5 folds",
+    "species column flagged HIGH leakage risk (direct target encoding)"
+  ]
+}

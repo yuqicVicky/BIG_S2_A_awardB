@@ -17,6 +17,7 @@ from .features import build_feature_bundle, _read_description
 from .gates import write_verdict
 from .leakage_guard import guard_to_verdict
 from .models import train_and_predict
+from .paths import run_logs_dir
 from .reporting import write_report
 from .schema import discover_schema, write_schema_json
 
@@ -26,7 +27,7 @@ def run_analysis(repo_root: Path) -> dict[str, Any]:
     run_id = _run_id(repo_root)
     outputs_dir = repo_root / "outputs"
     artifacts_dir = outputs_dir / "artifacts"
-    logs_dir = outputs_dir / "logs"
+    logs_dir = run_logs_dir(repo_root, run_id)  # outputs/runs/<run_id>/logs (per-run isolated)
     reports_dir = outputs_dir / "reports"
     for directory in [artifacts_dir, logs_dir, reports_dir]:
         directory.mkdir(parents=True, exist_ok=True)
@@ -35,7 +36,7 @@ def run_analysis(repo_root: Path) -> dict[str, Any]:
 
     print(f"=== Award B automated analysis: {run_id} ===")
     schema = discover_schema(repo_root / "data")
-    write_schema_json(schema, logs_dir / f"{run_id}_schema.json")
+    write_schema_json(schema, logs_dir / "schema.json")
     print(f"Target column: {schema.target_column}")
     print(f"Join keys: {schema.join_keys}")
 
@@ -47,13 +48,13 @@ def run_analysis(repo_root: Path) -> dict[str, Any]:
     _print_audit_summary("PRE-RUN", pre_audit)
 
     bundle = build_feature_bundle(schema)
-    _write_json(bundle.profile, logs_dir / f"{run_id}_profile.json")
+    _write_json(bundle.profile, logs_dir / "profile.json")
     print(f"Training rows: {bundle.profile['train_rows']}")
     print(f"Prediction rows: {bundle.profile['prediction_rows']}")
     print(f"Features: {len(bundle.feature_columns)}")
 
     # Code-enforced leakage floor over the static feature set (deterministic; an
-    # LLM auditor verdict still overrides via {run_id}_llm_gate_leakage.json).
+    # LLM auditor verdict still overrides via the run dir's llm_gate_leakage.json).
     write_verdict(guard_to_verdict(bundle.leakage_guard), logs_dir, run_id)
     if bundle.leakage_guard.get("status") == "fail":
         print(f"[leakage-guard] FAIL: {bundle.leakage_guard.get('summary')}")
@@ -73,7 +74,7 @@ def run_analysis(repo_root: Path) -> dict[str, Any]:
         "target_clip_min": model_result.target_clip_min,
         "target_clip_max": model_result.target_clip_max,
     }
-    _write_json(model_result_dict, logs_dir / f"{run_id}_model_selection.json")
+    _write_json(model_result_dict, logs_dir / "model_selection.json")
     print(f"Selected model: {model_result.selected_model_name} (metric {model_result.metric_name})")
     selected_score = _selected_score(model_result)
     if selected_score is not None:
@@ -85,7 +86,7 @@ def run_analysis(repo_root: Path) -> dict[str, Any]:
         model_result.predictions, bundle.sample_submission, schema, _desc_text
     )
     if _mono.get("applied"):
-        _write_json(_mono, logs_dir / f"{run_id}_monotonic_constraints.json")
+        _write_json(_mono, logs_dir / "monotonic_constraints.json")
         print(f"[monotonic] {_mono['parent']} >= children; rows adjusted: {_mono['rows_adjusted']}")
     submission = _build_submission(
         bundle, schema.row_id_column, schema.target_column, model_result.predictions, model_result.output_kind
@@ -94,7 +95,7 @@ def run_analysis(repo_root: Path) -> dict[str, Any]:
     submission_check = _validate_submission(
         bundle.sample_submission, submission, schema.row_id_column, schema.target_column, model_result.output_kind
     )
-    _write_json(submission_check, logs_dir / f"{run_id}_submission_check.json")
+    _write_json(submission_check, logs_dir / "submission_check.json")
     print(f"Submission written: {submission_path}")
 
     # ── POST-RUN anti-hardcoding audit ───────────────────────────────────────
@@ -150,7 +151,7 @@ def run_analysis(repo_root: Path) -> dict[str, Any]:
             "n_unacceptable": post_audit.n_unacceptable,
         },
     }
-    _write_json(manifest, logs_dir / f"{run_id}_manifest.json")
+    _write_json(manifest, logs_dir / "manifest.json")
     print("=== Analysis complete ===")
     return manifest
 
@@ -346,8 +347,8 @@ def _json_default(value: Any) -> Any:
 
 def _run_id(repo_root: Path) -> str:
     # The Claude orchestrator exports AWARDB_RUN_ID before dispatching `python main.py`
-    # so the floor's {run_id}_* files match the run_id the agents expect (P5b). Falls
-    # back to a fresh stamp when unset (standalone runs).
+    # so the floor writes into the same outputs/runs/<run_id>/ dir the agents expect
+    # (P5b). Falls back to a fresh stamp when unset (standalone runs).
     env = os.environ.get("AWARDB_RUN_ID")
     if env:
         return env
