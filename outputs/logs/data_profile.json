@@ -1,580 +1,941 @@
 {
-  "run_id": "20260614_175934",
-  "profiled_at": "2026-06-14T10:03:35.081552Z",
+  "run_id": "20260614_224500",
+  "profiled_at": "2026-06-14T14:51:58.582984+00:00",
   "train": {
-    "path": "data/train/train.csv",
-    "n_rows": 10886,
+    "path": "data/train/dose_sys_train.csv",
+    "n_rows": 31416,
+    "n_cols": 4,
+    "columns": [
+      "period_id",
+      "jurisdiction",
+      "overdose_category",
+      "rate_per_10000_ed_visits"
+    ],
+    "dtypes": {
+      "period_id": "object",
+      "jurisdiction": "object",
+      "overdose_category": "object",
+      "rate_per_10000_ed_visits": "float64"
+    },
+    "missing": {
+      "period_id": {
+        "count": 0,
+        "rate": 0.0
+      },
+      "jurisdiction": {
+        "count": 0,
+        "rate": 0.0
+      },
+      "overdose_category": {
+        "count": 0,
+        "rate": 0.0
+      },
+      "rate_per_10000_ed_visits": {
+        "count": 0,
+        "rate": 0.0
+      }
+    },
+    "numeric_stats": {
+      "rate_per_10000_ed_visits": {
+        "min": 0.05,
+        "max": 79.99,
+        "mean": 6.352162,
+        "std": 7.969806,
+        "p01": 0.09,
+        "p05": 0.21,
+        "p25": 1.68,
+        "p50": 3.21,
+        "p75": 7.5425,
+        "p95": 22.855,
+        "p99": 38.392,
+        "n_unique": 3305
+      }
+    },
+    "categorical_stats": {
+      "period_id": {
+        "n_unique": 77,
+        "top_values": {
+          "jtUOZLP4": 408,
+          "fizSTkFs": 408,
+          "44RA6kMl": 408,
+          "eVeAG5UX": 408,
+          "uTjgI1Sv": 408,
+          "9FQthr9A": 408,
+          "PJu8Wb2C": 408,
+          "NOtvYKB9": 408,
+          "gqVDbZc7": 408,
+          "x24Jbzaz": 408
+        }
+      },
+      "jurisdiction": {
+        "n_unique": 51,
+        "top_values": {
+          "AK": 616,
+          "PA": 616,
+          "ND": 616,
+          "NE": 616,
+          "NH": 616,
+          "NJ": 616,
+          "NM": 616,
+          "NV": 616,
+          "NY": 616,
+          "OH": 616
+        }
+      },
+      "overdose_category": {
+        "n_unique": 8,
+        "top_values": {
+          "all_drugs": 3927,
+          "all_opioids": 3927,
+          "all_stimulants": 3927,
+          "heroin": 3927,
+          "fentanyl": 3927,
+          "cocaine": 3927,
+          "methamphetamine": 3927,
+          "benzodiazepine": 3927
+        }
+      }
+    },
+    "datetime_like_columns": [],
+    "potential_id_columns": [],
+    "constant_columns": [],
+    "near_constant_columns": [],
+    "high_cardinality_columns": [],
+    "text_like_columns": [],
+    "duplicate_rows": 0,
+    "warnings": []
+  },
+  "train_covariates": {
+    "path": "data/train/covariates.csv",
+    "n_rows": 3927,
     "n_cols": 12,
     "columns": [
-      "datetime",
-      "season",
-      "holiday",
-      "workingday",
-      "weather",
-      "temp",
-      "atemp",
-      "humidity",
-      "windspeed",
-      "casual",
-      "registered",
-      "count"
+      "period_id",
+      "jurisdiction",
+      "unemployment_rate",
+      "labor_force",
+      "temp_avg_f",
+      "precip_in",
+      "gtrends_overdose",
+      "gtrends_fentanyl",
+      "gtrends_naloxone",
+      "gtrends_opioid",
+      "gtrends_methamphetamine",
+      "state_doh_release"
     ],
     "dtypes": {
-      "datetime": "object",
-      "season": "int64",
-      "holiday": "int64",
-      "workingday": "int64",
-      "weather": "int64",
-      "temp": "float64",
-      "atemp": "float64",
-      "humidity": "int64",
-      "windspeed": "float64",
-      "casual": "int64",
-      "registered": "int64",
-      "count": "int64"
+      "period_id": "object",
+      "jurisdiction": "object",
+      "unemployment_rate": "float64",
+      "labor_force": "float64",
+      "temp_avg_f": "float64",
+      "precip_in": "float64",
+      "gtrends_overdose": "float64",
+      "gtrends_fentanyl": "float64",
+      "gtrends_naloxone": "float64",
+      "gtrends_opioid": "float64",
+      "gtrends_methamphetamine": "float64",
+      "state_doh_release": "object"
     },
     "missing": {
-      "datetime": {
+      "period_id": {
         "count": 0,
         "rate": 0.0
       },
-      "season": {
+      "jurisdiction": {
         "count": 0,
         "rate": 0.0
       },
-      "holiday": {
+      "unemployment_rate": {
         "count": 0,
         "rate": 0.0
       },
-      "workingday": {
+      "labor_force": {
         "count": 0,
         "rate": 0.0
       },
-      "weather": {
+      "temp_avg_f": {
+        "count": 231,
+        "rate": 0.0588
+      },
+      "precip_in": {
+        "count": 231,
+        "rate": 0.0588
+      },
+      "gtrends_overdose": {
         "count": 0,
         "rate": 0.0
       },
-      "temp": {
+      "gtrends_fentanyl": {
         "count": 0,
         "rate": 0.0
       },
-      "atemp": {
+      "gtrends_naloxone": {
         "count": 0,
         "rate": 0.0
       },
-      "humidity": {
+      "gtrends_opioid": {
         "count": 0,
         "rate": 0.0
       },
-      "windspeed": {
+      "gtrends_methamphetamine": {
         "count": 0,
         "rate": 0.0
       },
-      "casual": {
-        "count": 0,
-        "rate": 0.0
-      },
-      "registered": {
-        "count": 0,
-        "rate": 0.0
-      },
-      "count": {
-        "count": 0,
-        "rate": 0.0
+      "state_doh_release": {
+        "count": 1162,
+        "rate": 0.2959
       }
     },
     "numeric_stats": {
-      "season": {
-        "min": 1.0,
-        "max": 4.0,
-        "mean": 2.5066139996325556,
-        "std": 1.1161743093442644,
-        "p25": 2.0,
-        "p50": 3.0,
-        "p75": 4.0,
-        "n_unique": 4,
-        "n_missing": 0
+      "unemployment_rate": {
+        "min": 1.7,
+        "max": 30.5,
+        "mean": 4.335523,
+        "std": 2.24917,
+        "p01": 1.9,
+        "p05": 2.3,
+        "p25": 3.1,
+        "p50": 3.8,
+        "p75": 4.7,
+        "p95": 8.6,
+        "p99": 13.874,
+        "n_unique": 146
       },
-      "holiday": {
+      "labor_force": {
+        "min": 285981.0,
+        "max": 19810355.0,
+        "mean": 3242854.627706,
+        "std": 3626672.11846,
+        "p01": 292528.76,
+        "p05": 354526.6,
+        "p25": 790878.5,
+        "p50": 2085865.0,
+        "p75": 3938764.5,
+        "p95": 10461833.3,
+        "p99": 19368498.62,
+        "n_unique": 3923
+      },
+      "temp_avg_f": {
+        "min": -2.7,
+        "max": 87.9,
+        "mean": 53.128517,
+        "std": 17.390253,
+        "p01": 14.29,
+        "p05": 23.9,
+        "p25": 39.7,
+        "p50": 54.1,
+        "p75": 67.725,
+        "p95": 78.9,
+        "p99": 82.8,
+        "n_unique": 711
+      },
+      "precip_in": {
         "min": 0.0,
-        "max": 1.0,
-        "mean": 0.02856880396839978,
-        "std": 0.16659885062471985,
-        "p25": 0.0,
-        "p50": 0.0,
-        "p75": 0.0,
-        "n_unique": 2,
-        "n_missing": 0
+        "max": 12.07,
+        "mean": 3.173344,
+        "std": 2.053866,
+        "p01": 0.11,
+        "p05": 0.37,
+        "p25": 1.49,
+        "p50": 2.97,
+        "p75": 4.45,
+        "p95": 6.9325,
+        "p99": 8.8405,
+        "n_unique": 803
       },
-      "workingday": {
-        "min": 0.0,
-        "max": 1.0,
-        "mean": 0.6808745177291935,
-        "std": 0.4661591687997421,
-        "p25": 0.0,
-        "p50": 1.0,
-        "p75": 1.0,
-        "n_unique": 2,
-        "n_missing": 0
+      "gtrends_overdose": {
+        "min": 31.35,
+        "max": 97.02,
+        "mean": 57.59096,
+        "std": 9.622998,
+        "p01": 37.8286,
+        "p05": 42.785,
+        "p25": 51.3,
+        "p50": 56.76,
+        "p75": 63.06,
+        "p95": 75.362,
+        "p99": 84.648,
+        "n_unique": 1561
       },
-      "weather": {
-        "min": 1.0,
-        "max": 4.0,
-        "mean": 1.418427337865148,
-        "std": 0.6338385858190921,
-        "p25": 1.0,
-        "p50": 1.0,
-        "p75": 2.0,
-        "n_unique": 4,
-        "n_missing": 0
+      "gtrends_fentanyl": {
+        "min": 12.6,
+        "max": 108.22,
+        "mean": 51.793443,
+        "std": 20.043511,
+        "p01": 15.31,
+        "p05": 17.47,
+        "p25": 34.65,
+        "p50": 55.93,
+        "p75": 66.55,
+        "p95": 81.504,
+        "p99": 93.38,
+        "n_unique": 1844
       },
-      "temp": {
-        "min": 0.82,
-        "max": 41.0,
-        "mean": 20.23085981995223,
-        "std": 7.791589843987506,
-        "p25": 13.94,
-        "p50": 20.5,
-        "p75": 26.24,
-        "n_unique": 49,
-        "n_missing": 0
+      "gtrends_naloxone": {
+        "min": 14.1,
+        "max": 102.2,
+        "mean": 46.951095,
+        "std": 16.362074,
+        "p01": 17.6326,
+        "p05": 21.2,
+        "p25": 33.645,
+        "p50": 47.43,
+        "p75": 59.135,
+        "p95": 73.12,
+        "p99": 84.7854,
+        "n_unique": 1888
       },
-      "atemp": {
-        "min": 0.76,
-        "max": 45.455,
-        "mean": 23.655084052912,
-        "std": 8.474600626484888,
-        "p25": 16.665,
-        "p50": 24.24,
-        "p75": 31.06,
-        "n_unique": 60,
-        "n_missing": 0
+      "gtrends_opioid": {
+        "min": 36.67,
+        "max": 103.04,
+        "mean": 60.368044,
+        "std": 9.665249,
+        "p01": 43.143,
+        "p05": 47.15,
+        "p25": 53.42,
+        "p50": 59.0,
+        "p75": 65.64,
+        "p95": 78.617,
+        "p99": 88.66,
+        "n_unique": 1575
       },
-      "humidity": {
-        "min": 0.0,
-        "max": 100.0,
-        "mean": 61.88645967297446,
-        "std": 19.245033277394786,
-        "p25": 47.0,
-        "p50": 62.0,
-        "p75": 77.0,
-        "n_unique": 89,
-        "n_missing": 0
-      },
-      "windspeed": {
-        "min": 0.0,
-        "max": 56.9969,
-        "mean": 12.7993954069447,
-        "std": 8.16453732683849,
-        "p25": 7.0015,
-        "p50": 12.998,
-        "p75": 16.9979,
-        "n_unique": 28,
-        "n_missing": 0
-      },
-      "casual": {
-        "min": 0.0,
-        "max": 367.0,
-        "mean": 36.02195480433584,
-        "std": 49.9604765726498,
-        "p25": 4.0,
-        "p50": 17.0,
-        "p75": 49.0,
-        "n_unique": 309,
-        "n_missing": 0
-      },
-      "registered": {
-        "min": 0.0,
-        "max": 886.0,
-        "mean": 155.5521771082124,
-        "std": 151.0390330819246,
-        "p25": 36.0,
-        "p50": 118.0,
-        "p75": 222.0,
-        "n_unique": 731,
-        "n_missing": 0
-      },
-      "count": {
-        "min": 1.0,
-        "max": 977.0,
-        "mean": 191.57413191254824,
-        "std": 181.14445383028496,
-        "p25": 42.0,
-        "p50": 145.0,
-        "p75": 284.0,
-        "n_unique": 822,
-        "n_missing": 0
+      "gtrends_methamphetamine": {
+        "min": 20.17,
+        "max": 63.28,
+        "mean": 36.097576,
+        "std": 6.331049,
+        "p01": 24.36,
+        "p05": 26.886,
+        "p25": 31.65,
+        "p50": 35.43,
+        "p75": 39.78,
+        "p95": 47.74,
+        "p99": 53.8824,
+        "n_unique": 1369
       }
     },
     "categorical_stats": {
-      "datetime": {
-        "n_unique": 10886,
+      "period_id": {
+        "n_unique": 77,
         "top_values": {
-          "2011-01-01 00:00:00": 1,
-          "2012-05-01 21:00:00": 1,
-          "2012-05-01 13:00:00": 1,
-          "2012-05-01 14:00:00": 1,
-          "2012-05-01 15:00:00": 1,
-          "2012-05-01 16:00:00": 1,
-          "2012-05-01 17:00:00": 1,
-          "2012-05-01 18:00:00": 1,
-          "2012-05-01 19:00:00": 1,
-          "2012-05-01 20:00:00": 1
+          "OqDkgaDk": 51,
+          "xtjIUpyk": 51,
+          "NWU8bRHI": 51,
+          "a239r7U4": 51,
+          "k4mmkR0U": 51,
+          "CDQGTxV0": 51,
+          "y5ysDDpd": 51,
+          "Hy8SBtar": 51,
+          "PJu8Wb2C": 51,
+          "27DK2m8F": 51
+        }
+      },
+      "jurisdiction": {
+        "n_unique": 51,
+        "top_values": {
+          "AK": 77,
+          "PA": 77,
+          "ND": 77,
+          "NE": 77,
+          "NH": 77,
+          "NJ": 77,
+          "NM": 77,
+          "NV": 77,
+          "NY": 77,
+          "OH": 77
+        }
+      },
+      "state_doh_release": {
+        "n_unique": 2665,
+        "top_values": {
+          "Mississippi State Department of Health Authorizes Expanded Syringe Services Program Coverage\nThe Department has approved expansion of authorized syringe services programs to additional counties under Mississippi public health authority. Syringe services programs reduce transmission of HIV and hepatitis C, connect individuals to medication for opioid use disorder, and distribute naloxone and fentanyl test strips. Decades of peer-reviewed evidence and CDC guidance support syringe services programs as a core component of the public health response to drug-related harms.": 9,
+          "Alaska Department of Health Authorizes Expanded Syringe Services Program Coverage\nThe Department has approved expansion of authorized syringe services programs to additional counties under Alaska public health authority. Syringe services programs reduce transmission of HIV and hepatitis C, connect individuals to medication for opioid use disorder, and distribute naloxone and fentanyl test strips. Decades of peer-reviewed evidence and CDC guidance support syringe services programs as a core component of the public health response to drug-related harms.": 5,
+          "Michigan Department of Health and Human Services Authorizes Expanded Syringe Services Program Coverage\nThe Department has approved expansion of authorized syringe services programs to additional counties under Michigan public health authority. Syringe services programs reduce transmission of HIV and hepatitis C, connect individuals to medication for opioid use disorder, and distribute naloxone and fentanyl test strips. Decades of peer-reviewed evidence and CDC guidance support syringe services programs as a core component of the public health response to drug-related harms.": 5,
+          "Montana Department of Public Health and Human Services Authorizes Expanded Syringe Services Program Coverage\nThe Department has approved expansion of authorized syringe services programs to additional counties under Montana public health authority. Syringe services programs reduce transmission of HIV and hepatitis C, connect individuals to medication for opioid use disorder, and distribute naloxone and fentanyl test strips. Decades of peer-reviewed evidence and CDC guidance support syringe services programs as a core component of the public health response to drug-related harms.": 4,
+          "Pennsylvania Department of Health Authorizes Expanded Syringe Services Program Coverage\nThe Department has approved expansion of authorized syringe services programs to additional counties under Pennsylvania public health authority. Syringe services programs reduce transmission of HIV and hepatitis C, connect individuals to medication for opioid use disorder, and distribute naloxone and fentanyl test strips. Decades of peer-reviewed evidence and CDC guidance support syringe services programs as a core component of the public health response to drug-related harms.": 3,
+          "Vermont Department of Health Warns Public of Counterfeit Pills Containing Fentanyl\nTablets sold as oxycodone, hydrocodone, Adderall, and Xanax continue to be seized in Vermont that, on laboratory analysis, contain illicitly manufactured fentanyl. The Drug Enforcement Administration has reported that approximately 60 percent of counterfeit pills tested nationally contain a potentially lethal dose of fentanyl. Residents are urged to obtain medications only from licensed pharmacies and to assume that any pill obtained from a non-pharmacy source may contain fentanyl regardless of its appearance. Naloxone should be available wherever opioid pills, illicit or otherwise, are present.": 3,
+          "Arizona Department of Health Services Authorizes Expanded Syringe Services Program Coverage\nThe Department has approved expansion of authorized syringe services programs to additional counties under Arizona public health authority. Syringe services programs reduce transmission of HIV and hepatitis C, connect individuals to medication for opioid use disorder, and distribute naloxone and fentanyl test strips. Decades of peer-reviewed evidence and CDC guidance support syringe services programs as a core component of the public health response to drug-related harms.": 3,
+          "Maine Department of Health and Human Services Reminds Residents of 911 Good Samaritan Overdose Protections\nUnder Maine law, individuals who call 911 to report an overdose are protected from prosecution for possession of a controlled substance for personal use. The Department urges anyone witnessing an overdose to call 911 immediately, administer naloxone if available, place the person in the recovery position, and remain with them until emergency responders arrive. Bystander intervention saves lives; hesitation due to fear of arrest is the leading reason calls are delayed.": 3,
+          "Minnesota Department of Health Authorizes Expanded Syringe Services Program Coverage\nThe Department has approved expansion of authorized syringe services programs to additional counties under Minnesota public health authority. Syringe services programs reduce transmission of HIV and hepatitis C, connect individuals to medication for opioid use disorder, and distribute naloxone and fentanyl test strips. Decades of peer-reviewed evidence and CDC guidance support syringe services programs as a core component of the public health response to drug-related harms.": 3,
+          "Wisconsin Department of Health Services Authorizes Expanded Syringe Services Program Coverage\nThe Department has approved expansion of authorized syringe services programs to additional counties under Wisconsin public health authority. Syringe services programs reduce transmission of HIV and hepatitis C, connect individuals to medication for opioid use disorder, and distribute naloxone and fentanyl test strips. Decades of peer-reviewed evidence and CDC guidance support syringe services programs as a core component of the public health response to drug-related harms.": 3
         }
       }
     },
-    "datetime_like_columns": [
-      "datetime"
-    ],
+    "datetime_like_columns": [],
     "potential_id_columns": [
-      "datetime"
+      "labor_force",
+      "state_doh_release"
     ],
     "constant_columns": [],
     "near_constant_columns": [],
-    "high_cardinality_columns": [],
-    "text_like_columns": [],
+    "high_cardinality_columns": [
+      "period_id"
+    ],
+    "text_like_columns": [
+      "state_doh_release"
+    ],
     "duplicate_rows": 0,
-    "warnings": []
+    "warnings": [
+      "Column 'temp_avg_f' missing_rate=5.9% exceeds 5% threshold",
+      "Column 'precip_in' missing_rate=5.9% exceeds 5% threshold",
+      "Column 'state_doh_release' missing_rate=29.6% exceeds 5% threshold"
+    ]
   },
   "prediction": {
-    "path": "data/test/test.csv",
-    "n_rows": 6493,
-    "n_cols": 9,
+    "path": "data/val/covariates.csv",
+    "n_rows": 357,
+    "n_cols": 12,
     "columns": [
-      "datetime",
-      "season",
-      "holiday",
-      "workingday",
-      "weather",
-      "temp",
-      "atemp",
-      "humidity",
-      "windspeed"
+      "period_id",
+      "jurisdiction",
+      "unemployment_rate",
+      "labor_force",
+      "temp_avg_f",
+      "precip_in",
+      "gtrends_overdose",
+      "gtrends_fentanyl",
+      "gtrends_naloxone",
+      "gtrends_opioid",
+      "gtrends_methamphetamine",
+      "state_doh_release"
     ],
     "dtypes": {
-      "datetime": "object",
-      "season": "int64",
-      "holiday": "int64",
-      "workingday": "int64",
-      "weather": "int64",
-      "temp": "float64",
-      "atemp": "float64",
-      "humidity": "int64",
-      "windspeed": "float64"
+      "period_id": "object",
+      "jurisdiction": "object",
+      "unemployment_rate": "float64",
+      "labor_force": "float64",
+      "temp_avg_f": "float64",
+      "precip_in": "float64",
+      "gtrends_overdose": "float64",
+      "gtrends_fentanyl": "float64",
+      "gtrends_naloxone": "float64",
+      "gtrends_opioid": "float64",
+      "gtrends_methamphetamine": "float64",
+      "state_doh_release": "object"
     },
     "missing": {
-      "datetime": {
+      "period_id": {
         "count": 0,
         "rate": 0.0
       },
-      "season": {
+      "jurisdiction": {
         "count": 0,
         "rate": 0.0
       },
-      "holiday": {
+      "unemployment_rate": {
+        "count": 195,
+        "rate": 0.5462
+      },
+      "labor_force": {
+        "count": 207,
+        "rate": 0.5798
+      },
+      "temp_avg_f": {
+        "count": 7,
+        "rate": 0.0196
+      },
+      "precip_in": {
+        "count": 21,
+        "rate": 0.0588
+      },
+      "gtrends_overdose": {
         "count": 0,
         "rate": 0.0
       },
-      "workingday": {
+      "gtrends_fentanyl": {
         "count": 0,
         "rate": 0.0
       },
-      "weather": {
+      "gtrends_naloxone": {
         "count": 0,
         "rate": 0.0
       },
-      "temp": {
+      "gtrends_opioid": {
         "count": 0,
         "rate": 0.0
       },
-      "atemp": {
+      "gtrends_methamphetamine": {
         "count": 0,
         "rate": 0.0
       },
-      "humidity": {
-        "count": 0,
-        "rate": 0.0
-      },
-      "windspeed": {
-        "count": 0,
-        "rate": 0.0
+      "state_doh_release": {
+        "count": 115,
+        "rate": 0.3221
       }
     },
     "numeric_stats": {
-      "season": {
-        "min": 1.0,
-        "max": 4.0,
-        "mean": 2.49330047743724,
-        "std": 1.0912579418644255,
-        "p25": 2.0,
-        "p50": 3.0,
-        "p75": 3.0,
-        "n_unique": 4,
-        "n_missing": 0
+      "unemployment_rate": {
+        "min": 2.1,
+        "max": 6.7,
+        "mean": 4.07716,
+        "std": 0.988397,
+        "p01": 2.161,
+        "p05": 2.6,
+        "p25": 3.4,
+        "p50": 4.0,
+        "p75": 4.6,
+        "p95": 5.5,
+        "p99": 6.639,
+        "n_unique": 36
       },
-      "holiday": {
-        "min": 0.0,
-        "max": 1.0,
-        "mean": 0.029108270445094717,
-        "std": 0.16812296760853587,
-        "p25": 0.0,
-        "p50": 0.0,
-        "p75": 0.0,
-        "n_unique": 2,
-        "n_missing": 0
+      "labor_force": {
+        "min": 287825.0,
+        "max": 19878800.0,
+        "mean": 3535369.133333,
+        "std": 4397749.529202,
+        "p01": 287953.82,
+        "p05": 365403.8,
+        "p25": 686929.5,
+        "p50": 1933804.5,
+        "p75": 4918050.0,
+        "p95": 11106081.8,
+        "p99": 19867544.75,
+        "n_unique": 150
       },
-      "workingday": {
-        "min": 0.0,
-        "max": 1.0,
-        "mean": 0.6858154936085015,
-        "std": 0.464226014798812,
-        "p25": 0.0,
-        "p50": 1.0,
-        "p75": 1.0,
-        "n_unique": 2,
-        "n_missing": 0
-      },
-      "weather": {
-        "min": 1.0,
-        "max": 4.0,
-        "mean": 1.4367780686893579,
-        "std": 0.6483898010717158,
-        "p25": 1.0,
-        "p50": 1.0,
-        "p75": 2.0,
-        "n_unique": 4,
-        "n_missing": 0
-      },
-      "temp": {
-        "min": 0.82,
-        "max": 40.18,
-        "mean": 20.620606807330972,
-        "std": 8.059583026412835,
-        "p25": 13.94,
-        "p50": 21.32,
-        "p75": 27.06,
-        "n_unique": 49,
-        "n_missing": 0
-      },
-      "atemp": {
-        "min": 0.0,
-        "max": 50.0,
-        "mean": 24.01286462344063,
-        "std": 8.782741298669128,
-        "p25": 16.665,
-        "p50": 25.0,
-        "p75": 31.06,
-        "n_unique": 65,
-        "n_missing": 0
-      },
-      "humidity": {
-        "min": 16.0,
-        "max": 100.0,
-        "mean": 64.1252117665178,
-        "std": 19.293390986073437,
-        "p25": 49.0,
+      "temp_avg_f": {
+        "min": -2.1,
+        "max": 83.7,
+        "mean": 60.084,
+        "std": 16.411135,
+        "p01": 17.247,
+        "p05": 29.98,
+        "p25": 48.95,
         "p50": 65.0,
-        "p75": 81.0,
-        "n_unique": 79,
-        "n_missing": 0
+        "p75": 72.475,
+        "p95": 80.455,
+        "p99": 83.251,
+        "n_unique": 261
       },
-      "windspeed": {
-        "min": 0.0,
-        "max": 55.9986,
-        "mean": 12.631157200061606,
-        "std": 8.250151174075718,
-        "p25": 7.0015,
-        "p50": 11.0014,
-        "p75": 16.9979,
-        "n_unique": 27,
-        "n_missing": 0
+      "precip_in": {
+        "min": 0.05,
+        "max": 10.62,
+        "mean": 2.770149,
+        "std": 1.729056,
+        "p01": 0.121,
+        "p05": 0.44,
+        "p25": 1.53,
+        "p50": 2.46,
+        "p75": 3.6925,
+        "p95": 5.9875,
+        "p99": 7.267,
+        "n_unique": 252
+      },
+      "gtrends_overdose": {
+        "min": 38.7,
+        "max": 82.46,
+        "mean": 54.100364,
+        "std": 7.521825,
+        "p01": 40.8488,
+        "p05": 44.74,
+        "p25": 48.87,
+        "p50": 52.42,
+        "p75": 57.8,
+        "p95": 68.472,
+        "p99": 76.2048,
+        "n_unique": 206
+      },
+      "gtrends_fentanyl": {
+        "min": 49.05,
+        "max": 100.66,
+        "mean": 68.772913,
+        "std": 9.183104,
+        "p01": 52.6328,
+        "p05": 57.504,
+        "p25": 61.95,
+        "p50": 66.88,
+        "p75": 73.34,
+        "p95": 86.474,
+        "p99": 97.7816,
+        "n_unique": 178
+      },
+      "gtrends_naloxone": {
+        "min": 45.6,
+        "max": 98.98,
+        "mean": 63.674538,
+        "std": 8.886865,
+        "p01": 48.3936,
+        "p05": 52.876,
+        "p25": 57.25,
+        "p50": 62.1,
+        "p75": 68.31,
+        "p95": 80.76,
+        "p99": 90.2664,
+        "n_unique": 203
+      },
+      "gtrends_opioid": {
+        "min": 36.67,
+        "max": 81.9,
+        "mean": 52.967507,
+        "std": 7.80118,
+        "p01": 39.9812,
+        "p05": 42.88,
+        "p25": 47.33,
+        "p50": 51.62,
+        "p75": 57.33,
+        "p95": 68.572,
+        "p99": 75.4676,
+        "n_unique": 204
+      },
+      "gtrends_methamphetamine": {
+        "min": 24.67,
+        "max": 63.42,
+        "mean": 38.422437,
+        "std": 6.076274,
+        "p01": 28.0104,
+        "p05": 29.61,
+        "p25": 34.19,
+        "p50": 37.4,
+        "p75": 41.81,
+        "p95": 49.83,
+        "p99": 55.5744,
+        "n_unique": 203
       }
     },
     "categorical_stats": {
-      "datetime": {
-        "n_unique": 6493,
+      "period_id": {
+        "n_unique": 7,
         "top_values": {
-          "2011-01-20 00:00:00": 1,
-          "2012-05-21 02:00:00": 1,
-          "2012-05-21 12:00:00": 1,
-          "2012-05-21 11:00:00": 1,
-          "2012-05-21 10:00:00": 1,
-          "2012-05-21 09:00:00": 1,
-          "2012-05-21 08:00:00": 1,
-          "2012-05-21 07:00:00": 1,
-          "2012-05-21 06:00:00": 1,
-          "2012-05-21 05:00:00": 1
+          "if5b8Sut": 51,
+          "aL5zkp6g": 51,
+          "dsZhPyK4": 51,
+          "kbpS9xmS": 51,
+          "DmKNJoJt": 51,
+          "lXSJn8AD": 51,
+          "yFh3wzPe": 51
+        }
+      },
+      "jurisdiction": {
+        "n_unique": 51,
+        "top_values": {
+          "AK": 7,
+          "PA": 7,
+          "ND": 7,
+          "NE": 7,
+          "NH": 7,
+          "NJ": 7,
+          "NM": 7,
+          "NV": 7,
+          "NY": 7,
+          "OH": 7
+        }
+      },
+      "state_doh_release": {
+        "n_unique": 242,
+        "top_values": {
+          "Alaska Department of Health Pilots Drug Checking and Fentanyl Test Strip Distribution\nBeginning this month the Department will support a pilot program providing fentanyl test strips and xylazine immunoassay strips through approximately 29 authorized harm reduction sites across Alaska. Drug checking allows individuals who use drugs to detect adulterants prior to use, an evidence-based intervention shown to reduce overdose risk. Test strips are legal under Alaska statute when used for harm reduction and are distributed at no cost to the recipient. Site locations are listed on the Department's harm reduction webpage. --- Alaska Department of Health Announces Expanded Over-the-Counter Naloxone Availability\nFollowing the U.S. Food and Drug Administration approval of over-the-counter naloxone nasal spray, Alaska Department of Health confirms that Narcan is now available without a prescription at participating retail pharmacies statewide, including major chains. The Department continues to operate 149 community distribution sites and supplies free naloxone to approximately 69 community-based organizations through state and federal opioid response funding. Residents may also request free naloxone by mail through the state harm-reduction program. The Department reminds the public that naloxone reverses opioid overdose only and is safe to administer; bystanders cannot harm a person who does not have opioids in their system.": 1,
+          "Idaho Department of Health and Welfare Issues Public Health Advisory on Cluster of Suspected Fentanyl-Involved Overdoses\nIdaho health officials are alerting clinicians, first responders, and the public to a recent cluster of 15 suspected nonfatal overdose events reported in the Meridian area. Preliminary toxicology indicates involvement of illicitly manufactured fentanyl, with several specimens also positive for xylazine. Naloxone remains the recommended reversal agent; clinicians should be prepared to administer repeat doses given fentanyl potency. Community members are encouraged to obtain naloxone through participating pharmacies or county health departments at no cost. Anyone witnessing an overdose should call 911; the Idaho Good Samaritan law provides limited protection from prosecution for those seeking help. --- Idaho Department of Health and Welfare Announces Expanded Over-the-Counter Naloxone Availability\nFollowing the U.S. Food and Drug Administration approval of over-the-counter naloxone nasal spray, Idaho Department of Health and Welfare confirms that Narcan is now available without a prescription at participating retail pharmacies statewide, including major chains. The Department continues to operate 42 community distribution sites and supplies free naloxone to approximately 23 community-based organizations through state and federal opioid response funding. Residents may also request free naloxone by mail through the state harm-reduction program. The Department reminds the public that naloxone reverses opioid overdose only and is safe to administer; bystanders cannot harm a person who does not have opioids in their system.": 1,
+          "Massachusetts Department of Public Health Issues Alert on Detection of Nitazene Synthetic Opioids\nState public health laboratory results have detected isotonitazene, N-pyrrolidino-protonitazene, and related synthetic opioids in samples submitted from 5 jurisdictions in the past 30 days. Nitazene analogues are extremely potent \u2014 some exceeding fentanyl in laboratory potency assays \u2014 and may not be reliably detected by point-of-care fentanyl test strips alone. Naloxone remains the recommended reversal agent; multiple sequential doses may be required. Clinicians treating suspected opioid overdose should consider repeat naloxone administration, airway management, and prolonged observation. --- Massachusetts Department of Public Health Opens Naloxone Vending Machines and Harm-Reduction Kiosks\nNaloxone vending machines providing free Narcan nasal spray, fentanyl test strips, and overdose education materials are now operational at 11 locations across Massachusetts, including Worcester, Boston, Springfield. The machines operate 24 hours a day and require no identification, prescription, or fee. Use of the machines is anonymous and protected under state public health authority. The Department will continue to expand kiosk placement in partnership with libraries, transit hubs, and community organizations.": 1,
+          "Maryland Department of Health Launches Quick Response Teams in Additional Counties\nQuick Response Teams (QRTs) consisting of behavioral health peers, paramedics, and law enforcement liaisons will begin operations in Davidson, Marion, Baltimore, Allegheny counties. QRTs follow up with overdose survivors within 72 hours of an emergency response, offering naloxone, fentanyl test strips where authorized, and warm handoffs to medication for opioid use disorder treatment. Funding for the expansion comes from a $8,400,000 CDC Overdose Data to Action grant administered by the Department's behavioral health division.": 1,
+          "Maine Department of Health and Human Services Expands Access to Medication for Opioid Use Disorder\nThe Department announces the addition of approximately 245 new buprenorphine-prescribing clinicians to the Maine treatment network as a result of the federal removal of the X-waiver requirement and continued state-led training programs. Buprenorphine, methadone, and extended-release naltrexone remain the first-line treatments for opioid use disorder. Residents seeking medication for opioid use disorder may use the SAMHSA treatment locator at FindTreatment.gov or contact the state addiction services helpline. Medicaid covers all three medications and counseling services without prior authorization. --- Maine Department of Health and Human Services Launches Quick Response Teams in Additional Counties\nQuick Response Teams (QRTs) consisting of behavioral health peers, paramedics, and law enforcement liaisons will begin operations in Fulton, Philadelphia, Baltimore, Mecklenburg counties. QRTs follow up with overdose survivors within 72 hours of an emergency response, offering naloxone, fentanyl test strips where authorized, and warm handoffs to medication for opioid use disorder treatment. Funding for the expansion comes from a $7,100,000 State Opioid Response grant administered by the Department's behavioral health division. --- Maine Department of Health and Human Services Announces Expanded Over-the-Counter Naloxone Availability\nFollowing the U.S. Food and Drug Administration approval of over-the-counter naloxone nasal spray, Maine Department of Health and Human Services confirms that Narcan is now available without a prescription at participating retail pharmacies statewide, including major chains. The Department continues to operate 132 community distribution sites and supplies free naloxone to approximately 31 community-based organizations through state and federal opioid response funding. Residents may also request free naloxone by mail through the state harm-reduction program. The Department reminds the public that naloxone reverses opioid overdose only and is safe to administer; bystanders cannot harm a person who does not have opioids in their system.": 1,
+          "Minnesota Department of Health Warns of Xylazine Mixed Into Illicit Drug Supply\nToxicology reports from Minnesota medical examiners and law-enforcement seizures continue to show xylazine, a non-opioid veterinary sedative, mixed into the illicit fentanyl supply. Xylazine \u2014 also known as 'tranq' \u2014 was detected in approximately 50 percent of fentanyl-positive specimens analyzed in the past quarter. Xylazine causes prolonged sedation and can produce severe soft-tissue wounds. Naloxone reverses the opioid component of these mixtures and should still be administered when overdose is suspected. Individuals presenting with non-healing wounds should seek medical evaluation and be screened for substance use treatment options including buprenorphine and methadone. --- Minnesota Department of Health Issues Alert on Detection of Nitazene Synthetic Opioids\nState public health laboratory results have detected isotonitazene, N-pyrrolidino-protonitazene, and related synthetic opioids in samples submitted from 4 jurisdictions in the past 30 days. Nitazene analogues are extremely potent \u2014 some exceeding fentanyl in laboratory potency assays \u2014 and may not be reliably detected by point-of-care fentanyl test strips alone. Naloxone remains the recommended reversal agent; multiple sequential doses may be required. Clinicians treating suspected opioid overdose should consider repeat naloxone administration, airway management, and prolonged observation.": 1,
+          "Missouri Department of Health and Senior Services Launches Quick Response Teams in Additional Counties\nQuick Response Teams (QRTs) consisting of behavioral health peers, paramedics, and law enforcement liaisons will begin operations in Kanawha, Cuyahoga, Baltimore counties. QRTs follow up with overdose survivors within 72 hours of an emergency response, offering naloxone, fentanyl test strips where authorized, and warm handoffs to medication for opioid use disorder treatment. Funding for the expansion comes from a $3,100,000 State Opioid Response grant administered by the Department's behavioral health division.": 1,
+          "Mississippi State Department of Health Launches Quick Response Teams in Additional Counties\nQuick Response Teams (QRTs) consisting of behavioral health peers, paramedics, and law enforcement liaisons will begin operations in Fulton, Cook, Marion, Suffolk counties. QRTs follow up with overdose survivors within 72 hours of an emergency response, offering naloxone, fentanyl test strips where authorized, and warm handoffs to medication for opioid use disorder treatment. Funding for the expansion comes from a $3,900,000 HRSA grant administered by the Department's behavioral health division. --- Mississippi State Department of Health Authorizes Expanded Syringe Services Program Coverage\nThe Department has approved expansion of authorized syringe services programs to additional counties under Mississippi public health authority. Syringe services programs reduce transmission of HIV and hepatitis C, connect individuals to medication for opioid use disorder, and distribute naloxone and fentanyl test strips. Decades of peer-reviewed evidence and CDC guidance support syringe services programs as a core component of the public health response to drug-related harms.": 1,
+          "Montana Department of Public Health and Human Services Expands Access to Medication for Opioid Use Disorder\nThe Department announces the addition of approximately 79 new buprenorphine-prescribing clinicians to the Montana treatment network as a result of the federal removal of the X-waiver requirement and continued state-led training programs. Buprenorphine, methadone, and extended-release naltrexone remain the first-line treatments for opioid use disorder. Residents seeking medication for opioid use disorder may use the SAMHSA treatment locator at FindTreatment.gov or contact the state addiction services helpline. Medicaid covers all three medications and counseling services without prior authorization.": 1,
+          "New Hampshire Department of Health and Human Services Warns of Xylazine Mixed Into Illicit Drug Supply\nToxicology reports from New Hampshire medical examiners and law-enforcement seizures continue to show xylazine, a non-opioid veterinary sedative, mixed into the illicit fentanyl supply. Xylazine \u2014 also known as 'tranq' \u2014 was detected in approximately 42 percent of fentanyl-positive specimens analyzed in the past quarter. Xylazine causes prolonged sedation and can produce severe soft-tissue wounds. Naloxone reverses the opioid component of these mixtures and should still be administered when overdose is suspected. Individuals presenting with non-healing wounds should seek medical evaluation and be screened for substance use treatment options including buprenorphine and methadone. --- New Hampshire Department of Health and Human Services Launches Quick Response Teams in Additional Counties\nQuick Response Teams (QRTs) consisting of behavioral health peers, paramedics, and law enforcement liaisons will begin operations in Davidson, Cabell, Cuyahoga, Jefferson counties. QRTs follow up with overdose survivors within 72 hours of an emergency response, offering naloxone, fentanyl test strips where authorized, and warm handoffs to medication for opioid use disorder treatment. Funding for the expansion comes from a $7,000,000 SAMHSA grant administered by the Department's behavioral health division.": 1
         }
       }
     },
-    "datetime_like_columns": [
-      "datetime"
-    ],
+    "datetime_like_columns": [],
     "potential_id_columns": [
-      "datetime"
+      "labor_force",
+      "state_doh_release"
     ],
     "constant_columns": [],
     "near_constant_columns": [],
-    "high_cardinality_columns": [],
-    "text_like_columns": [],
+    "high_cardinality_columns": [
+      "jurisdiction"
+    ],
+    "text_like_columns": [
+      "state_doh_release"
+    ],
     "duplicate_rows": 0,
-    "warnings": []
+    "warnings": [
+      "Column 'unemployment_rate' missing_rate=54.6% exceeds 5% threshold",
+      "Column 'labor_force' missing_rate=58.0% exceeds 5% threshold",
+      "Column 'precip_in' missing_rate=5.9% exceeds 5% threshold",
+      "Column 'state_doh_release' missing_rate=32.2% exceeds 5% threshold"
+    ]
   },
   "sample_submission": {
-    "path": "data/test/sampleSubmission.csv",
-    "n_rows": 6493,
-    "n_cols": 2,
+    "path": "data/sample_submission.csv",
+    "n_rows": 918,
+    "n_cols": 5,
     "columns": [
-      "datetime",
-      "count"
+      "row_id",
+      "period_id",
+      "jurisdiction",
+      "overdose_category",
+      "rate_per_10000_ed_visits"
     ],
     "dtypes": {
-      "datetime": "object",
-      "count": "int64"
+      "row_id": "int64",
+      "period_id": "object",
+      "jurisdiction": "object",
+      "overdose_category": "object",
+      "rate_per_10000_ed_visits": "float64"
     },
     "missing": {
-      "datetime": {
+      "row_id": {
         "count": 0,
         "rate": 0.0
       },
-      "count": {
+      "period_id": {
+        "count": 0,
+        "rate": 0.0
+      },
+      "jurisdiction": {
+        "count": 0,
+        "rate": 0.0
+      },
+      "overdose_category": {
+        "count": 0,
+        "rate": 0.0
+      },
+      "rate_per_10000_ed_visits": {
         "count": 0,
         "rate": 0.0
       }
     },
     "numeric_stats": {
-      "count": {
+      "row_id": {
+        "min": 0.0,
+        "max": 917.0,
+        "mean": 458.5,
+        "std": 265.148072,
+        "p01": 9.17,
+        "p05": 45.85,
+        "p25": 229.25,
+        "p50": 458.5,
+        "p75": 687.75,
+        "p95": 871.15,
+        "p99": 907.83,
+        "n_unique": 918
+      },
+      "rate_per_10000_ed_visits": {
         "min": 0.0,
         "max": 0.0,
         "mean": 0.0,
         "std": 0.0,
+        "p01": 0.0,
+        "p05": 0.0,
         "p25": 0.0,
         "p50": 0.0,
         "p75": 0.0,
-        "n_unique": 1,
-        "n_missing": 0
+        "p95": 0.0,
+        "p99": 0.0,
+        "n_unique": 1
       }
     },
     "categorical_stats": {
-      "datetime": {
-        "n_unique": 6493,
+      "period_id": {
+        "n_unique": 6,
         "top_values": {
-          "2011-01-20 00:00:00": 1,
-          "2012-05-21 02:00:00": 1,
-          "2012-05-21 12:00:00": 1,
-          "2012-05-21 11:00:00": 1,
-          "2012-05-21 10:00:00": 1,
-          "2012-05-21 09:00:00": 1,
-          "2012-05-21 08:00:00": 1,
-          "2012-05-21 07:00:00": 1,
-          "2012-05-21 06:00:00": 1,
-          "2012-05-21 05:00:00": 1
+          "aL5zkp6g": 153,
+          "yFh3wzPe": 153,
+          "lXSJn8AD": 153,
+          "kbpS9xmS": 153,
+          "DmKNJoJt": 153,
+          "if5b8Sut": 153
+        }
+      },
+      "jurisdiction": {
+        "n_unique": 51,
+        "top_values": {
+          "AK": 18,
+          "PA": 18,
+          "ND": 18,
+          "NE": 18,
+          "NH": 18,
+          "NJ": 18,
+          "NM": 18,
+          "NV": 18,
+          "NY": 18,
+          "OH": 18
+        }
+      },
+      "overdose_category": {
+        "n_unique": 3,
+        "top_values": {
+          "all_drugs": 306,
+          "all_opioids": 306,
+          "all_stimulants": 306
         }
       }
     },
-    "datetime_like_columns": [
-      "datetime"
-    ],
+    "datetime_like_columns": [],
     "potential_id_columns": [
-      "datetime"
+      "row_id"
     ],
     "constant_columns": [
-      "count"
+      "rate_per_10000_ed_visits"
     ],
     "near_constant_columns": [],
-    "high_cardinality_columns": [],
+    "high_cardinality_columns": [
+      "jurisdiction"
+    ],
     "text_like_columns": [],
     "duplicate_rows": 0,
     "warnings": [
-      "Column 'count' is constant"
+      "Column 'rate_per_10000_ed_visits' is constant (n_unique=1)"
     ]
   },
   "schema_diff": {
     "in_train_only": [
-      "casual",
-      "count",
-      "registered"
+      "overdose_category",
+      "rate_per_10000_ed_visits"
     ],
-    "in_prediction_only": [],
+    "in_prediction_only": [
+      "gtrends_fentanyl",
+      "gtrends_methamphetamine",
+      "gtrends_naloxone",
+      "gtrends_opioid",
+      "gtrends_overdose",
+      "labor_force",
+      "precip_in",
+      "state_doh_release",
+      "temp_avg_f",
+      "unemployment_rate"
+    ],
     "in_both": [
-      "atemp",
-      "datetime",
-      "holiday",
-      "humidity",
-      "season",
-      "temp",
-      "weather",
-      "windspeed",
-      "workingday"
-    ]
+      "jurisdiction",
+      "period_id"
+    ],
+    "note": "prediction_file is val/covariates.csv (covariates only). train_file is dose_sys_train.csv (target + id cols). Covariate features live in data/train/covariates.csv (train) + data/val/covariates.csv (pred). train-only columns [overdose_category, rate_per_10000_ed_visits] are expected (target + category key). prediction-only covariate columns are expected\u2014they exist in data/train/covariates.csv for train."
   },
+  "sidecars": [
+    {
+      "path_train": "data/train/images/mat_density",
+      "path_pred": "data/val/images/mat_density",
+      "modality": "image",
+      "format": "png",
+      "filename_pattern": "{jurisdiction}_{period_id}.png",
+      "key_columns": [
+        "jurisdiction",
+        "period_id"
+      ],
+      "n_files_train": 3927,
+      "n_files_pred": 357,
+      "sample_filenames_train": [
+        "AK_0Un18Xny.png",
+        "AK_1Tl9271R.png",
+        "AK_27DK2m8F.png",
+        "AK_3CdEQbdr.png",
+        "AK_3JILuYCd.png"
+      ],
+      "sample_filenames_pred": [
+        "AK_DmKNJoJt.png",
+        "AK_aL5zkp6g.png",
+        "AK_dsZhPyK4.png",
+        "AK_if5b8Sut.png",
+        "AK_kbpS9xmS.png"
+      ],
+      "train_keys_needed": 3927,
+      "pred_keys_needed": 357,
+      "train_coverage_pct": 100.0,
+      "pred_coverage_pct": 100.0,
+      "note": "One image per (jurisdiction, period_id); images vary per key, not group-constant; 100% coverage for both train and pred"
+    }
+  ],
   "split_structure": {
-    "type": "within_month_cross_day",
-    "cv_recommendation": "Within each calendar month, train rows are days 1-19 and prediction rows are days 20-end. CV must hold out late-sub-period rows (days 14-19) as a validation set while keeping early-sub-period rows (days 1-13) in train; a simple last-N% chronological holdout will be misleadingly optimistic because the split pattern repeats within every month. Within-period aggregates (e.g. month-level means from days 1-13) are valid features.",
-    "train_day_range": {
-      "min": 1,
-      "max": 19
+    "type": "chronological_no_overlap",
+    "cv_recommendation": "Chronological split: train covers 77 opaque period IDs mapped to 2019-01-31 to 2025-05-31, pred covers 6-7 opaque period IDs mapped to 2025-07-31 to 2025-12-31. No period overlap. Use time-series blocked GroupKFold on ordered period_id (ascending); hold out last N periods as validation fold, earlier periods as train folds. CV should be restricted to scoring overdose_category values to match the leaderboard MAE.",
+    "train_period_range": {
+      "start": "2019-01-31",
+      "end": "2025-05-31",
+      "n_periods": 77,
+      "n_jurisdictions": 51,
+      "n_categories": 8
     },
-    "test_day_range": {
-      "min": 20,
-      "max": 31
+    "test_period_range": {
+      "start": "2025-07-31",
+      "end": "2025-12-31",
+      "n_periods": 7,
+      "n_jurisdictions": 51
     },
-    "overlapping_months": 24,
+    "period_overlap": [],
     "sub_target_candidates": [
-      {
-        "column": "registered",
-        "corr_with_target": 0.9709
-      },
-      {
-        "column": "casual",
-        "corr_with_target": 0.6904
-      }
+      "overdose_category=benzodiazepine",
+      "overdose_category=cocaine",
+      "overdose_category=fentanyl",
+      "overdose_category=methamphetamine",
+      "overdose_category=heroin"
     ]
   },
   "target_distribution": {
     "type": "numeric",
-    "min": 1.0,
-    "max": 977.0,
-    "mean": 191.57413191254824,
-    "std": 181.14445383028496,
-    "p25": 42.0,
-    "p50": 145.0,
-    "p75": 284.0,
-    "skewness": 1.241895058803035,
-    "excess_kurtosis": 1.2989447727380323,
-    "log1p_skewness": -0.851294310261887,
+    "min": 0.05,
+    "max": 79.99,
+    "mean": 6.3522,
+    "std": 7.9698,
+    "p25": 1.68,
+    "p50": 3.21,
+    "p75": 7.5425,
+    "skewness": 2.7032,
+    "excess_kurtosis": 9.7963,
+    "log1p_skewness": 0.4995,
     "n_missing": 0,
     "recommend_log_transform": true,
-    "log_transform_reason": "Metric is RMSLE (error on log scale); log1p transforms target to align loss with evaluation. Skewness=1.242, log1p_skewness=-0.851."
+    "log_transform_reason": "Target skewness=2.703 (>1.0 threshold) with no negative values. log1p reduces skewness to 0.499 (ratio=0.18<0.5). Metric is MAE (not RMSLE), but strong right-skew and range 0.05-80.0 benefit from log-space modeling; recommend log1p transform."
   },
   "descriptive_summary": {
-    "train_n_rows": 10886,
-    "train_n_cols": 12,
-    "pred_n_rows": 6493,
-    "pred_n_cols": 9,
-    "target_column": "count",
+    "train_n_rows": 31416,
+    "train_n_cols": 4,
+    "train_cov_n_rows": 3927,
+    "train_cov_n_cols": 12,
+    "pred_n_rows": 357,
+    "pred_n_cols": 12,
+    "sample_sub_n_rows": 918,
+    "target_column": "rate_per_10000_ed_visits",
     "target_type": "numeric",
-    "target_mean": 191.57413191254824,
-    "target_std": 181.14445383028496,
-    "target_min": 1.0,
-    "target_max": 977.0,
-    "target_skewness": 1.241895058803035,
+    "target_mean": 6.3522,
+    "target_std": 7.9698,
+    "target_min": 0.05,
+    "target_max": 79.99,
+    "target_skewness": 2.7032,
     "recommend_log_transform": true,
-    "log_transform_reason": "Metric is RMSLE (error on log scale); log1p transforms target to align loss with evaluation. Skewness=1.242, log1p_skewness=-0.851.",
-    "columns_with_missing_in_train": [],
-    "max_missing_rate_in_train": 0.0,
-    "n_numeric_cols_train": 11,
-    "n_categorical_cols_train": 1,
-    "n_datetime_like_cols_train": 1,
-    "duplicate_rows_train": 0,
-    "high_cardinality_cols_train": [],
-    "constant_cols_train": []
+    "log_transform_reason": "Target skewness=2.703 (>1.0 threshold) with no negative values. log1p reduces skewness to 0.499 (ratio=0.18<0.5). Metric is MAE (not RMSLE), but strong right-skew and range 0.05-80.0 benefit from log-space modeling; recommend log1p transform.",
+    "train_cols_with_missing": [],
+    "pred_cols_with_missing": [
+      "unemployment_rate",
+      "labor_force",
+      "temp_avg_f",
+      "precip_in",
+      "state_doh_release"
+    ],
+    "train_max_missing_rate": 0.0,
+    "pred_max_missing_rate": 0.5798,
+    "train_n_numeric_cols": 1,
+    "train_n_categorical_cols": 3,
+    "train_n_datetime_like": 0,
+    "train_duplicate_rows": 0,
+    "pred_duplicate_rows": 0,
+    "train_high_cardinality_cols": [],
+    "train_constant_cols": [],
+    "sidecar_modalities": [
+      "image/mat_density"
+    ],
+    "n_train_periods": 77,
+    "n_pred_periods": 7,
+    "n_jurisdictions": 51,
+    "n_overdose_categories_train": 8,
+    "scoring_categories": [
+      "all_drugs",
+      "all_opioids",
+      "all_stimulants"
+    ]
   },
   "summary_warnings": [
-    "LOUD WARNING: within-period cross-sub-period split \u2014 train covers days 1-19, prediction covers days 20-end of each month. A simple last-N% chronological holdout will give misleadingly optimistic local scores. CV must hold out late-sub-period rows (days ~14-19) while keeping early-sub-period rows (days 1-13) in train.",
-    "Metric is RMSLE: recommend log1p transform on target before training and expm1 after prediction.",
-    "Column 'registered' (corr=0.9709 with target) is train-only \u2014 leakage as direct feature but valid as a sub-target (predict separately and sum).",
-    "Column 'casual' (corr=0.6904 with target) is train-only \u2014 leakage as direct feature but valid as a sub-target (predict separately and sum).",
-    "MissingnessAuditor not found in src/; missingness audit written manually below."
+    "PRED: 'unemployment_rate' missing_rate=54.6%",
+    "PRED: 'labor_force' missing_rate=58.0%",
+    "PRED: 'precip_in' missing_rate=5.9%",
+    "PRED: 'state_doh_release' missing_rate=32.2%",
+    "TRAIN_COV: 'temp_avg_f' missing_rate=5.9%",
+    "TRAIN_COV: 'precip_in' missing_rate=5.9%",
+    "TRAIN_COV: 'state_doh_release' missing_rate=29.6%",
+    "SCHEMA: prediction_file (val/covariates.csv) has no target. Train target is in dose_sys_train.csv. Covariate features must be joined from data/train/covariates.csv for train rows.",
+    "SCORING: MAE computed only on overdose_category in {all_drugs, all_opioids, all_stimulants}. CV metric must filter to these 3 categories.",
+    "TARGET: Strong right-skew (skewness=2.70); recommend_log_transform=True.",
+    "SPLIT: Chronological, no period overlap between train and pred. Use time-blocked CV ordered by period_id."
   ]
 }

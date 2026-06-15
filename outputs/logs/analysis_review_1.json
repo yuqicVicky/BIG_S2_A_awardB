@@ -6,47 +6,31 @@
     "feature_audit_review.json",
     "overfitting_leakage_audit.json"
   ],
-  "current_best_cv_score": 25.549220169969686,
-  "metric": "block_mae",
-  "baseline_cv_score": 143.01911446337385,
+  "current_best_cv_score": 1.653602,
+  "baseline_cv_score": 1.700229,
   "prev_round_cv_score": null,
   "round_over_round_improvement_pct": null,
-  "improvement_vs_baseline_pct": 82.14,
   "merged_high_impact_suggestions": [
     {
       "source_reviewer": "model-performance-reviewer",
       "category": "target_transform",
-      "suggestion": "Implement sub-target modeling: predict 'registered' and 'casual' separately per fold (corr 0.97/0.69 with count), sum predictions to form 'count'. Both columns are train-only — no leakage risk.",
+      "suggestion": "Heteroscedasticity corr=0.616 with Q4 mean_abs_residual=3.34 (5x Q1). Apply log1p to target in the specialist pipeline to compress right tail and reduce absolute error at high values. Ensure GBDT tuned-catboost uses log1p target consistently (floor's lightgbm_log already does this).",
       "expected_impact": "high",
-      "implementation_hint": "In feature_pipeline.py, train two per-fold GBDT models on registered and casual targets using early-day (day<=13) train rows; store OOF preds as registered_pred and casual_pred; sum as count_pred. Refit on full train for prediction frame."
+      "implementation_hint": "In feature_pipeline.py / specialist training, train on log1p(target) and predict back via expm1. Mirror the floor's _log model setup in the gbdt specialist."
     },
     {
       "source_reviewer": "model-performance-reviewer",
-      "category": "feature_engineering",
-      "suggestion": "Drop 'datetime__day' from all model features: train mean ~10 vs test mean ~25 (z=2.78) causes distribution shift. Currently present in authored specialist features; its removal will improve generalization to the 20-31 day range.",
+      "category": "hyperparameter_tuning",
+      "suggestion": "GBDT agent reports tune_iter=null — no randomized search budget was consumed. Run at least 30 Optuna/random-search iterations on catboost/LightGBM (learning_rate [0.01,0.1], num_leaves [63,255], min_child_samples [5,50], subsample/colsample [0.6,1.0]) on canonical 5-folds.",
       "expected_impact": "high",
-      "implementation_hint": "Remove 'datetime__day' from feature_spec.json groups and feature_pipeline.py output columns. Flag confirmed in validation_implications and data-pattern-analyzer output."
-    },
-    {
-      "source_reviewer": "feature-leakage-reviewer",
-      "category": "feature_engineering",
-      "suggestion": "Add hour_x_temp and hour_x_humidity interaction features: datetime__hour is the strongest signal and temp/humidity modulate ridership at each hour. These are absent from current authored_features_used.",
-      "expected_impact": "high",
-      "implementation_hint": "Add multiply interactions: hour_x_temp = datetime__hour * temp; hour_x_humidity = datetime__hour * humidity. Append to plan interactions spec in feature_pipeline.py."
-    },
-    {
-      "source_reviewer": "generalization-reviewer",
-      "category": "cv_validity",
-      "suggestion": "Switch CV scoring metric from block_mae to RMSLE to align model selection with the official leaderboard metric. MAE-optimal models may differ from RMSLE-optimal, especially on low-count hours. data_profile.json recommend_log_transform=true confirms log1p alignment is needed.",
-      "expected_impact": "high",
-      "implementation_hint": "Replace mean(abs(pred-true)) with sqrt(mean((log1p(pred)-log1p(true))**2)) in all scoring loops; clip pred>=0 before log1p. Update metric_name in model_selection.json and specialist cv_metric fields."
+      "implementation_hint": "Set tune_iter=30 in gbdt-specialist prompt; use Optuna or RandomizedSearchCV with early_stopping_rounds=50."
     }
   ],
-  "high_priority_suggestion_count": 4,
+  "high_priority_suggestion_count": 2,
   "blocking_leakage": false,
   "approved_for_final": true,
   "revert_promotion": false,
   "blacklist_candidate": "linear",
   "next_action": "stop_and_report",
-  "notes": "Round 1 complete. GBDT achieves 82.1% improvement over dummy baseline (block_mae 25.549 vs 143.019). No HIGH-severity leakage found; promoted GBDT winner is clean. Per CLAUDE.md improvement-round limit=1, next_action is stop_and_report unconditionally. Linear family blacklisted: NNLS weight 0.014, OOF 90.48 (255% worse than floor) — pure dead weight. Top future priorities: sub-target modeling (registered+casual), drop datetime__day distribution-shift feature, add hour interaction features, and align CV metric to official RMSLE."
+  "notes": "Round 1 single-round policy mandates stop_and_report. gbdt OOF block_mae=1.654 beats floor 1.700 by 2.7%; linear (NNLS weight 0.012, OOF=3.684, 116% worse than floor) is blacklisted as dead weight — skip next round's training if rerun. No HIGH-severity leakage (subtgt_mean_* mismatch is medium severity; imputation is low). No prior-round recurrence. Approved for final submission. Top priorities if a future round runs: log1p target transform (heteroscedasticity corr=0.616) and hyperparameter search (tune_iter=null)."
 }

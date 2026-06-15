@@ -1,0 +1,65 @@
+{
+  "run_id": "20260614_224500",
+  "round": 1,
+  "reviewer": "feature-engineering-reviewer",
+  "baseline_mae": 1.661112,
+  "prune_margin": 0.01661112,
+  "script_pruned_groups": [],
+  "final_pruned_groups": ["text_svd"],
+  "final_pruned_columns": [
+    "text_svd_0",
+    "text_svd_1",
+    "text_svd_2",
+    "text_svd_3",
+    "text_svd_4",
+    "text_svd_5",
+    "text_svd_6",
+    "text_svd_7"
+  ],
+  "restored_groups": [],
+  "extra_pruned_groups": [
+    {
+      "group": "text_svd",
+      "reason": "large group (8 cols), delta = -0.000853 (negative — removal helps), well within noise but non-positive; no leakage concern, no positive contribution demonstrated; dead weight, cut overfit surface + train cost"
+    }
+  ],
+  "group_decisions": {
+    "per_fold_aggregates": {
+      "script_decision": "keep",
+      "final_decision": "keep",
+      "delta": -0.009177,
+      "n_cols": 14,
+      "rationale": "Fold-aware target encodings and sub-target aggregates are systematically undervalued by single HGB ablation because per-fold recomputation adds noise on each held-out slice. Delta barely negative and well below prune_margin; these are canonical panel anchor features the tuned CatBoost/LGBM stack reliably exploits. Retain."
+    },
+    "text_svd": {
+      "script_decision": "keep",
+      "final_decision": "prune",
+      "delta": -0.000853,
+      "n_cols": 8,
+      "rationale": "Delta negative (removal helps) and trivially small; 8 SVD columns with no demonstrated positive contribution constitute dead weight enlarging the overfit surface."
+    },
+    "image_features": {
+      "script_decision": "keep",
+      "final_decision": "keep",
+      "delta": 0.001836,
+      "n_cols": 21,
+      "rationale": "Positive delta (removal hurts); static per (jurisdiction, period_id) — no leakage. Within noise but net positive direction; retain."
+    },
+    "datetime_derived": {
+      "script_decision": "keep",
+      "final_decision": "keep",
+      "delta": 0.017047,
+      "n_cols": 8,
+      "rationale": "Delta above prune_margin; clear unambiguous contributor. Keep."
+    },
+    "other_features": {
+      "script_decision": "keep",
+      "final_decision": "keep",
+      "delta": 0.0014,
+      "n_cols": 30,
+      "rationale": "Positive delta; contains target lags and rolling windows essential for time-series. Keep."
+    }
+  },
+  "rationale": "Script pruned nothing. Extra-pruned text_svd: 8 cols, delta = -0.000853 (negative — dead weight). Kept per_fold_aggregates despite small negative delta because fold-aware features are systematically discounted by the single-HGB proxy. datetime_derived is the strongest contributor (delta > prune_margin). image_features and other_features positive. No leakage review present (round 1).",
+  "next_action": "proceed_to_specialists"
+}

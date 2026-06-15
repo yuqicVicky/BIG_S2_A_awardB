@@ -42,8 +42,10 @@ holdout kept separate? Does it simulate the hidden-evaluation gap?
   the leaderboard is itself the red flag — recommend enabling `scoring_subset`.)
 - `cv_score` improved round-over-round but `holdout_score` worsened → CV leakage likely.
 - `holdout_score` improved but `cv_score` worsened → CV measurement inconsistent.
-- `abs(cv_score - holdout_score) > 0.08` → CV and holdout disagree by >8%; check the holdout
-  period/day range vs `spec_parse.json → detected_structure.split_pattern`.
+- `abs(cv_score - holdout_score) / max(baseline_cv_score, 1e-6) > 0.08` → CV and holdout
+  disagree by >8% *relative to the baseline score* (floor's `model_selection.json` CV); check
+  the holdout period/day range vs `spec_parse.json → detected_structure.split_pattern`.
+  (Using an absolute threshold is inappropriate when the metric scale differs across datasets.)
 - single-round CV improvement > 20% → possible target leakage in a new feature.
 
 **Prediction sanity** (compute from `submission.csv` vs the training target; corroborate

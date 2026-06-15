@@ -39,27 +39,73 @@ fall back to `report.pdf` if the Markdown is absent.
 
 For each check record PASS / WARN / FAIL with a specific location.
 
-1. **Numbers match logs.** Every number in the report matches its source log:
-   row counts vs `data_profile.json`; model scores vs `model_search.json` /
-   `final_model.json` (tol 0.005); missing rates vs `data_profile.json` (tol 0.001).
-   Any mismatch → FAIL.
-2. **Required sections present.** All 11 sections have headings; Section 8 has all eight
-   subsections (8.1–8.8). Missing any → FAIL.
-3. **Causal language absent.** Scan for "causes", "caused by", "leads to", "led to",
-   "effect of", "results in", "drives", "determines", "due to" in data-relationship
-   sentences. Each occurrence → FAIL.
-4. **Report describes THIS run.** No fixed conclusions unlinked to a log value; no column
-   / file / metric names absent from this run's logs; no claim contradicting a log value.
-   Confirm the report names the **official metric actually used for selection** (e.g.
-   block-MAE or RMSLE in log space, not a placeholder). Violations → FAIL.
-5. **Limitations coverage.** Every `data_profile.json.summary_warnings` entry is addressed
-   in Section 10. Missing critical_missing warning → FAIL; others → WARN.
-6. **Baseline comparison present.** If `model_search.json.used_baseline == true` or no
-   candidate beat the baseline, Section 7 states it explicitly. Missing → FAIL.
-7. **Overfitting section completeness.** Section 8 contains: validation-strategy rationale;
-   a train-val gap value OR explicit "not recorded"; n_splits OR "unavailable"; leakage
-   audit result OR "not run"; prediction sanity OR "not run"; selection rationale; repair
-   status. Missing subsection → WARN; present but not sourced from a log → FAIL.
+### Check 1 — Numeric spot-check (most important)
+
+Read these source logs, extract the values below, then find the **exact sentence** in the
+report that states each value and compare. Tolerance: ±0.005 for model scores, ±0.001 for
+rates/percentages, ±1 for integer counts. Any mismatch → FAIL with the actual vs reported
+values quoted.
+
+Mandatory values to spot-check (read from logs, not from the report):
+
+| Claim | Read from | Key path |
+|---|---|---|
+| Winning model OOF block-MAE | `{run_id}_ensemble_meta.json` | `scores.<winner>` or `best_score` |
+| Floor OOF block-MAE | `{run_id}_ensemble_meta.json` | `scores.floor` |
+| % improvement over floor | compute: (floor − winner) / floor × 100 | — |
+| Linear specialist OOF score | `{run_id}_agent_linear.json` or ensemble_meta | `scores.linear` |
+| NNLS blend score | `{run_id}_ensemble_meta.json` | `blend_score` or `scores.blend` |
+| Training row count | `data_profile.json` | `n_rows` or `row_count` |
+| Training period count | `spec_parse.json` or `data_profile.json` | period column cardinality |
+| Prediction / submission row count | `{run_id}_submission_validation.json` | `row_count` |
+| Target skewness | `data_profile.json` | `target_skewness` or `skewness` |
+| Top-1 missing rate (val set) | `data_profile.json` or `missingness_profile.json` | highest missing % in val |
+| Target autocorrelation lag-1 | `{run_id}_feature_influence.json` | `autocorrelation.lag_1` |
+| Heteroscedasticity correlation | `model_performance_review.json` | residual-magnitude corr value |
+| Number of features entering model | `{run_id}_feature_spec.json` | total columns after pruning |
+
+For each value: (a) record what the log says, (b) find the sentence in the report, (c) verdict.
+If the report omits a value entirely that should be present → WARN (not FAIL unless it's a
+headline number). If present but wrong → FAIL.
+
+### Check 2 — Required sections present
+
+All 11 sections have headings; Section 8 has all eight subsections (8.1–8.8). Missing → FAIL.
+
+### Check 3 — Causal language absent
+
+Scan for "causes", "caused by", "leads to", "led to", "effect of", "results in", "drives",
+"determines", "due to" in data-relationship sentences. Each occurrence → FAIL.
+
+### Check 4 — Report describes THIS run
+
+No fixed conclusions unlinked to a log value; no column / file / metric names absent from
+this run's logs; no claim contradicting a log value. Confirm the report names the official
+metric actually used for selection. Violations → FAIL.
+
+### Check 5 — Limitations coverage
+
+Every `data_profile.json.summary_warnings` entry is addressed in Section 10. Missing
+critical_missing warning → FAIL; others → WARN.
+
+### Check 6 — Baseline comparison present
+
+Section 6 or 7 states explicitly whether the winning model beat the floor/baseline and by
+how much. Missing → FAIL.
+
+### Check 7 — Overfitting section completeness
+
+Section 8 contains: validation-strategy rationale; train-val gap value OR "not recorded";
+n_splits OR "unavailable"; leakage audit result OR "not run"; prediction sanity OR "not run";
+selection rationale; repair status. Missing subsection → WARN; present but unsourced → FAIL.
+
+### Check 8 — Figures present and plausible
+
+At least one inline figure must be embedded in the report (the MD must contain at least one
+`![...](...)` line that references an existing PNG file in `outputs/reports/`). If zero
+figures are present → WARN (not FAIL, since figure generation can fail). If figures are
+referenced but the PNG files do not exist on disk → FAIL (broken link). Check each figure
+path that appears in the Markdown.
 
 ---
 
@@ -74,7 +120,10 @@ For each check record PASS / WARN / FAIL with a specific location.
   "checks": [
     {"check": 1, "name": "numbers_match_logs", "verdict": "pass|warn|fail", "location": "...", "detail": "..."}
   ],
-  "summary": {"total_checks": 7, "passed": 0, "warned": 0, "failed": 0},
+  "numeric_spotcheck": [
+    {"claim": "winning block-MAE", "log_value": 0.0, "report_value": 0.0, "verdict": "pass|fail"}
+  ],
+  "summary": {"total_checks": 8, "passed": 0, "warned": 0, "failed": 0},
   "required_revisions": [],
   "optional_improvements": [],
   "approved": true,

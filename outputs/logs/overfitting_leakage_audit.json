@@ -1,7 +1,6 @@
 {
   "round": 1,
   "reviewer": "generalization-reviewer",
-  "run_id": "20260614_175934",
   "overall_verdict": "WARN",
   "high_overfitting_risk": false,
   "checks": [
@@ -9,80 +8,49 @@
       "name": "cv_strategy_validity",
       "verdict": "pass",
       "severity": "low",
-      "detail": "cv_folds.json strategy='within_period_holdout' matches validation_strategy.json.chosen_strategy='within_period_holdout'. Val rows=3434 (days 14-19), train rows=7452 (days 1-13), per spec_parse.json sub_period_ranges train_days=1-19 / prediction_days=20-end. Correctly simulates the hidden-test gap. No group leakage; holdout not contaminated."
-    },
-    {
-      "name": "cv_single_split_variance",
-      "verdict": "warn",
-      "severity": "medium",
-      "detail": "n_folds=1 gives a single OOF estimate with cv_mae_std=0 (artificial stability, from agent_gbdt.json cv_stability). A single within-period holdout produces high-variance score estimates; the true generalization error cannot be bounded. Floor model_selection.json used a different scheme (GroupKFold n_splits=5 on year_month blocks) making floor vs gbdt OOF comparison (25.811 vs 25.549) methodologically inconsistent — they were scored on different fold assignments."
+      "detail": "validation_strategy.json.chosen_strategy=forward_expanding_time correctly applied: panel structure (jurisdiction x period_id), 5 folds, horizon=6 periods, expanding window trains strictly on past periods. cv_folds.json.scoring_restricted=True; OOF scored on 4590 rows (scoring categories all_drugs/all_opioids/all_stimulants in val folds only), matching leaderboard metric. Strategy correctly simulates hidden evaluation gap."
     },
     {
       "name": "cv_holdout_calibration",
-      "verdict": "pass",
-      "severity": "low",
-      "detail": "No separate held-out test score is available from any agent file; calibration gap abs(cv-holdout) cannot be computed. Only OOF val MAE is reported: floor=25.811, gbdt=25.549, blend=25.582 (ensemble_meta.json). Since there is no second holdout period, this check is underdetermined. Scores are self-consistent within the single-split setup. Single-round run; no round-over-round regression to judge."
-    },
-    {
-      "name": "cv_metric_vs_official_metric",
       "verdict": "warn",
       "severity": "medium",
-      "detail": "Official evaluation metric is RMSLE (spec_parse.json evaluation_metric='rmsle'). All CV scoring uses block_mae (agent_gbdt.json cv_metric='block_mae'). Model selection, NNLS blending, and keep-best decisions are all based on MAE — a proxy that does not penalise relative errors on small counts the same way RMSLE does. Target skewness=1.242 (data_profile.json) and data_profile.json recommend_log_transform=true confirm log1p alignment is needed for RMSLE optimisation. MAE-selected model may not be RMSLE-optimal."
-    },
-    {
-      "name": "improvement_over_baseline",
-      "verdict": "warn",
-      "severity": "medium",
-      "detail": "Improvement from dummy_mean baseline (block_mae=143.019, model_selection.json) to best gbdt OOF (25.549) is 82.1%, exceeding the >20% single-round threshold. However, baseline is a degenerate dummy_mean — 82% over a dummy mean is expected for a competent GBDT on a time-series count target. No evidence of target leakage: casual/registered are absent from authored_features_used (agent_gbdt.json); no future data used."
+      "detail": "No holdout_score available (agent_gbdt.json holdout_score=null); calibration can only be assessed via OOF. Floor internal cv_mean for best single model (lightgbm_log)=0.882 vs canonical OOF floor=1.700 — a 1.93x discrepancy documented in ensemble_meta.json as different protocols (floor uses its own val splits, not canonical folds). gbdt canonical OOF=1.654 vs floor canonical OOF=1.700 → 2.7% improvement, well within expected range. Baseline best (group_category_mean) canonical OOF=1.884; gbdt achieves 12.2% improvement — plausible. Single-round CV improvement is 2.7% (well below 20% leakage threshold). Primary concern: inability to verify OOF vs held-out period calibration due to no holdout_score."
     },
     {
       "name": "prediction_sanity",
-      "verdict": "pass",
-      "severity": "low",
-      "detail": "Confirmed via prediction_sanity.json and direct inspection of submission.csv (6493 rows). CV=0.919 (well above 0.01 threshold). pred_min=0.439, pred_max=875.35; train range [1, 977] — no clipping at bounds (0% at lower/upper). 0% outside ±5σ of train target. pred_mean=188.65 vs train_mean=191.57 (ratio=0.985, KS≈0.007) — no distribution shift. Row count exact match."
+      "verdict": "warn",
+      "severity": "medium",
+      "detail": "CoV=0.698 (>>0.01, not near-constant). No clipping at bounds (0% at lower bound). Pred range [3.281, 54.542] within train range [0.050, 79.990]. KS(OOF vs preds)=0.056 (<0.5) — no concerning distribution shift between val and test predictions. OOF mean=13.295 vs pred mean=12.730, ratio=1.044 — healthy. WARN: prediction_sanity.json reports pred_mean/train_mean ratio=2.004, flagging potential shift. However train_mean=6.352 includes all 8 overdose categories (incl. sub-categories with lower rates), while predictions cover only the 3 scored categories (all_drugs/all_opioids/all_stimulants) which have structurally higher rates. The ratio reflects a legitimate category-level difference, not model drift. 20 predictions (2.2%) exceed train p99=38.392; within acceptable bounds."
     },
     {
       "name": "train_val_gap",
-      "verdict": "pass",
+      "verdict": "warn",
       "severity": "low",
-      "detail": "No in-sample train-fold predictions are provided by specialist agents (only OOF val predictions exist in oof_gbdt.csv). A direct train-vs-val MAE gap cannot be computed. Proxy check: val target mean=196.56 vs train target mean=189.27 (3.8% shift, days 14-19 vs days 1-13) — mild temporal drift consistent with within-month structure, not a leakage indicator. No evidence of overfitting from available artifacts."
-    },
-    {
-      "name": "leakage_risk_casual_registered",
-      "verdict": "pass",
-      "severity": "low",
-      "detail": "validation_strategy.json flags 'casual' and 'registered' as high-severity leakage risks (train-only target components). agent_gbdt.json authored_features_used contains only OHE/interaction features (season__ohe_*, weather__ohe_*, temp_x_season, hour_x_workingday) — neither casual nor registered appears. Leakage exclusion honoured."
+      "detail": "No train_score available in agent_gbdt.json (train_score=null), so direct train-train gap cannot be computed. OOF=1.654 is the only available generalization estimate. Forward-expanding folds naturally produce some train-val gap as early periods are always in training; gap cannot be quantified without a holdout set. Distribution shift flagged in validation_strategy.json for gtrends_fentanyl (train mean=51.8, pred=68.8) and unemployment_rate (54.6% missing in pred vs 0% in train) suggests real-world generalization may be harder than OOF implies."
     }
   ],
   "suggestions": [
     {
-      "priority": "high",
-      "category": "cv_validity",
-      "suggestion": "Switch CV scoring metric from block_mae to RMSLE (log1p(pred) vs log1p(actual)) to align model selection with the official leaderboard metric. MAE-selected models may rank differently under RMSLE, especially for low-count hours.",
-      "expected_impact": "high",
-      "implementation_hint": "In scoring loops replace mean(abs(pred-true)) with sqrt(mean((log1p(pred)-log1p(true))**2)); clip pred to >=0 before log1p. Update model_selection.json metric_name and specialist cv_metric."
-    },
-    {
       "priority": "medium",
       "category": "cv_validity",
-      "suggestion": "Upgrade from a single within-period holdout (n_folds=1) to a rolling or repeated within-period CV to reduce score variance. Use each month's days 14-19 as a rotating val set across multiple month-windows.",
+      "suggestion": "Record a temporal holdout score (last 6 periods withheld from all model selection) to validate OOF calibration. Currently holdout_score=null in agent_gbdt.json, leaving calibration gap unverified.",
       "expected_impact": "medium",
-      "implementation_hint": "In cv_folds generation, iterate over each of the 24 months: train on days 1-13 of that month plus all prior months, validate on days 14-19 of that month. Average OOF MAEs across months. Keeps within-period structure per validation_strategy.json."
+      "implementation_hint": "In modeling-specialist, after training on all canonical folds, evaluate on a fixed held-out block (e.g., periods 72-77 of period_order) and log holdout_score to agent_{fam}.json."
     },
     {
       "priority": "medium",
       "category": "regularization",
-      "suggestion": "Ensure GBDT training applies log1p target transform to align the loss with RMSLE. data_profile.json recommend_log_transform=true; expm1 back-transform predictions before submission.",
-      "expected_impact": "high",
-      "implementation_hint": "Set y_train = np.log1p(raw_counts); train on transformed target; prediction = np.expm1(model.predict(X_test)). Clip final predictions to >=0."
+      "suggestion": "Address distribution shift in gtrends features (train mean 51.8 vs pred 68.8 for fentanyl) by using lag-differences or rank-normalised features rather than raw levels to reduce sensitivity to out-of-distribution covariate shift.",
+      "expected_impact": "medium",
+      "implementation_hint": "In feature_pipeline.py, replace raw gtrends_* columns with per-jurisdiction 1-period diff and 3-period rolling z-score."
     },
     {
       "priority": "low",
-      "category": "cv_validity",
-      "suggestion": "Standardise floor model_selection.json CV to use the same canonical cv_folds.json as specialists, so keep-best NNLS blending compares OOF scores on identical fold assignments rather than mixing GroupKFold(5) vs within-period-holdout.",
-      "expected_impact": "medium",
-      "implementation_hint": "Pass --cv-folds outputs/logs/{run_id}_cv_folds.json to the floor pipeline's main.py; disable its internal holdout_strategy in favour of the canonical folds file."
+      "category": "prediction_postprocess",
+      "suggestion": "Reconcile train_mean vs pred_mean reporting in prediction_sanity.json by restricting train_mean to scored categories (all_drugs/all_opioids/all_stimulants) to avoid misleading ratio=2.0 flag in future runs.",
+      "expected_impact": "low",
+      "implementation_hint": "Filter training target to spec_parse.json.scoring_subset.scoring_values before computing train_mean in the sanity check."
     }
   ],
-  "notes": "Overall WARN: no HIGH-severity fires. Two medium risks: CV optimises MAE not RMSLE (the official metric per spec_parse.json), and a single-split holdout gives zero variance estimate with floor/specialist OOF comparisons on inconsistent fold structures. Prediction distribution is healthy (CV=0.919, mean ratio=0.985, no clipping). No leakage of casual/registered into features confirmed."
+  "notes": "CV strategy is correctly specified (forward_expanding_time, scoring-restricted OOF). gbdt OOF block_mae=1.654 is a 2.7% improvement over floor and 12.2% over best baseline — plausible, no leakage signal. Main gap: no holdout_score to verify OOF calibration, and real covariate shift (gtrends, missing unemployment in pred) may cause OOF to underestimate test difficulty. No high-severity violations triggered."
 }

@@ -128,7 +128,7 @@ TABLE_HEADER_STYLE = TableStyle([
 ])
 
 
-def parse_markdown(md_text: str, styles):
+def parse_markdown(md_text: str, styles, md_dir: str = ""):
     """Parse Markdown lines into a list of reportlab Flowable objects."""
     story = []
     lines = md_text.splitlines()
@@ -218,14 +218,23 @@ def parse_markdown(md_text: str, styles):
         m = re.match(r"^!\[(.*?)\]\((.+?)\)\s*$", line)
         if m:
             alt, img_path = m.group(1), m.group(2)
-            if os.path.exists(img_path):
+            # Resolve relative paths against the MD file's directory
+            if not os.path.isabs(img_path) and md_dir:
+                resolved = os.path.join(md_dir, img_path)
+            else:
+                resolved = img_path
+            if os.path.exists(resolved):
                 try:
-                    iw, ih = ImageReader(img_path).getSize()
-                    scale = min(1.0, (usable_w * 0.78) / iw)
-                    story.append(Image(img_path, width=iw * scale, height=ih * scale))
+                    iw, ih = ImageReader(resolved).getSize()
+                    scale = min(1.0, (usable_w * 0.88) / iw)
+                    story.append(Image(resolved, width=iw * scale, height=ih * scale))
                     if alt:
-                        story.append(Paragraph(sanitize(alt), styles["body"]))
-                    story.append(Spacer(1, 6))
+                        caption_style = ParagraphStyle(
+                            "caption", parent=styles["body"], fontSize=8,
+                            textColor=INK_SOFT, spaceAfter=2,
+                        )
+                        story.append(Paragraph(sanitize(alt), caption_style))
+                    story.append(Spacer(1, 8))
                 except Exception:
                     pass
             i += 1
@@ -302,11 +311,14 @@ def header_footer(canvas, doc):
 
 
 def convert(md_path: str, pdf_path: str) -> None:
+    md_path = os.path.abspath(md_path)
+    md_dir = os.path.dirname(md_path)
+
     with open(md_path, encoding="utf-8") as f:
         md_text = f.read()
 
     styles = build_styles()
-    story = parse_markdown(md_text, styles)
+    story = parse_markdown(md_text, styles, md_dir=md_dir)
 
     frame = Frame(MARGIN, MARGIN, PAGE_W - 2 * MARGIN, PAGE_H - 2 * MARGIN, id="main")
     template = PageTemplate(id="main", frames=[frame], onPage=header_footer)

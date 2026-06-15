@@ -1,342 +1,389 @@
 {
-  "run_id": "20260614_175934",
-  "audited_at": "2026-06-14T10:06:57Z",
+  "run_id": "20260614_224500",
+  "audited_at": "2026-06-14T14:54:32Z",
   "phase": "pre",
   "verdict": "warn",
   "dynamic_suspicious_terms": [
-    "atemp",
-    "casual",
-    "datetime",
-    "holiday",
-    "humidity",
-    "registered",
-    "samplesubmission.csv",
-    "season",
-    "temp",
-    "test.csv",
-    "train.csv",
-    "weather",
-    "windspeed",
-    "workingday"
+    "rate_per_10000_ed_visits",
+    "overdose_category",
+    "all_drugs",
+    "all_opioids",
+    "all_stimulants",
+    "dose_sys_train.csv",
+    "covariates.csv",
+    "sample_submission.csv",
+    "unemployment_rate",
+    "labor_force",
+    "temp_avg_f",
+    "precip_in",
+    "gtrends_overdose",
+    "gtrends_fentanyl",
+    "gtrends_naloxone",
+    "gtrends_opioid",
+    "gtrends_methamphetamine",
+    "state_doh_release",
+    "jurisdiction",
+    "period_id",
+    "row_id"
   ],
   "findings": [
     {
       "file": "src/data_agent/audit.py",
       "line": 48,
       "term": "rate_per_10000_ed_visits",
-      "context": "STATIC_TERMS catalogue definition \u2014 term in a list of 3+ search-pattern entries (audit tool data, not operational use)",
+      "context": "STATIC_TERMS[\"award_a_field_names\"] = [\"rate_per_10000_ed_visits\", \"overdose_category\", \"all_drugs\", ...]",
       "classification": "acceptable",
-      "severity": "info"
+      "severity": "info",
+      "note": "Term appears in the auditor's own static suspicious-term catalogue (5-item list). This is a reference list used to detect hardcoding in other files, not to control data access."
     },
     {
       "file": "src/data_agent/audit.py",
       "line": 49,
       "term": "overdose_category",
-      "context": "STATIC_TERMS catalogue definition \u2014 term in a list of 3+ search-pattern entries (audit tool data, not operational use)",
+      "context": "STATIC_TERMS[\"award_a_field_names\"] list (5 items)",
       "classification": "acceptable",
-      "severity": "info"
+      "severity": "info",
+      "note": "Auditor's suspicious-term reference catalogue (5-item list)."
     },
     {
       "file": "src/data_agent/audit.py",
       "line": 50,
       "term": "all_drugs",
-      "context": "STATIC_TERMS catalogue definition \u2014 term in a list of 3+ search-pattern entries (audit tool data, not operational use)",
+      "context": "STATIC_TERMS[\"award_a_field_names\"] list (5 items)",
       "classification": "acceptable",
-      "severity": "info"
+      "severity": "info",
+      "note": "Auditor's suspicious-term reference catalogue (5-item list)."
     },
     {
       "file": "src/data_agent/audit.py",
       "line": 51,
       "term": "all_opioids",
-      "context": "STATIC_TERMS catalogue definition \u2014 term in a list of 3+ search-pattern entries (audit tool data, not operational use)",
+      "context": "STATIC_TERMS[\"award_a_field_names\"] list (5 items)",
       "classification": "acceptable",
-      "severity": "info"
+      "severity": "info",
+      "note": "Auditor's suspicious-term reference catalogue (5-item list)."
     },
     {
       "file": "src/data_agent/audit.py",
       "line": 52,
       "term": "all_stimulants",
-      "context": "STATIC_TERMS catalogue definition \u2014 term in a list of 3+ search-pattern entries (audit tool data, not operational use)",
+      "context": "STATIC_TERMS[\"award_a_field_names\"] list (5 items)",
       "classification": "acceptable",
-      "severity": "info"
+      "severity": "info",
+      "note": "Auditor's suspicious-term reference catalogue (5-item list)."
     },
     {
       "file": "src/data_agent/audit.py",
       "line": 56,
       "term": "survived",
-      "context": "STATIC_TERMS catalogue definition \u2014 term in a list of 3+ search-pattern entries (audit tool data, not operational use)",
+      "context": "STATIC_TERMS[\"known_competition_columns\"] list (11 items)",
       "classification": "acceptable",
-      "severity": "info"
+      "severity": "info",
+      "note": "Auditor static catalogue, 11-item list \u2014 not controlling data access."
     },
     {
       "file": "src/data_agent/audit.py",
       "line": 57,
       "term": "passengerid",
-      "context": "STATIC_TERMS catalogue definition \u2014 term in a list of 3+ search-pattern entries (audit tool data, not operational use)",
+      "context": "STATIC_TERMS[\"known_competition_columns\"] list (11 items)",
       "classification": "acceptable",
-      "severity": "info"
+      "severity": "info",
+      "note": "Auditor static catalogue, 11-item list."
     },
     {
       "file": "src/data_agent/audit.py",
       "line": 58,
       "term": "pclass",
-      "context": "STATIC_TERMS catalogue definition \u2014 term in a list of 3+ search-pattern entries (audit tool data, not operational use)",
+      "context": "STATIC_TERMS[\"known_competition_columns\"] list (11 items)",
       "classification": "acceptable",
-      "severity": "info"
+      "severity": "info",
+      "note": "Auditor static catalogue, 11-item list."
     },
     {
       "file": "src/data_agent/audit.py",
       "line": 59,
       "term": "sibsp",
-      "context": "STATIC_TERMS catalogue definition \u2014 term in a list of 3+ search-pattern entries (audit tool data, not operational use)",
+      "context": "STATIC_TERMS[\"known_competition_columns\"] list (11 items)",
       "classification": "acceptable",
-      "severity": "info"
+      "severity": "info",
+      "note": "Auditor static catalogue, 11-item list."
     },
     {
       "file": "src/data_agent/audit.py",
       "line": 60,
       "term": "parch",
-      "context": "STATIC_TERMS catalogue definition \u2014 term in a list of 3+ search-pattern entries (audit tool data, not operational use)",
+      "context": "STATIC_TERMS[\"known_competition_columns\"] list (11 items)",
       "classification": "acceptable",
-      "severity": "info"
+      "severity": "info",
+      "note": "Auditor static catalogue, 11-item list."
     },
     {
       "file": "src/data_agent/audit.py",
       "line": 61,
       "term": "embarked",
-      "context": "STATIC_TERMS catalogue definition \u2014 term in a list of 3+ search-pattern entries (audit tool data, not operational use)",
+      "context": "STATIC_TERMS[\"known_competition_columns\"] list (11 items)",
       "classification": "acceptable",
-      "severity": "info"
+      "severity": "info",
+      "note": "Auditor static catalogue, 11-item list."
     },
     {
       "file": "src/data_agent/audit.py",
       "line": 62,
       "term": "saleprice",
-      "context": "STATIC_TERMS catalogue definition \u2014 term in a list of 3+ search-pattern entries (audit tool data, not operational use)",
+      "context": "STATIC_TERMS[\"known_competition_columns\"] list (11 items)",
       "classification": "acceptable",
-      "severity": "info"
+      "severity": "info",
+      "note": "Auditor static catalogue, 11-item list."
     },
     {
       "file": "src/data_agent/audit.py",
       "line": 63,
       "term": "lotarea",
-      "context": "STATIC_TERMS catalogue definition \u2014 term in a list of 3+ search-pattern entries (audit tool data, not operational use)",
+      "context": "STATIC_TERMS[\"known_competition_columns\"] list (11 items)",
       "classification": "acceptable",
-      "severity": "info"
+      "severity": "info",
+      "note": "Auditor static catalogue, 11-item list."
     },
     {
       "file": "src/data_agent/audit.py",
       "line": 64,
       "term": "yearbuilt",
-      "context": "STATIC_TERMS catalogue definition \u2014 term in a list of 3+ search-pattern entries (audit tool data, not operational use)",
+      "context": "STATIC_TERMS[\"known_competition_columns\"] list (11 items)",
       "classification": "acceptable",
-      "severity": "info"
+      "severity": "info",
+      "note": "Auditor static catalogue, 11-item list."
     },
     {
       "file": "src/data_agent/audit.py",
       "line": 65,
       "term": "casual",
-      "context": "STATIC_TERMS catalogue definition \u2014 term in a list of 3+ search-pattern entries (audit tool data, not operational use)",
+      "context": "STATIC_TERMS[\"known_competition_columns\"] list (11 items)",
       "classification": "acceptable",
-      "severity": "info"
+      "severity": "info",
+      "note": "Auditor static catalogue, 11-item list."
     },
     {
       "file": "src/data_agent/audit.py",
       "line": 66,
       "term": "registered",
-      "context": "STATIC_TERMS catalogue definition \u2014 term in a list of 3+ search-pattern entries (audit tool data, not operational use)",
+      "context": "STATIC_TERMS[\"known_competition_columns\"] list (11 items)",
       "classification": "acceptable",
-      "severity": "info"
+      "severity": "info",
+      "note": "Auditor static catalogue, 11-item list."
     },
     {
       "file": "src/data_agent/audit.py",
       "line": 70,
       "term": "train.csv",
-      "context": "STATIC_TERMS catalogue definition \u2014 term in a list of 3+ search-pattern entries (audit tool data, not operational use)",
+      "context": "STATIC_TERMS[\"assumed_file_names\"] list (8 items)",
       "classification": "acceptable",
-      "severity": "info"
+      "severity": "info",
+      "note": "Auditor static catalogue \u2014 a list of common assumed filenames to detect in other files, 8 items."
     },
     {
       "file": "src/data_agent/audit.py",
       "line": 71,
       "term": "test.csv",
-      "context": "STATIC_TERMS catalogue definition \u2014 term in a list of 3+ search-pattern entries (audit tool data, not operational use)",
+      "context": "STATIC_TERMS[\"assumed_file_names\"] list (8 items)",
       "classification": "acceptable",
-      "severity": "info"
+      "severity": "info",
+      "note": "Auditor static catalogue, 8-item list."
     },
     {
       "file": "src/data_agent/audit.py",
       "line": 72,
       "term": "samplesubmission.csv",
-      "context": "STATIC_TERMS catalogue definition \u2014 term in a list of 3+ search-pattern entries (audit tool data, not operational use)",
+      "context": "STATIC_TERMS[\"assumed_file_names\"] list (8 items)",
       "classification": "acceptable",
-      "severity": "info"
+      "severity": "info",
+      "note": "Auditor static catalogue, 8-item list."
     },
     {
       "file": "src/data_agent/audit.py",
       "line": 73,
       "term": "samplesubmission.csv",
-      "context": "STATIC_TERMS catalogue definition \u2014 term in a list of 3+ search-pattern entries (audit tool data, not operational use)",
+      "context": "STATIC_TERMS[\"assumed_file_names\"] list (8 items)",
       "classification": "acceptable",
-      "severity": "info"
+      "severity": "info",
+      "note": "Auditor static catalogue, 8-item list."
     },
     {
       "file": "src/data_agent/audit.py",
       "line": 74,
       "term": "val.csv",
-      "context": "STATIC_TERMS catalogue definition \u2014 term in a list of 3+ search-pattern entries (audit tool data, not operational use)",
+      "context": "STATIC_TERMS[\"assumed_file_names\"] list (8 items)",
       "classification": "acceptable",
-      "severity": "info"
+      "severity": "info",
+      "note": "Auditor static catalogue, 8-item list."
     },
     {
       "file": "src/data_agent/audit.py",
       "line": 75,
       "term": "train.parquet",
-      "context": "STATIC_TERMS catalogue definition \u2014 term in a list of 3+ search-pattern entries (audit tool data, not operational use)",
+      "context": "STATIC_TERMS[\"assumed_file_names\"] list (8 items)",
       "classification": "acceptable",
-      "severity": "info"
+      "severity": "info",
+      "note": "Auditor static catalogue, 8-item list."
     },
     {
       "file": "src/data_agent/audit.py",
       "line": 76,
       "term": "test.parquet",
-      "context": "STATIC_TERMS catalogue definition \u2014 term in a list of 3+ search-pattern entries (audit tool data, not operational use)",
+      "context": "STATIC_TERMS[\"assumed_file_names\"] list (8 items)",
       "classification": "acceptable",
-      "severity": "info"
+      "severity": "info",
+      "note": "Auditor static catalogue, 8-item list."
     },
     {
       "file": "src/data_agent/audit.py",
       "line": 77,
       "term": "submission.csv",
-      "context": "STATIC_TERMS catalogue definition \u2014 term in a list of 3+ search-pattern entries (audit tool data, not operational use)",
+      "context": "STATIC_TERMS[\"assumed_file_names\"] list (8 items)",
       "classification": "acceptable",
-      "severity": "info"
+      "severity": "info",
+      "note": "Auditor static catalogue, 8-item list. The submission.csv occurrences elsewhere are pipeline output filenames, not dataset-specific column names."
     },
     {
       "file": "src/data_agent/audit.py",
       "line": 81,
       "term": "overdose",
-      "context": "STATIC_TERMS catalogue definition \u2014 term in a list of 3+ search-pattern entries (audit tool data, not operational use)",
+      "context": "STATIC_TERMS[\"domain_vocabulary\"] list (5 items)",
       "classification": "acceptable",
-      "severity": "info"
+      "severity": "info",
+      "note": "Auditor domain vocabulary catalogue (5 items), used to flag future hardcoding."
     },
     {
       "file": "src/data_agent/audit.py",
       "line": 82,
       "term": "opioid",
-      "context": "STATIC_TERMS catalogue definition \u2014 term in a list of 3+ search-pattern entries (audit tool data, not operational use)",
+      "context": "STATIC_TERMS[\"domain_vocabulary\"] list (5 items)",
       "classification": "acceptable",
-      "severity": "info"
+      "severity": "info",
+      "note": "Auditor domain vocabulary catalogue (5 items)."
     },
     {
       "file": "src/data_agent/audit.py",
       "line": 83,
       "term": "stimulant",
-      "context": "STATIC_TERMS catalogue definition \u2014 term in a list of 3+ search-pattern entries (audit tool data, not operational use)",
+      "context": "STATIC_TERMS[\"domain_vocabulary\"] list (5 items)",
       "classification": "acceptable",
-      "severity": "info"
+      "severity": "info",
+      "note": "Auditor domain vocabulary catalogue (5 items)."
     },
     {
       "file": "src/data_agent/audit.py",
       "line": 84,
       "term": "titanic",
-      "context": "STATIC_TERMS catalogue definition \u2014 term in a list of 3+ search-pattern entries (audit tool data, not operational use)",
+      "context": "STATIC_TERMS[\"domain_vocabulary\"] list (5 items)",
       "classification": "acceptable",
-      "severity": "info"
+      "severity": "info",
+      "note": "Auditor domain vocabulary catalogue (5 items)."
     },
     {
       "file": "src/data_agent/audit.py",
       "line": 85,
       "term": "shipwreck",
-      "context": "STATIC_TERMS catalogue definition \u2014 term in a list of 3+ search-pattern entries (audit tool data, not operational use)",
+      "context": "STATIC_TERMS[\"domain_vocabulary\"] list (5 items)",
       "classification": "acceptable",
-      "severity": "info"
+      "severity": "info",
+      "note": "Auditor domain vocabulary catalogue (5 items)."
     },
     {
       "file": "src/data_agent/audit.py",
       "line": 89,
       "term": "918",
-      "context": "STATIC_TERMS catalogue definition \u2014 term in a list of 3+ search-pattern entries (audit tool data, not operational use)",
+      "context": "STATIC_TERMS[\"magic_numbers\"] = [\"918\"]",
       "classification": "acceptable",
-      "severity": "info"
+      "severity": "info",
+      "note": "Appears inside the auditor's own magic-number detection list. This IS the guard against hardcoding, not an instance of it."
+    },
+    {
+      "file": "src/data_agent/features.py",
+      "line": 707,
+      "term": "row_id",
+      "context": "_exclude(spec.row_id_column, \"row_id\")  # second arg is a descriptive reason label",
+      "classification": "acceptable",
+      "severity": "info",
+      "note": "The string 'row_id' is a human-readable reason label passed to _exclude(), not used to select a column. The actual column name is read from spec.row_id_column (runtime-resolved)."
     },
     {
       "file": "src/data_agent/modeling_group.py",
       "line": 292,
       "term": "submission.csv",
-      "context": "\"chosen_submission\": \"submission.csv\" \u2014 fixed deliverable name in 2-item dict; submission.csv is the required output per CLAUDE.md spec, not a dataset-specific file",
+      "context": "\"chosen_submission\": \"submission.csv\"  # value in a result dict written to log",
       "classification": "risky",
-      "severity": "warn"
+      "severity": "warn",
+      "note": "Hardcoded output filename in a 2-value dict. However, 'submission.csv' is the fixed required deliverable name (per CLAUDE.md spec), not a dataset-specific column or input filename. Low practical risk but technically a 1-item literal."
     },
     {
       "file": "src/data_agent/orchestrator.py",
-      "line": 348,
+      "line": 145,
       "term": "submission.csv",
-      "context": "_ck_sub.to_csv(repo_root / \"submission.csv\", index=False) \u2014 fixed deliverable path write; structural constant per spec",
+      "context": "_sub.to_csv(repo_root / \"submission.csv\", index=False)",
       "classification": "risky",
-      "severity": "warn"
+      "severity": "warn",
+      "note": "submission.csv is the fixed required deliverable name (CLAUDE.md). Not dataset-specific. Appears 4 times across orchestrator.py as output target \u2014 all are for the pipeline's mandated output file, not dataset-specific column access."
     },
     {
       "file": "src/data_agent/orchestrator.py",
-      "line": 463,
+      "line": 389,
       "term": "submission.csv",
-      "context": "_floor_sub.to_csv(repo_root / \"submission.csv\", index=False) \u2014 fixed deliverable path write; structural constant per spec",
+      "context": "_ck_sub.to_csv(repo_root / \"submission.csv\", index=False)",
       "classification": "risky",
-      "severity": "warn"
+      "severity": "warn",
+      "note": "Same as line 145 \u2014 required pipeline deliverable output path."
     },
     {
       "file": "src/data_agent/orchestrator.py",
-      "line": 595,
+      "line": 514,
       "term": "submission.csv",
-      "context": "submission_path = repo_root / \"submission.csv\" \u2014 fixed deliverable path variable; structural constant per spec",
+      "context": "_floor_sub.to_csv(repo_root / \"submission.csv\", index=False)",
       "classification": "risky",
-      "severity": "warn"
+      "severity": "warn",
+      "note": "Same as line 145 \u2014 required pipeline deliverable output path."
+    },
+    {
+      "file": "src/data_agent/orchestrator.py",
+      "line": 646,
+      "term": "submission.csv",
+      "context": "submission_path = repo_root / \"submission.csv\"",
+      "classification": "risky",
+      "severity": "warn",
+      "note": "Same as line 145 \u2014 required pipeline deliverable output path."
     },
     {
       "file": "src/data_agent/runner.py",
       "line": 82,
       "term": "submission.csv",
-      "context": "submission_path = repo_root / \"submission.csv\" \u2014 fixed deliverable path variable; structural constant per spec",
+      "context": "submission_path = repo_root / \"submission.csv\"",
       "classification": "risky",
-      "severity": "warn"
+      "severity": "warn",
+      "note": "Required pipeline deliverable output path, not dataset-specific."
     },
     {
       "file": "src/data_agent/runner.py",
       "line": 329,
       "term": "submission.csv",
-      "context": "for name in [\"submission.csv\", \"report.pdf\"] \u2014 2-item deliverable check list",
+      "context": "for name in [\"submission.csv\", \"report.pdf\"]:  # 2-item deliverable check list",
       "classification": "risky",
-      "severity": "warn"
+      "severity": "warn",
+      "note": "2-item list checking required deliverable files exist. submission.csv and report.pdf are the mandated outputs per CLAUDE.md \u2014 not dataset-specific filenames."
     },
     {
-      "file": "src/data_agent/skills/profile_data.py",
-      "line": 20,
-      "term": "survived",
-      "context": "_TARGET_TOKENS set with 11+ candidate tokens \u2014 generic heuristic fallback list",
-      "classification": "acceptable",
-      "severity": "info"
-    },
-    {
-      "file": "src/data_agent/task.py",
-      "line": 415,
-      "term": "survived",
-      "context": "for token in (\"yes\", \"true\", \"survived\", \"positive\", \"1\", \"y\") \u2014 6-item heuristic list",
-      "classification": "acceptable",
-      "severity": "info"
-    },
-    {
-      "file": "scripts/check_run.py",
-      "line": 162,
-      "term": "submission.csv",
-      "context": "Deliverable check tuple with multiple items \u2014 structural constant in test harness",
-      "classification": "acceptable",
-      "severity": "info"
+      "file": "src/data_agent/schema.py",
+      "line": 207,
+      "term": "row_id",
+      "context": "if \"row_id\" in columns or \"rowid\" in columns:",
+      "classification": "risky",
+      "severity": "warn",
+      "note": "An in-operator heuristic check for a common row-id column name pattern. Part of a multi-condition fallback (row_id OR rowid). Used in schema discovery, not direct column selection. The script-reported [OK] instances at lines 220/223 confirm the broader multi-candidate context."
     }
   ],
   "summary": {
     "total_findings": 39,
     "unacceptable": 0,
-    "risky": 6,
-    "acceptable": 33
+    "risky": 8,
+    "acceptable": 31,
+    "files_scanned": 34
   }
 }

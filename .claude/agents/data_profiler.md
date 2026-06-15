@@ -129,28 +129,58 @@ split warning when applicable.
 
 ---
 
-## Missingness audit (invoke the missingness-audit-planner skill)
+## Missingness audit — direct computation
 
-After writing `data_profile.json`, run the column-level imputation audit. The
-`MissingnessAuditor` in `src/` is a reusable helper — load it and run it (resolve train/
-prediction/target names from `spec_parse.json`):
+After writing `data_profile.json`, author and run a script to write the missingness audit files.
+Resolve all names from `spec_parse.json`; never hardcode column names, file names, or thresholds.
 
 ```python
-import sys, pathlib, json, pandas as pd
-sys.path.insert(0, "src")
-spec  = json.load(open("outputs/logs/spec_parse.json"))
+import json, pandas as pd
+from pathlib import Path
+
+spec = json.load(open("outputs/logs/spec_parse.json"))
 df_train   = pd.read_csv(spec["train_file"])      if spec.get("train_file") else None
 df_predict = pd.read_csv(spec["prediction_file"]) if spec.get("prediction_file") else None
-try:
-    from missingness_auditor import MissingnessAuditor
-    auditor = MissingnessAuditor(df_train, predict_df=df_predict, target_col=spec.get("target_column"))
-    auditor.save_outputs(auditor.run(), "outputs/")
-except ImportError:
-    pass  # log a warning in data_profile.json → summary_warnings and continue
+target_col = spec.get("target_column")
+
+def audit_missingness(df, role):
+    if df is None:
+        return {"role": role, "columns": {}}
+    miss = df.isnull().sum()
+    rate = (miss / len(df)).round(4)
+    return {
+        "role": role,
+        "n_rows": len(df),
+        "columns": {col: {"missing_count": int(miss[col]), "missing_rate": float(rate[col])}
+                    for col in df.columns if miss[col] > 0},
+    }
+
+missingness = {
+    "train": audit_missingness(df_train, "train"),
+    "prediction": audit_missingness(df_predict, "prediction"),
+}
+Path("outputs/logs").mkdir(parents=True, exist_ok=True)
+Path("outputs/logs/missingness_profile.json").write_text(json.dumps(missingness, indent=2))
+
+def recommend_strategy(df, col, target_col):
+    if df is None or col not in df.columns:
+        return "skip"
+    if col == target_col:
+        return "exclude"
+    dtype = str(df[col].dtype)
+    return "median_per_fold" if ("float" in dtype or "int" in dtype) else "mode"
+
+plan = {"columns": {}}
+if df_train is not None:
+    for col in df_train.columns:
+        if df_train[col].isnull().any():
+            plan["columns"][col] = {"strategy": recommend_strategy(df_train, col, target_col)}
+Path("outputs/logs/imputation_plan.json").write_text(json.dumps(plan, indent=2))
+print("missingness audit done —", len(plan["columns"]), "columns need imputation")
 ```
 
 Confirm `outputs/logs/missingness_profile.json` and `outputs/logs/imputation_plan.json` exist.
-If the auditor is unavailable, log a warning in `summary_warnings` and continue (never halt).
+Never halt on failure — log a warning in `summary_warnings` and continue.
 
 ---
 

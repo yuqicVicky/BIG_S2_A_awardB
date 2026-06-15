@@ -1,76 +1,51 @@
 {
   "round": 1,
   "reviewer": "model-performance-reviewer",
-  "current_best_cv_score": 25.549220169969686,
+  "current_best_cv_score": 1.653602,
   "metric": "block_mae",
-  "baseline_cv_score": 143.01911446337385,
-  "improvement_vs_baseline_pct": 82.14,
+  "baseline_cv_score": 1.700229,
+  "improvement_vs_baseline_pct": 2.74,
   "train_val_gap": null,
   "cv_relative_stability": 0.0,
-  "overfit_risk": "low",
-  "sources": {
-    "best_model": "20260614_175934_agent_gbdt.json — best_single:gbdt (stack(lightgbm_sqrt+lightgbm+lightgbm_strong)), cv=25.549",
-    "floor": "20260614_175934_model_selection.json — floor=25.811 (stack lightgbm_sqrt+lightgbm+lightgbm_strong), baseline dummy_mean=143.019",
-    "linear": "20260614_175934_agent_linear.json — elastic_net cv=90.478 (3.5x worse than gbdt)",
-    "ensemble": "20260614_175934_ensemble_meta.json — NNLS blend score=25.582 (worse than best single gbdt=25.549); choice=best_single:gbdt",
-    "stability": "20260614_175934_model_stability_by_split.json — single-fold cv_mae_std=0.0 (only 1 split reported for both specialists)",
-    "residuals": "20260614_175934_state.json residual_analysis — Q4 mean_residual=+19.41 (true quantile), high_value_bias=systematic_underprediction (65.1% of top-value rows underpredicted, mean_residual=+19.18), heteroscedasticity_corr=0.454"
-  },
-  "key_findings": [
-    "GBDT specialist improved floor by 1.0% (25.549 vs 25.811); improvement vs dummy baseline is 82.1%.",
-    "Linear family (elastic_net cv=90.48) performed 3.5x worse than floor — received NNLS weight 0.014 (near-zero) in the blend but was still included.",
-    "NNLS blend (25.582) lost to best single GBDT (25.549); blend degraded result slightly — linear family is dead weight.",
-    "Only 1 CV split reported for specialists (cv_mae_std=0.0); this is a single-fold eval, not full 5-fold CV scored at specialist level, limiting generalization confidence.",
-    "Residual analysis shows systematic underprediction of high-value rows: 65.1% of top-quantile true values underpredicted, mean residual=+19.18. Q4 (by true quantile) mean_residual=+19.41 vs Q1 mean_residual=-2.98. Heteroscedasticity corr=0.454 (moderate).",
-    "Sub-target modeling (predict casual + registered separately and sum) was recommended by data-pattern-analyzer (registered r=0.970, casual r=0.690 with count) but does NOT appear to have been implemented — the feature set in state.json shows no tgt_* or casual/registered derived features.",
-    "Within-period early-day aggregates (group mean by hour/month/year/workingday) were recommended as the primary leakage-safe temporal signal but are absent from authored_features_used in specialist outputs.",
-    "GBDT specialist search_effort.tune_iter and seeds are both null — no evidence of hyperparameter tuning or seed-averaging was performed."
-  ],
+  "overfit_risk": "moderate",
+  "notes": "GBDT specialist (stack: tuned-catboost + hgb_log + catboost_log) beats floor OOF by 2.7% (1.654 vs 1.700). However, GBDT stability is 0.0/single-split — the specialist scored only one aggregate OOF, not 5-fold per-candidate, making stability unassessable. Residual analysis shows strong heteroscedasticity (corr=0.616): Q4 mean_abs_residual=3.34 vs Q1=0.67 — high-value observations drive error. Linear scored 3.68 (NNLS weight 0.012, near-dead weight). Pred mean=12.73 vs train mean=6.35 (ratio 2.0) is elevated but passes sanity. tune_iter=null in gbdt agent suggests no randomized hyperparameter search was logged.",
   "suggestions": [
     {
       "priority": "high",
       "category": "target_transform",
-      "suggestion": "Implement sub-target modeling: predict 'registered' and 'casual' separately (both train-only, high r with count: 0.97 and 0.69), sum predictions to form 'count'. This is the primary untapped accuracy lever as shown in state.json sub_target_correlations.",
+      "suggestion": "Heteroscedasticity corr=0.616 with Q4 mean_abs_residual=3.34 (5x Q1). Apply log1p to the target in the specialist pipeline to compress the right tail and reduce absolute error at high values. The floor already uses _log variants and they outperform raw models.",
       "expected_impact": "high",
-      "implementation_hint": "In feature_pipeline.py, add target columns 'registered' and 'casual' to the training feature spec as sub-targets; train two GBDT models per fold, sum OOF predictions as the count OOF. They are absent from prediction data so no leakage risk."
+      "implementation_hint": "In feature_pipeline.py / specialist training, train on log1p(target) and predict back via expm1. The floor's lightgbm_log already does this and scores 0.882 OOF — ensure the GBDT specialist's tuned-catboost also uses log1p target consistently."
     },
     {
       "priority": "high",
-      "category": "feature_engineering",
-      "suggestion": "Add within-period early-day group aggregates: for each (hour, month, year, workingday, season) group, compute mean/median/std of count using only rows with day <= 13 (safe early-period). These are leakage-free and the data-pattern-analyzer identified them as the top temporal signal substitute for lags.",
+      "category": "hyperparameter_tuning",
+      "suggestion": "GBDT agent reports tune_iter=null — no randomized search budget was consumed. Run at least 30 Optuna/random-search iterations on catboost/LightGBM (learning_rate in [0.01,0.1], num_leaves in [63,255], min_child_samples in [5,50], subsample/colsample in [0.6,1.0]) on canonical 5-folds to replace the default single-configuration run.",
       "expected_impact": "high",
-      "implementation_hint": "In feature_pipeline.py, compute per-fold groupby(['datetime__hour','datetime__month','datetime__year','workingday']).agg({'count':['mean','std']}) restricted to day<=13 training rows; merge back to full train+pred set."
-    },
-    {
-      "priority": "high",
-      "category": "feature_engineering",
-      "suggestion": "Drop 'datetime__day' as a model feature: data-pattern-analyzer confirmed it shifts from train mean=10 to test mean=25 (z=2.78, severity=medium). Its inclusion degrades generalization to the 20-31 day range. Currently included in final_feature_columns per state.json.",
-      "expected_impact": "high",
-      "implementation_hint": "Remove 'datetime__day' from feature_spec.json groups and feature_pipeline.py output columns. It was flagged in validation_implications as 'do not use datetime__day as a direct feature'."
+      "implementation_hint": "Set tune_iter=30 in the gbdt-specialist prompt; use optuna or RandomizedSearchCV with cv=canonical_folds; early_stopping_rounds=50."
     },
     {
       "priority": "medium",
       "category": "ensemble",
-      "suggestion": "Blacklist linear family from NNLS blend: elastic_net cv=90.48 vs floor=25.81 (250% worse); NNLS weight=0.014 (near-zero); blend score 25.582 is worse than best single 25.549. Drop linear from next round's pool to remove noise.",
+      "suggestion": "Linear family (NNLS weight 0.012) is near-dead weight. Drop it from next-round NNLS pool to save 854s of training time. The gap vs floor (3.68 vs 1.70) is too large to recover via blending.",
+      "expected_impact": "medium",
+      "implementation_hint": "Blacklist linear in next round; redirect its wall-clock budget to deeper GBDT search or seed-averaging."
+    },
+    {
+      "priority": "medium",
+      "category": "feature_engineering",
+      "suggestion": "Prediction mean (12.73) is 2x training mean (6.35) — the test period likely contains higher-rate observations. Add a jurisdiction-level trend feature (target_roll12_mean / target_lag12 ratio or linear slope over last 12 periods per jurisdiction-category) to help the model extrapolate rising trends rather than regressing to mean.",
+      "expected_impact": "medium",
+      "implementation_hint": "In feature_pipeline.py, per (jurisdiction, overdose_category) group compute slope = polyfit(ordinal_rank[-12:], target[-12:], deg=1)[0] fitted on training data only; join to both train and pred sets."
+    },
+    {
+      "priority": "low",
+      "category": "model_selection",
+      "suggestion": "The floor stack (lightgbm_log + catboost_log weights 0.455/0.545) scores 0.878 on the floor's internal CV but the canonical OOF is 1.700. Verify the floor stack's OOF was computed on the same canonical 5-folds as specialists to ensure apples-to-apples comparison; the note in ensemble_meta.json acknowledges the protocol difference.",
       "expected_impact": "low",
-      "implementation_hint": "Set linear specialist NNLS weight to 0 / exclude from ensemble_meta candidates. Already surfaced in ensemble_meta.json choice=best_single:gbdt."
-    },
-    {
-      "priority": "medium",
-      "category": "hyperparameter_tuning",
-      "suggestion": "Enable seed-averaging for the GBDT specialist: search_effort.seeds=null in agent_gbdt.json indicates no seed ensemble was performed. Add seeds=[42,123,456] and average OOF predictions to reduce variance by ~10-15% on high-variance splits.",
-      "expected_impact": "medium",
-      "implementation_hint": "Pass AWARDB_SEEDS=3 or similar env var to gbdt-specialist; average the 3 seed OOFs before scoring."
-    },
-    {
-      "priority": "medium",
-      "category": "target_transform",
-      "suggestion": "Apply log1p transform to the count target before GBDT training to address the systematic high-value underprediction (heteroscedasticity_corr=0.454, Q4 mean_residual=+19.41). Exponentiate predictions back before scoring.",
-      "expected_impact": "medium",
-      "implementation_hint": "In gbdt specialist, wrap target with np.log1p before fit and np.expm1 after predict. lightgbm_sqrt already uses sqrt transform — extend this to the primary lightgbm variant."
+      "implementation_hint": "Cross-check floor OOF CSV (oof_floor.csv) against cv_folds.json period assignments; if the floor used a different holdout, re-score floor predictions on canonical fold assignments before NNLS blending."
     }
   ],
   "do_not_repeat": [],
-  "partial_verdict": "warn",
-  "notes": "Strong improvement vs baseline (82%). GBDT wins cleanly; linear is dead weight. Two high-impact levers are untapped: sub-target modeling (registered r=0.97) and within-period early-day group aggregates. datetime__day inclusion is a known distribution-shift risk per the data pattern report. Residuals show persistent high-value underprediction (mean residual +19 in Q4). Single-fold specialist CV limits stability confidence."
+  "partial_verdict": "warn"
 }

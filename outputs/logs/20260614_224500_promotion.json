@@ -1,0 +1,21 @@
+{
+  "run_id": "20260614_224500",
+  "round": 1,
+  "promoted_choice": "gbdt",
+  "promoted_cv_score": 1.653602,
+  "prior_best_choice": "floor",
+  "prior_best_submission": "outputs/logs/20260614_224500_prior_best.csv",
+  "nnls_weights": {
+    "floor": 0.187692,
+    "gbdt": 0.799994,
+    "linear": 0.012314
+  },
+  "oof_scores": {
+    "floor": 1.700229,
+    "gbdt": 1.653602,
+    "linear": 3.684155
+  },
+  "promoted": true,
+  "prior_best_cv_score": 1.700229,
+  "note": "gbdt beats floor on canonical OOF (1.654 < 1.700); NNLS blend (1.656) does not beat best single (gbdt=1.654)"
+}

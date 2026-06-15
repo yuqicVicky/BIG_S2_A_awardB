@@ -4,56 +4,28 @@
   "overall_verdict": "warn",
   "findings": [
     {
-      "criterion": "Criterion A — Data coverage",
-      "verdict": "pass",
-      "location": "data_coverage.available_sources",
-      "finding": "All columns from all three file_schemas entries (train.csv 12 cols, test.csv 9 cols, sampleSubmission.csv 2 cols) are present in available_sources. uncovered_columns is empty. casual and registered correctly classified as 'target' sub-targets rather than excluded or direct features. sampleSubmission.csv::count correctly excluded as placeholder zeros with substantive justification. datetime classified as datetime_derived with correct rationale.",
-      "required_fix": "None."
+      "criterion": "Criterion B — Feature reasonableness",
+      "verdict": "warn",
+      "location": "data_coverage.target_aggregate_keys[3] — [\"jurisdiction\", \"period_rank_bin\"]",
+      "finding": "data_coverage.target_aggregate_keys includes [\"jurisdiction\", \"period_rank_bin\"] which groups by a temporal bin. This group_key appears in the coverage metadata but NOT in feature_plan.per_fold_target_aggregates. If the programmer implements this aggregate it would average same-period-bin rows and create contemporaneous temporal leakage. The feature_plan.per_fold_target_aggregates section (which the programmer should follow) correctly omits it, but the dangling entry in data_coverage.target_aggregate_keys is an inconsistency that could mislead the programmer.",
+      "required_fix": "Remove [\"jurisdiction\", \"period_rank_bin\"] from data_coverage.target_aggregate_keys OR add a note that this entry must NOT be implemented as a per_fold_target_aggregate due to temporal leakage risk. The feature_plan.per_fold_target_aggregates list is the authoritative implementation spec."
     },
     {
       "criterion": "Criterion B — Feature reasonableness",
       "verdict": "warn",
-      "location": "feature_plan.datetime_derived — 'datetime__ordinal'",
-      "finding": "datetime is the row_id/join key per spec_parse.json (row_id_column: 'datetime'). Including datetime__ordinal — a monotonically increasing numeric encoding of the full datetime timestamp — is effectively encoding the row position, which can overfit to temporal trends present only in training range (2011-2012) and may not generalize well to test rows (days 20-end, structurally outside train day range within each month). The ordinal also correlates with unobserved secular demand growth, making it a speculative temporal trend feature. It is not flagged experimental, but is higher-risk than the other datetime-derived components.",
-      "required_fix": "Flag datetime__ordinal as experimental: true so the Step-6A' ablation gate validates its out-of-fold utility before it enters specialist models, OR provide explicit justification for why ordinal generalizes to test days (20+) given train day range is 1-19."
-    },
-    {
-      "criterion": "Criterion B — Feature reasonableness",
-      "verdict": "pass",
-      "location": "feature_plan.per_fold_target_aggregates",
-      "finding": "All 8 aggregates are marked fit_on: fold_train_only. Group keys examined for contemporaneous leakage: ['datetime__hour', 'datetime__month', 'datetime__year'] groups across all same-hour+month+year training rows (days 1-19 in fold-train), not isolating individual prediction-period rows. This is a within-period cross-sub-period dataset (not a panel where period is the atomic unit), so grouping by month+year+hour pools training observations from days 1-13 safely — no same-period peek. No FAIL on leakage.",
-      "required_fix": "None."
-    },
-    {
-      "criterion": "Criterion B — Feature reasonableness",
-      "verdict": "pass",
-      "location": "feature_plan.within_period_aggregates",
-      "finding": "All three within_period_aggregates are flagged experimental: true, ensuring Step-6A' ablation gate validates them. day_filter: 'day <= 13' correctly restricts to early-period rows only, making these safe lag substitutes per the split structure. Rationale is substantive.",
-      "required_fix": "None."
-    },
-    {
-      "criterion": "Criterion B — Feature reasonableness",
-      "verdict": "pass",
-      "location": "feature_plan — overall family coverage",
-      "finding": "Covers direct numeric, categorical encoding (one-hot for season/weather), datetime-derived (comprehensive: year/month/cyclic/quarter/weekofyear/dayofweek/cyclic/is_weekend/hour/cyclic/ordinal), per-fold target aggregates, interactions (7 entries spanning top-influence signal pairs), within-period aggregates as lag substitutes. No text signal exists (text_like_columns empty). No image sidecars. No lag features planned — correctly omitted per influence file (same-month lags unavailable safely). Feature families are comprehensive for this dataset.",
-      "required_fix": "None."
+      "location": "feature_plan — missing sub_target_modeling block",
+      "finding": "spec_parse.detected_structure.split_pattern.sub_target_candidates is non-empty (5 candidates: benzodiazepine, cocaine, fentanyl, methamphetamine, heroin) and completeness_constraints.sub_target_decomposition echoes them. However feature_plan contains no sub_target_modeling block with concrete per-fold training steps for using these auxiliary categories (e.g. how to construct cross-category lag/aggregate features from sub-target rows, whether separate sub-target models are trained and summed, etc.). A bare reference in completeness_constraints is insufficient.",
+      "required_fix": "Add a feature_plan.sub_target_modeling block describing concretely: (1) how sub-target category rows are used as auxiliary feature sources (cross-category lag/pivot features); (2) whether separate per-category models are trained; (3) how sub-target predictions are handled relative to the 3 scored categories. Even if sub-targets inform only lag/aggregate features, the block must state that explicitly."
     },
     {
       "criterion": "Criterion C — Completeness constraints",
       "verdict": "warn",
-      "location": "completeness_constraints.submission_frame_expansion",
-      "finding": "The value '6493' appears as a bare literal count in the expansion description rather than being expressed as a reference to spec_parse.json.file_schemas['data/test/sampleSubmission.csv'].n_rows. The mapping description ('same datetime keys, one-to-one') is correct and consistent with spec_parse, but the literal count means the runtime code must derive this dynamically from the file rather than relying on this plan literal.",
-      "required_fix": "Acceptable as a WARN — the literal matches spec_parse exactly and the one-to-one mapping is described. Programmer must derive the row count from the file at runtime rather than hardcoding 6493."
-    },
-    {
-      "criterion": "Criterion C — Completeness constraints",
-      "verdict": "pass",
-      "location": "completeness_constraints",
-      "finding": "full_train_refit: true. missing_value_handling_required: false — consistent with data_profile (all missing rates 0.0). two_column_submission: true. sub_target_decomposition echoes spec_parse.detected_structure.split_pattern.sub_target_candidates exactly (registered corr=0.9709, casual corr=0.6904). log1p_target_transform: true consistent with data_profile recommend_log_transform: true.",
-      "required_fix": "None."
+      "location": "completeness_constraints.submission_frame_expansion — literal count '918'",
+      "finding": "The expansion description uses the literal '918 rows' and '6 periods x 51 jurisdictions x 3 scoring categories'. The row count 918 is consistent with spec_parse.file_schemas[\"data/sample_submission.csv\"].n_rows but is expressed as a hardcoded literal rather than referencing the schema field. At runtime the programmer should read this from spec_parse, not embed a literal.",
+      "required_fix": "Revise the expansion description to specify that the row count must be read from spec_parse.file_schemas[\"data/sample_submission.csv\"].n_rows at runtime, not assumed to be 918."
     }
   ],
-  "summary": "Plan is sound with no FAIL findings. Two WARNs: (1) datetime__ordinal is a row-id-derived feature not flagged experimental despite overfit risk on days-20+ test rows; (2) submission_frame_expansion uses a bare literal '6493' — programmer must derive count dynamically at runtime. All per-fold aggregates are fold-safe; no contemporaneous leakage detected; sub-target decomposition and completeness constraints are correct.",
+  "summary": "No FAIL findings. Three WARNs: (1) data_coverage.target_aggregate_keys contains a period_rank_bin temporal grouping absent from feature_plan but could mislead the programmer into creating a leaky same-period aggregate; (2) no concrete sub_target_modeling block in feature_plan despite non-empty sub_target_candidates; (3) submission row count expressed as literal 918 rather than a runtime spec_parse reference. Plan is approvable as-is; WARNs should be addressed in revision.",
   "approved": true,
   "next_action": "accept_plan"
 }

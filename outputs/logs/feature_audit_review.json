@@ -4,60 +4,53 @@
   "overall_verdict": "warn",
   "leakage_findings": [
     {
-      "severity": "low",
-      "feature": "datetime__day (floor model only)",
-      "issue": "20260614_175934_profile.json final_feature_columns includes datetime__day, which has a known distribution shift (train mean ~10, test mean ~25). This appears in the floor model feature set from main.py, NOT in the authored feature_pipeline.py (which correctly excludes it via DATETIME_DERIVED_COLS filter). The GBDT specialist uses authored features and is not affected. Risk is confined to floor OOF.",
-      "required_fix": "Confirm floor model (main.py) also drops datetime__day; if it cannot be controlled, accept floor as degraded baseline only."
+      "severity": "medium",
+      "feature": "subtgt_mean_benzodiazepine, subtgt_mean_cocaine, subtgt_mean_fentanyl, subtgt_mean_methamphetamine, subtgt_mean_heroin",
+      "issue": "Sub-target aggregates group by (jurisdiction, period_id) and average the target across train rows for other overdose_category values at the same (jurisdiction, period_id) cell. For a given val row with category X at (jur, pid), the fold-train rows for that same (jur, pid) exist only if pid falls in the fold's train period set — for forward-expanding CV this is always true (val pid > all train pids), so the (jur, pid) cell in fold-train is EMPTY. The pipeline falls back to the fold-train global mean, making these features constant within each fold's val set. They carry zero information in OOF but non-zero information at inference (where full-train cross-category data exists), creating a train/OOF representation mismatch. Not classical leakage (no future target used), but the OOF representation differs from inference representation.",
+      "required_fix": "Group subtgt_mean_* by (jurisdiction, period_id_lag1) — i.e., use the prior period's cross-category mean — so the same look-back window is available in both train and val rows. Alternatively drop these and replace with target_lag1 broken out per category (already captured by target_lag1/lag3/lag6 which are correctly computed)."
     },
     {
       "severity": "low",
-      "feature": "per_fold_aggregates group (all 11 columns)",
-      "issue": "The agg_* and early_day_* columns were built with per-fold safety (canonical train_idx from cv_folds.json, never ~val_mask), but the ablation gate confirmed they hurt OOF (delta=-2.976, decision=prune). They were correctly pruned from feature_spec.json before specialist training. No active leakage remains.",
-      "required_fix": "None — already pruned. Do not regenerate this group in future rounds."
+      "feature": "imputation medians (juris_train_medians, global_train_medians) for unemployment_rate, labor_force, temp_avg_f, precip_in",
+      "issue": "Jurisdiction-level and global medians are computed once on the full training frame (lines 198-199 of feature_pipeline.py) before the CV split and applied to both train and pred. For the train set this means fold-val rows' missing covariate values are imputed using statistics that include fold-val data. This is a low-risk issue since these are exogenous covariates (not target-derived), but it constitutes a mild fold-unsafe imputation.",
+      "required_fix": "Compute jurisdiction medians inside the per-fold loop on fold_train rows only, then apply to val rows. The full-train medians for pred imputation remain correct as-is."
     },
     {
       "severity": "low",
-      "feature": "single-fold holdout (cv_folds.json strategy=within_period_holdout, n_folds=1)",
-      "issue": "Only one validation split is used, so OOF score variance is unquantified. CV stability report shows cv_mae_std=0.0 by construction. CV reliability for model selection is reduced; holdout vs test gap cannot be measured within-run.",
-      "required_fix": "Medium-term: extend to multi-month rolling windows (e.g. last-3-months holdout per month). Not a leakage issue but inflates confidence in CV score."
+      "feature": "img_svd_0 through img_svd_7",
+      "issue": "Image SVD is fit on ALL unique train images at once (line 940-943: img_svd.fit(gray_arr) where gray_arr covers all train keys). The image sidecar is a static, non-target-derived observation so this is NOT target leakage. However the SVD basis is fit on the same set used for evaluation, which for a small number of unique images (jurisdiction x period) may overfit the image manifold. Since delta=+0.001836 is small and positive, this is low risk.",
+      "required_fix": "No fix required for correctness; acceptable per audit rules for static image features. Noted for completeness."
     }
   ],
   "suggestions": [
     {
       "priority": "high",
       "category": "feature_engineering",
-      "suggestion": "Add within-period sub-target aggregates for registered and casual separately (predicted via per-fold regression on early-day rows), then sum for count. Sub-targets have corr 0.97/0.69 with count and are train-only — predict them separately and use predictions as fold-safe features.",
-      "expected_impact": "high",
-      "implementation_hint": "For each fold's train_idx rows where day<=13, fit a simple model predicting registered and casual; store fold OOF preds as registered_pred and casual_pred features; refit on full train for prediction frame."
+      "suggestion": "Build on period_id__ordinal_rank and target_lag1 (top contributors per datetime_derived delta=0.017 and other_features delta=0.0014): add interaction target_lag1 * period_id__ordinal_rank and target_lag1 / (tgt_mean_jur_cat + 1e-6) to capture trend-relative-to-group deviation, computed inside the per-fold lag loop.",
+      "expected_impact": "medium",
+      "implementation_hint": "After computing target_lag1 OOF inside fold loop, compute ratio_lag1_to_jur_cat = target_lag1 / (tgt_mean_jur_cat + 1e-6) and trend_x_lag = target_lag1 * period_id__ordinal_rank per fold val rows; apply same formula at inference using full-train values."
     },
     {
-      "priority": "high",
+      "priority": "medium",
       "category": "feature_engineering",
-      "suggestion": "Build hour_x_temp and hour_x_humidity interactions — datetime__hour is the strongest signal (ablation delta +4.26 for other_features group which includes hour interactions); temp and humidity modulate ridership at each hour of day.",
-      "expected_impact": "high",
-      "implementation_hint": "Add {'name': 'hour_x_temp', 'columns': ['datetime__hour', 'temp'], 'type': 'multiply'} and {'name': 'hour_x_humidity', 'columns': ['datetime__hour', 'humidity'], 'type': 'multiply'} to plan interactions spec."
+      "suggestion": "Replace subtgt_mean_* (mismatch between OOF and inference) with cross-category lag features: for each sub-target category c, compute subtgt_lag1_c = the target value at (jurisdiction, period_id_rank-1) for category c, using full-train sorted data. This preserves the cross-category signal without the (jur, pid) emptiness problem in OOF.",
+      "expected_impact": "medium",
+      "implementation_hint": "In the per-fold loop, for each sub-cat c: filter fold_train to rows where overdose_category==c, sort by (jurisdiction, period_rank), shift(1) grouped by jurisdiction, then join to val rows on (jurisdiction, period_rank-1). For pred, use full-train shift(1) from last train period."
     },
     {
       "priority": "medium",
       "category": "feature_pruning",
-      "suggestion": "Prune season (raw int) and weather (raw int) from direct features since season__ohe_1..4 and weather__ohe_1..4 already encode them fully; the raw ordinal integers add noise for non-linear models and redundancy for linear.",
+      "suggestion": "text_svd group was correctly pruned (delta=-0.000853, decision=prune). Confirm it remains absent. No other groups fall clearly into prune territory but per_fold_aggregates shows delta=-0.009177 (removal lowers MAE); do not expand this group further.",
       "expected_impact": "low",
-      "implementation_hint": "Remove 'season' and 'weather' from DIRECT_FEATURE_COLS after OHE columns are added; keep OHE variants."
-    },
-    {
-      "priority": "medium",
-      "category": "feature_engineering",
-      "suggestion": "Add year_x_month interaction (datetime__year * datetime__month__ordinal) to capture growth trend within seasons — datetime__year shows 94-unit target mean range across 2 years, and month interacts with it.",
-      "expected_impact": "medium",
-      "implementation_hint": "Add {'name': 'year_x_month', 'columns': ['datetime__year', 'datetime__month'], 'type': 'multiply'} to plan interactions."
+      "implementation_hint": "text_svd_0 through text_svd_7 already in ablation_pruned_columns; verify specialist feature list excludes them — confirmed in agent_gbdt.json authored_features_used."
     },
     {
       "priority": "low",
-      "category": "feature_pruning",
-      "suggestion": "Per_fold_aggregates group (agg_hour_season_mean_count, agg_hour_workingday_mean_count, and 9 others) confirmed harmful by ablation (delta=-2.976). Do not regenerate in future rounds; replace with the sub-target prediction approach instead.",
-      "expected_impact": "medium",
-      "implementation_hint": "Keep PLAN_FOLD_AGGS empty or remove within_period_aggregates spec entries entirely; implement registered_pred/casual_pred sub-target features instead."
+      "category": "feature_engineering",
+      "suggestion": "Add target_roll12_mean / target_roll3_mean ratio (acceleration proxy) and target_lag1 - target_lag3 (short-term momentum) as new features within the existing per-fold lag loop, leveraging already-computed lag values.",
+      "expected_impact": "low",
+      "implementation_hint": "After computing target_roll3_mean and target_roll12_mean OOF, add roll_accel = target_roll3_mean / (target_roll12_mean + 1e-6) and tgt_momentum = target_lag1 - target_lag3 as derived columns in the same fold loop iteration."
     }
   ],
-  "notes": "No HIGH-severity leakage found. Pipeline correctly uses canonical train_idx from cv_folds.json (not ~val_mask). Sub-targets casual/registered are properly excluded as direct features. datetime__day distribution-shift issue exists only in the floor model, not the authored specialist features. Ablation pruning of per_fold_aggregates was correct. Primary opportunity is sub-target (registered+casual) prediction as fold-safe features and richer hour interactions."
+  "notes": "No HIGH-severity leakage found. CV uses forward-expanding canonical folds correctly; all target aggregates (tgt_mean_*, te_*, tgt_mean_gtrends_*) confirmed fit per fold on fold-train rows only (not ~val_mask). subtgt_mean_* features have a train/OOF representation mismatch (empty cell fallback) warranting replacement. Image SVD fit on full train is safe for static sidecar. text_svd correctly pruned. Imputation medians are computed globally — minor fold-unsafety for exogenous covariates only."
 }

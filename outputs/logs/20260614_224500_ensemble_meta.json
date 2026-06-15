@@ -1,0 +1,23 @@
+{
+  "run_id": "20260614_224500",
+  "oof_cv_scores": {
+    "floor": 1.700229,
+    "gbdt": 1.653602,
+    "linear": 3.684155
+  },
+  "nnls_weights": {
+    "floor": 0.187692,
+    "gbdt": 0.799994,
+    "linear": 0.012314
+  },
+  "blend_oof_score": 1.655587,
+  "choice": "gbdt",
+  "chosen_cv_score": 1.653602,
+  "chosen_submission": "outputs/logs/20260614_224500_meta_choice.csv",
+  "submission_cv_score": 1.653602,
+  "overwrote_submission": true,
+  "n_common_oof_rows": 4590,
+  "metric": "block_mae",
+  "greater_is_better": false,
+  "note": "floor OOF block_mae=1.700 (canonical 5-fold on scored rows); model_selection.json 0.878 is the stacked model val score computed by the floor training run (different protocol). NNLS common-OOF apples-to-apples: gbdt=1.654 < floor=1.700, so gbdt promoted. Blend=1.656 > gbdt single, so best_single wins."
+}

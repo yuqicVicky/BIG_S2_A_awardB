@@ -1,14 +1,25 @@
 {
-  "run_id": "20260614_175934",
+  "run_id": "20260614_224500",
   "converted_files": [],
   "already_csv": [
-    "data/test/sampleSubmission.csv",
-    "data/test/test.csv",
-    "data/train/train.csv"
+    "data/sample_submission.csv",
+    "data/train/covariates.csv",
+    "data/train/dose_sys_train.csv",
+    "data/val/covariates.csv"
   ],
   "skipped_files": [
-    {"file": "data/.DS_Store", "reason": "system metadata file"},
-    {"file": "data/Data_Description.md", "reason": "documentation"}
+    {"file": "data/.DS_Store", "reason": "hidden file"},
+    {"file": "data/.gitkeep", "reason": "hidden file"},
+    {"file": "data/Data_Description.md", "reason": "non-tabular (.md)"},
+    {"file": "data/sample_submission_python.ipynb", "reason": "non-tabular (.ipynb)"},
+    {"file": "data/sample_submission_r.ipynb", "reason": "non-tabular (.ipynb)"},
+    {"file": "data/train/images/mat_density/*.png (4284 files)", "reason": "image sidecar files (non-tabular binary)"}
   ],
-  "errors": []
+  "errors": [],
+  "csv_validation": [
+    {"csv_output": "data/sample_submission.csv", "rows": 918, "columns": 5, "status": "OK"},
+    {"csv_output": "data/train/covariates.csv", "rows": 3927, "columns": 12, "status": "OK"},
+    {"csv_output": "data/train/dose_sys_train.csv", "rows": 31416, "columns": 4, "status": "OK"},
+    {"csv_output": "data/val/covariates.csv", "rows": 357, "columns": 12, "status": "OK"}
+  ]
 }

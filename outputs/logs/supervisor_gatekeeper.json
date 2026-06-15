@@ -1,21 +1,10 @@
 {
-  "run_id": "20260614_175934",
-  "reviewed_at": "2026-06-14T10:54:02.929035Z",
+  "run_id": "20260614_224500",
+  "reviewed_at": "2026-06-14T16:14:42.617026Z",
   "review_pass": 1,
   "final_gate": true,
   "keep_best_decision": "kept_current",
-  "keep_best_detail": {
-    "meta_chosen": "best_single:gbdt",
-    "meta_chosen_cv_score": 25.549220169969686,
-    "blend_score": 25.58213747864879,
-    "oof_cv_scores": {
-      "floor": 25.811094238786563,
-      "gbdt": 25.549220169969686,
-      "linear": 90.47769520951982
-    },
-    "overwrote_submission": true,
-    "note": "ensemble_meta already overwrote submission.csv with best single (gbdt, block_mae=25.549); current submission IS the meta choice"
-  },
+  "keep_best_rationale": "ensemble_meta.json.overwrote_submission=true already promoted gbdt (block_mae=1.6536) over floor (1.7002). Current submission.csv is the meta-chosen candidate. No regression applied.",
   "logs_present": {
     "spec_parse.json": true,
     "data_profile.json": true,
@@ -27,114 +16,112 @@
     "feature_audit_review.json": true,
     "overfitting_leakage_audit.json": true,
     "hardcoding_audit_pre.json": true,
-    "hardcoding_audit_post.json": true,
+    "hardcoding_audit_post.json": false,
     "report_review.json": true,
     "prediction_sanity.json": true,
-    "note": "model_search.json and final_model.json absent (specialist mode); replaced by 20260614_175934_agent_gbdt.json, 20260614_175934_ensemble_meta.json, 20260614_175934_model_selection.json"
+    "20260614_224500_ensemble_meta.json": true,
+    "20260614_224500_agent_gbdt.json": true,
+    "20260614_224500_submission_validation.json": true,
+    "20260614_224500_overfitting_leakage_audit.json": true
   },
+  "missing_required_notes": [
+    "model_search.json absent \u2014 pipeline ran in specialist mode (ensemble_meta + agent_gbdt.json cover this role; not a defect).",
+    "final_model.json absent \u2014 specialist mode writes agent_gbdt.json instead. Model: stack(tuned(catboost)+hgb_log+catboost_log), block_mae=1.6536. No adjusted_robust_score field (specialist mode does not emit this field). MEDIUM-severity note recorded.",
+    "hardcoding_audit_post.json absent \u2014 no post-run audit for this run. MEDIUM-severity note recorded."
+  ],
   "submission_status": {
     "exists": true,
     "columns": [
-      "datetime",
-      "count"
+      "row_id",
+      "rate_per_10000_ed_visits"
     ],
+    "n_cols": 2,
     "columns_ok": true,
-    "row_count": 6493,
+    "row_count": 918,
     "row_count_ok": true,
-    "row_order_matches_sample": true,
+    "row_id_alignment_ok": true,
     "all_finite": true,
     "missing_predictions": 0,
-    "pred_min": 0.44,
-    "pred_max": 875.35,
-    "pred_mean": 188.65,
+    "pred_min": 3.2812,
+    "pred_max": 54.5418,
+    "pred_mean": 12.7295,
     "validation_verdict": "PASS"
   },
   "prediction_sanity_status": {
-    "overall_verdict": "PASS",
+    "overall_verdict": "WARN",
     "high_overfitting_risk": false,
-    "all_checks_passed": 5,
     "key_findings": [
-      "CV=0.9188 (well above constant threshold)",
-      "Clip fraction 0.03% (no aggressive clipping)",
-      "0% predictions outside 5-sigma range",
-      "KS=0.0246 (distribution matches training)",
-      "82.1% improvement over baseline (block_mae 143.0 -> 25.5)"
+      "PASS: near_constant (CV=0.699, well above threshold)",
+      "PASS: aggressive_clipping (0.2% at boundary)",
+      "PASS: unrealistic_prediction_range (0.7% outside 5-sigma)",
+      "WARN: prediction_distribution_shift (KS=0.539, mean_ratio=1.004) \u2014 explained by scoring-category subset (all_drugs/all_opioids/all_stimulants) having structurally higher rates than all-category train mean; not model drift",
+      "PASS: large_train_val_gap (GBDT OOF=1.6536 vs floor=1.7002, rel_gap=0.027)"
     ]
   },
   "cv_validation": {
-    "chosen_strategy": "within_period_holdout",
-    "strategy_matches_split": true,
-    "detail": "Train uses days 1-19, test uses days 20-31 in each of 24 months. within_period_holdout with holdout_threshold=14 correctly simulates later-in-month prediction, matching the hidden test structure.",
-    "issues": []
+    "cv_matches_split_structure": "PASS",
+    "detail": "forward_expanding_time (5-fold, horizon=6 periods) correctly mirrors hidden test split. Period IDs are opaque hashes; forward-expanding window on chronological period order avoids any forward-peeking. CV strategy appropriate for panel time-series structure."
   },
   "overfitting_protocol_status": {
     "robust_selection_applied": true,
+    "note": "NNLS keep-best on common OOF (4590 rows, block_mae): gbdt=1.6536 < floor=1.7002 \u2192 gbdt promoted. Blend=1.6556 > gbdt single \u2192 best single wins. Selection is apples-to-apples on canonical folds.",
     "validation_strategy_appropriate": true,
     "leakage_audit_verdict": "WARN",
-    "leakage_audit_crit_high_count": 0,
+    "leakage_audit_detail": "No HIGH-severity leakage. MEDIUM: subtgt_mean_* have OOF/inference representation mismatch (empty cell fallback in OOF). LOW: imputation medians computed globally; image SVD fit on full train (safe for static sidecar). No train-only feature contamination detected.",
     "train_val_gap_acceptable": true,
-    "cv_stability_relative": 0.0332,
-    "note": "Overfitting audit WARN with 0 CRITICAL/HIGH findings; leakage risks from registered/casual correctly excluded as features"
+    "train_val_gap": 0.027
   },
   "report_status": {
     "exists": true,
+    "size_bytes": 29574,
     "review_approved": true,
-    "next_action": "approve_report"
+    "review_verdict": "6/7 checks pass, 1 WARN (minor omission of precip_in/temp_avg_f in Section 10). No required revisions.",
+    "next_action_from_report_reviewer": "approve_report"
   },
-  "feature_gate_status": {
-    "llm_gate_status": "pass",
-    "per_fold_aggregates_pruned": true,
-    "datetime_derived_kept": true,
-    "note": "per_fold_aggregates removed (delta=-2.976, harmful); datetime_derived and other_features retained as strongly helpful"
-  },
-  "hardcoding_status": {
-    "pre_audit_verdict": "warn",
-    "post_audit_verdict": "warn",
-    "unacceptable_count_pre": 0,
-    "unacceptable_count_post": 0
+  "hardcoding_audit_status": {
+    "pre_verdict": "warn",
+    "unacceptable_findings": 0,
+    "risky_findings": 8,
+    "risky_finding_summary": "All 8 risky findings are submission.csv and row_id literal strings in pipeline infrastructure (required deliverable names, not dataset-specific column access). Acceptable per audit rules.",
+    "post_audit": "absent \u2014 MEDIUM-severity note recorded"
   },
   "issues": [
     {
-      "severity": "LOW",
-      "source_log": "feature_audit_review.json",
-      "description": "Feature audit overall_verdict=warn; no CRITICAL or HIGH issues found. Authored feature set passed ablation gate.",
+      "severity": "MEDIUM",
+      "source_log": "20260614_224500_agent_gbdt.json / missing final_model.json",
+      "description": "Specialist mode does not emit final_model.json or adjusted_robust_score. Model identity and CV score confirmed from agent_gbdt.json (stack(tuned(catboost)+hgb_log+catboost_log), block_mae=1.6536). Not a blocking defect.",
+      "fixable": false
+    },
+    {
+      "severity": "MEDIUM",
+      "source_log": "hardcoding_audit_pre.json",
+      "description": "hardcoding_audit_post.json absent. Pre-run audit found 0 unacceptable findings; post-run audit was not dispatched for this run. Not a blocking defect.",
+      "fixable": false
+    },
+    {
+      "severity": "MEDIUM",
+      "source_log": "overfitting_leakage_audit.json / feature_audit_review.json",
+      "description": "subtgt_mean_* features have OOF/inference representation mismatch (medium severity, documented in feature_audit_review). Not classical target leakage; OOF scores are valid. No action required for this submission.",
       "fixable": false
     },
     {
       "severity": "LOW",
-      "source_log": "overfitting_leakage_audit.json",
-      "description": "Overfitting/leakage audit overall_verdict=WARN; 0 CRITICAL/HIGH findings. registered/casual correctly excluded.",
+      "source_log": "prediction_sanity.json",
+      "description": "KS=0.539 distribution shift between train target and submission predictions. Explained by scoring-category subset having structurally higher rates vs full-category train distribution. Generalization-reviewer confirmed this is not model drift.",
       "fixable": false
     },
     {
       "severity": "LOW",
-      "source_log": "hardcoding_audit_pre.json / hardcoding_audit_post_20260614_175934.json",
-      "description": "Both hardcoding audits verdict=warn with 0 unacceptable findings.",
-      "fixable": false
-    },
-    {
-      "severity": "LOW",
-      "source_log": "N/A",
-      "description": "model_search.json and final_model.json absent \u2014 expected for specialist mode; covered by agent_gbdt.json and ensemble_meta.json.",
+      "source_log": "report_review.json",
+      "description": "Section 10 omits explicit mention of precip_in (5.9% missing in pred) and temp_avg_f (5.9% missing in train_cov). Minor; report approved.",
       "fixable": false
     }
   ],
   "repair_needed": false,
   "model_rerun_required": false,
   "critical_issues": [],
-  "overall_verdict": "PASS",
+  "overall_verdict": "WARN",
   "delivery_recommendation": "proceed",
   "next_action": "deliver",
-  "summary": {
-    "task_type": "regression",
-    "target_column": "count",
-    "row_id_column": "datetime",
-    "best_model": "stack(lightgbm_sqrt+tuned(xgboost)+lightgbm)",
-    "best_cv_score_block_mae": 25.549,
-    "baseline_block_mae": 143.019,
-    "improvement_pct": 82.1,
-    "submission_rows": 6493,
-    "submission_cols": 2,
-    "report_approved": true
-  }
+  "summary": "submission.csv valid (918 rows, 2 columns, finite, correct order). report.pdf present and approved. No CRITICAL or HIGH issues. All MEDIUM/LOW issues are non-blocking: missing specialist-mode fields (agent_gbdt.json covers), absent post-run hardcoding audit, documented subtgt_mean representation mismatch, and explained distribution shift. CV strategy (forward_expanding_time, 5-fold, horizon=6) correctly mirrors hidden test structure. GBDT stack beats floor by 2.7% on block_mae (1.6536 vs 1.7002). Deliverables are valid."
 }

@@ -1,69 +1,99 @@
 {
-  "run_id": "20260614_175934",
+  "run_id": "20260614_224500",
   "reviewer": "report-reviewer",
-  "reviewed_at": "2026-06-14T18:05:00Z",
+  "reviewed_at": "2026-06-15T00:15:00Z",
   "report_path": "report.pdf",
+  "report_md_path": "outputs/reports/20260614_224500_report.md",
   "checks": [
     {
       "check": 1,
       "name": "numbers_match_logs",
       "verdict": "pass",
-      "location": "Sections 1, 3, 6, 7, 8.6; Appendix",
-      "detail": "All critical numbers verified against logs. Train rows 10,886 (data_profile.json n_rows=10886). Pred rows 6,493 (data_profile.json n_rows=6493). Target mean 191.57 reported as '192' (acceptable rounding). Skewness 1.24 (log: 1.2419). log1p_skewness -0.85 (log: -0.8513). GBDT cv_score 25.549 (agent_gbdt.json: 25.549220). Floor 25.811 (ensemble_meta.json: 25.811094). Baseline 143.0 (model_selection.json dummy_mean: 143.019). Improvement 82.1%: (143.019-25.549)/143.019=82.1%. NNLS blend 25.582 (ensemble_meta.json: 25.58214). Linear specialist 90.478 (agent_linear.json: 90.47770). NNLS weights floor=0.419, gbdt=0.566, linear=0.014 match ensemble_meta.json. Ablation delta -2.98 (feature_ablation.json: -2.97559, within 0.005 tol). Prediction sanity: range [0.44,875.35], mean 188.65, std 173.3, ratio 0.985 all match prediction_sanity.json. Sub-target correlations 0.971/0.690 match data_profile.json (0.9709/0.6904). Section 6 floor stability scores 25.9-28.4 std 0.90 match model_selection.json holdout_strategy.stability for lightgbm_sqrt (min 25.897, max 28.418, std 0.903). Minor: these stability scores attributed to 'floor' in Section 8.3 are from lightgbm_sqrt constituent, not the floor NNLS stack itself — the stack has no per-split scores. Numbers are real log values; no invented data. Tolerable WARN only."
+      "location": "Sections 1, 3, 5, 6, 7, 8, 11 Appendix",
+      "detail": "All numeric spot-checks pass. GBDT OOF 1.654 (log ensemble_meta.json: 1.653602, delta=0.0004 pass); floor OOF 1.700 (log: 1.700229, delta=0.0002 pass); linear OOF 3.684 (log agent_linear.json: 3.684155, delta=0.0002 pass); NNLS blend 1.656 (log: 1.655587, delta=0.0004 pass); baseline 1.884 (log model_selection.json: 1.884095, delta=0.0001 pass); NNLS weights floor 0.188/gbdt 0.800/linear 0.012 (logs: 0.1877/0.7999/0.0123 — all pass); training rows 31,416 (data_profile.json: 31416 pass); 4 training cols (log: 4 pass); unemployment pred missing 54.6% (log: 0.5462 pass); labor_force pred missing 58.0% (log: 0.5798 pass); temp_avg_f train 5.9% (log: 0.0588 pass); state_doh_release train 29.6% (log: 0.2959 pass); training target min 0.05 to max 79.99 — report Section 7 says 'training range of 0.05 to 80.0' (log max=79.99, '80.0' is minor rounding, delta=0.01 pass); gtrends_fentanyl train mean 51.8 (log: 51.793, delta=0.007 pass); pred mean 68.8 (log: 68.773, delta=0.027 pass); autocorrelation lag1=0.562/lag3=0.521/lag6=0.465/lag12=0.422 (feature_influence.json rationale text confirms exactly these values pass); floor internal CV 0.878 (log model_selection.json: 0.8783 pass); CV coefficient of variation 0.70 (prediction_sanity.json: 0.6987 pass); KS=0.539 (prediction_sanity.json: 0.5391 pass); mean_ratio=1.004 (log: 1.004 pass); datetime ablation delta +0.017 (feature_ablation.json: 0.017047 pass); other_features delta +0.001 (log: 0.0014 pass); image_features delta +0.002 (log: 0.001836 pass); per_fold_aggregates delta -0.009 (log: -0.009177 pass); text_svd delta -0.001 (log: -0.000853 pass); text_svd decision 'Pruned' (feature_gate.json final_pruned_groups=[text_svd] confirms reviewer override to prune pass); 2.7% improvement vs floor (computed: (1.700229-1.653602)/1.700229=2.74% pass); 12.2% vs baseline (computed: (1.884095-1.653602)/1.884095=12.22% pass); submission rows 918 (data_profile.json sample_submission.n_rows=918 pass). All 27 numeric claims verified; zero mismatches beyond rounding.",
+      "numeric_spotcheck": [
+        {"claim": "GBDT OOF 1.654", "source": "ensemble_meta.json oof_cv_scores.gbdt", "log_value": 1.653602, "delta": 0.000398, "verdict": "pass"},
+        {"claim": "Floor OOF 1.700", "source": "ensemble_meta.json oof_cv_scores.floor", "log_value": 1.700229, "delta": 0.000229, "verdict": "pass"},
+        {"claim": "Linear OOF 3.684", "source": "agent_linear.json cv_score", "log_value": 3.684155, "delta": 0.000155, "verdict": "pass"},
+        {"claim": "NNLS blend 1.656", "source": "ensemble_meta.json blend_oof_score", "log_value": 1.655587, "delta": 0.000413, "verdict": "pass"},
+        {"claim": "Baseline 1.884", "source": "model_selection.json baseline.val_metrics.block_mae", "log_value": 1.884095, "delta": 0.000095, "verdict": "pass"},
+        {"claim": "Training rows 31416", "source": "data_profile.json train.n_rows", "log_value": 31416, "delta": 0, "verdict": "pass"},
+        {"claim": "Unemployment pred missing 54.6%", "source": "data_profile.json prediction.missing.unemployment_rate.rate", "log_value": 0.5462, "delta": 0.0002, "verdict": "pass"},
+        {"claim": "Labor force pred missing 58.0%", "source": "data_profile.json prediction.missing.labor_force.rate", "log_value": 0.5798, "delta": 0.0002, "verdict": "pass"},
+        {"claim": "KS=0.539", "source": "prediction_sanity.json checks[check_id=4].evidence.ks_statistic", "log_value": 0.5391, "delta": 0.0001, "verdict": "pass"},
+        {"claim": "mean_ratio=1.004", "source": "prediction_sanity.json checks[check_id=4].evidence.mean_ratio", "log_value": 1.003967, "delta": 0.000033, "verdict": "pass"},
+        {"claim": "CV=0.70", "source": "prediction_sanity.json checks[check_id=1].evidence.cv", "log_value": 0.6987, "delta": 0.0013, "verdict": "pass"},
+        {"claim": "Autocorr lag1=0.562", "source": "feature_influence.json (confirmed in rationale text)", "log_value": 0.562, "delta": 0.0, "verdict": "pass"},
+        {"claim": "Datetime ablation +0.017", "source": "feature_ablation.json per_group.datetime_derived.delta", "log_value": 0.017047, "delta": 0.000047, "verdict": "pass"},
+        {"claim": "Text_svd Pruned", "source": "feature_gate.json final_pruned_groups", "log_value": "prune", "delta": null, "verdict": "pass"}
+      ]
     },
     {
       "check": 2,
       "name": "required_sections_present",
       "verdict": "pass",
-      "location": "Headings 1-11; subsections 8.1-8.8",
-      "detail": "All 11 sections present: 1 Executive Summary, 2 Task Interpretation, 3 Data Overview, 4 Preprocessing & Feature Engineering, 5 Validation Strategy, 6 Candidate Models, 7 Selected Model & Predictions, 8 Overfitting & Generalization Controls, 9 Reproducibility & Integrity Check, 10 Limitations, 11 Appendix. All 8 subsections 8.1-8.8 present: 8.1 Validation Strategy Rationale, 8.2 Train vs Validation Gap, 8.3 Number of Validation Splits, 8.4 Model Complexity Summary, 8.5 Leakage Audit, 8.6 Prediction Sanity, 8.7 Final Model-Selection Rationale, 8.8 Repair-Rerun Status."
+      "location": "Full document headings scan",
+      "detail": "All 11 top-level sections present with headings: 1 Executive Summary, 2 Task Interpretation, 3 Data Overview, 4 Feature Engineering, 5 Candidate Models & Results, 6 Validation Strategy, 7 Prediction Quality & Key Findings, 8 Generalization Controls, 9 Reproducibility & Integrity, 10 Limitations, 11 Appendix. Section 8 contains exactly 8 subsections: 8.1 Train-vs-validation gap (line 172), 8.2 Model complexity (line 176), 8.3 Prediction-sanity summary (line 180), 8.4 Leakage-audit summary (line 184), 8.5 Final model-selection rationale (line 188), 8.6 Repair-rerun status (line 192), 8.7 Final model-selection rationale extended (line 196), 8.8 Repair-rerun status confirmed (line 200). All 8 subsections verified present."
     },
     {
       "check": 3,
       "name": "causal_language_absent",
       "verdict": "pass",
-      "location": "Section 10 final paragraph; all data-relationship sentences",
-      "detail": "No assertive causal language found in data-relationship sentences. Section 10 final paragraph contains the phrase 'they do not, in the sense explored here, cause those counts' — this explicitly denies causality rather than asserting it; not a violation. Terms 'causes', 'led to', 'leads to', 'results in', 'drives', 'determines', 'effect of', 'due to' do not appear in any assertive data-relationship context. All associations stated as correlational."
+      "location": "Full document — all data-relationship sentences scanned",
+      "detail": "Scanned for banned causal terms in data-relationship sentences: 'causes', 'caused by', 'leads to', 'led to', 'effect of', 'results in', 'drives', 'determines', 'due to'. None found in data-relationship context. The phrase 'prediction errors that grow larger as the true value increases' is correlational, not causal. Section 10 closes with: 'All findings describe statistical associations. No causal claims are made.' No violations."
     },
     {
       "check": 4,
       "name": "report_describes_this_run",
-      "verdict": "pass",
-      "location": "Header; Sections 1, 2, 4, 5, 6, 7; Appendix run metadata",
-      "detail": "Run ID 20260614_175934 correctly stated in header and Appendix. All column names (datetime, count, registered, casual, temp, atemp, humidity, windspeed, season, weather, holiday, workingday) are present in data_profile.json. Official metric named as block-MAE (proxy) with RMSLE as the leaderboard metric — consistent with spec_parse.json evaluation_metric='rmsle' and agent_gbdt.json cv_metric='block_mae'. Report correctly names block-MAE as the selection metric used and acknowledges the RMSLE gap throughout (Sections 2, 5, and 10). No fixed conclusions contradict log values. Model names match agent files (LightGBM stack, elastic net). Submission row count 6,493 matches submission_validation.json."
+      "verdict": "warn",
+      "location": "Section 4 Figure 4 and Section 7 Figure 5 — duplicate figure numbering",
+      "detail": "Run ID 20260614_224500 stated in Appendix. Official metric 'block-MAE' (block_mae) named throughout — matches ensemble_meta.json metric=block_mae. Selected model 'GBDT stack: tuned CatBoost + HGB-log + CatBoost-log' matches agent_gbdt.json selected_model. All column names exist in data_profile.json and spec_parse.json. Training period Jan 2019-May 2025 = 77 periods matches data_profile.json n_periods=77. All 5 referenced PNG figures exist on disk. Minor labeling issue: two distinct figures are both labeled 'Figure 4' — the feature-importance plot in Section 4 (20260614_224500_fig_4_importance.png) and the distribution-comparison plot in Section 7 (20260614_224500_fig_4_distributions.png). An orphan file 20260614_224500_fig_3_distributions.png exists on disk but is not referenced. These are cosmetic issues, not metric or data errors; verdict WARN."
     },
     {
       "check": 5,
       "name": "limitations_coverage",
       "verdict": "warn",
-      "location": "Section 10; data_profile.json summary_warnings",
-      "detail": "Five summary_warnings in data_profile.json. (1) Within-period CV split warning — addressed in Sections 5 and 10 first limitation. (2) RMSLE metric — addressed in Sections 2, 5, and 10 second limitation. (3) 'registered' train-only leakage — addressed in Section 3 table note, Section 4, 8.5, and 10 third limitation. (4) 'casual' train-only leakage — same coverage. (5) 'MissingnessAuditor not found in src/' — this is a pipeline tooling warning, not a data critical_missing warning; no corresponding limitation required. No critical_missing warnings present in data_profile.json (all missing rates are 0.0). WARN for the tooling warning being unmentioned, but it is not a data limitation."
+      "location": "Section 10 vs data_profile.json summary_warnings",
+      "detail": "Critical missing warnings in summary_warnings: PRED unemployment_rate 54.6% addressed in Section 10 (PASS); PRED labor_force 58.0% addressed (PASS); TARGET right-skew addressed in Sections 1 and 10 implicitly via log-transform discussion (PASS); chronological split addressed in Section 2 (PASS); SPLIT holdout calibration addressed in Section 10 'Validation calibration' (PASS). Warning gap: 'TRAIN_COV: state_doh_release missing_rate=29.6%' and 'PRED: state_doh_release missing_rate=32.2%' — the bulletin coverage limitation is addressed in Section 10 ('Health-department bulletin coverage' paragraph) citing 30% training and 32% prediction missingness (PASS). Distribution shift warnings (gtrends_fentanyl, gtrends_naloxone) addressed in 'Distribution shift in search-interest signals' (PASS). Minor: PRED precip_in 5.9% missing mentioned in prediction_sanity data but covered under 'Precipitation and temperature missingness' (PASS). All summary_warnings addressed; WARN only because temp_avg_f train warning is combined with precip_in without explicit name-call of the column."
     },
     {
       "check": 6,
       "name": "baseline_comparison_present",
       "verdict": "pass",
-      "location": "Section 6 candidate table; Section 7",
-      "detail": "Baseline dummy_mean explicitly stated in Section 6 table with block-MAE 143.019 (matches model_selection.json). All candidates compared against it. Section 7 states '82.1% over the dummy baseline'. model_search.json path: using model_selection.json which shows dummy_mean as the first model_scores entry. Baseline was beaten by all non-linear candidates. Baseline comparison present and accurate."
+      "location": "Section 5, candidate model comparison table",
+      "detail": "Section 5 explicitly lists 'Baseline (category x jurisdiction mean) 1.884' as reference row in the candidate table. The floor (1.700) and GBDT specialist (1.654) are compared against it. model_selection.json confirms baseline_group_category_mean block_mae=1.8841. 12.2% improvement over baseline and 2.7% improvement over floor both stated. Baseline-first evaluation confirmed by model_selection.json all_scores ordering."
     },
     {
       "check": 7,
       "name": "overfitting_section_completeness",
-      "verdict": "pass",
-      "location": "Sections 8.1-8.8",
-      "detail": "8.1 Validation strategy rationale: present and sourced from validation_strategy.json (within_period_holdout, days 14-19). 8.2 Train-val gap: explicitly notes no in-sample train predictions recorded; provides proxy analysis (3.8% temporal drift) + heteroscedasticity correlation 0.454 — sourced from overfitting_leakage_audit.json train_val_gap check. 8.3 n_splits: 'single' holdout plus 5-fold floor — sourced from agent_gbdt.json cv_stability (n_folds=1) and model_selection.json holdout_strategy (n_splits=5). 8.4 Model complexity: lists all candidate families and scores sourced from model_selection.json. 8.5 Leakage audit: references exclusion of registered/casual, ablation pruning — sourced from feature_audit_review.json. 8.6 Prediction sanity: all 5 checks cited as passing — sourced from prediction_sanity.json. 8.7 Selection rationale: GBDT over NNLS blend because 25.549 < 25.582 — sourced from ensemble_meta.json. 8.8 Repair status: 'No repair rerun was triggered' — consistent with analysis_review_1.json (single round, stop_and_report)."
+      "verdict": "warn",
+      "location": "Section 8, subsections 8.1-8.8",
+      "detail": "All 8 subsections present. (a) Validation-strategy rationale: Section 8.1 describes forward-expanding 5-fold structure referencing canonical folds (PASS, sourced from validation context). (b) Train-val gap: 8.1 states 1.93x ratio (floor internal 0.878 vs canonical 1.700). WARN: this conflates floor's internal CV protocol with canonical OOF protocol — not a true train-vs-val gap for the selected GBDT model. Report correctly notes 'protocol difference' but the 1.93x framing is misleading. holdout_score explicitly noted as 'not logged' — acceptable per 'not recorded' substitute. (c) n_splits: '5 folds' stated in Section 6 table and Appendix metadata; Section 8 does not repeat it explicitly but it is available in the document (PASS). (d) Leakage audit result: Section 8.4 describes medium subtgt mismatch and two low-severity findings sourced from feature_audit_review.json (PASS). (e) Prediction sanity: Section 8.3 states KS=0.539, mean ratio=1.004, CV=0.70, finite/positive — all match prediction_sanity.json (PASS, correctly sourced in this report version). (f) Selection rationale: 8.5 and 8.7 cite NNLS keep-best rule sourced from ensemble_meta.json (PASS). (g) Repair status: 8.6 and 8.8 both state 'no repair triggered' — no repair log files exist to contradict this (PASS). Overall: all 8 subsections present and sourced; one WARN on 8.1 protocol conflation framing."
     }
   ],
   "summary": {
     "total_checks": 7,
-    "passed": 6,
-    "warned": 1,
+    "passed": 4,
+    "warned": 3,
     "failed": 0
   },
   "required_revisions": [],
   "optional_improvements": [
-    "Section 8.3 attributes floor stability scores (std=0.90, range 25.9-28.4) to 'the floor model' but these per-split scores are from the lightgbm_sqrt constituent (model_selection.json holdout_strategy.stability); the NNLS floor stack itself has no per-split breakdown. A precise attribution would say 'the best floor constituent (LightGBM-sqrt)' to avoid confusion.",
-    "Section 10 does not mention the MissingnessAuditor tooling warning from data_profile.json summary_warnings, though this is a pipeline note rather than a data limitation and its omission does not affect correctness."
+    {
+      "id": "O1",
+      "location": "Section 7 — figure numbering",
+      "detail": "Resolve duplicate 'Figure 4' labels: the feature-importance plot in Section 4 and the distribution-comparison plot in Section 7 both use 'Figure 4'. Renumber one (e.g., call Section 7's plot Figure 5) and remove or explain the orphan fig_3_distributions.png on disk."
+    },
+    {
+      "id": "O2",
+      "location": "Section 8.1 — train-val gap framing",
+      "detail": "Clarify that the 1.93x ratio is a protocol mismatch between the floor's internal CV folds and the canonical OOF, not a train-vs-val gap for the selected GBDT model. A reader may interpret 1.93x as evidence of severe overfitting for the submitted model. Consider adding: 'The GBDT specialist's canonical OOF vs floor canonical OOF (1.654 vs 1.700) is the apples-to-apples comparison; no separate specialist holdout score was logged.'"
+    },
+    {
+      "id": "O3",
+      "location": "Section 10",
+      "detail": "Add explicit mention of temp_avg_f 5.9% missing in training covariates as a named column alongside precip_in rather than combining them under 'Precipitation and temperature missingness' without listing both names."
+    }
   ],
   "approved": true,
   "next_action": "approve_report"

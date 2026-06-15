@@ -1,0 +1,17 @@
+{
+  "type": "canonical_external",
+  "n_splits": 5,
+  "group_column": "period_id",
+  "stability": {
+    "split_scores": [
+      0.9355,
+      0.8812,
+      0.8774,
+      0.9064,
+      0.8098
+    ],
+    "cv_mae_mean": 0.8821,
+    "cv_mae_std": 0.0417,
+    "relative_stability": 0.0473
+  }
+}

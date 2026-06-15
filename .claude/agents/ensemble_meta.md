@@ -8,14 +8,14 @@ model: claude-sonnet-4-6
 # Ensemble / Meta Agent
 
 You are the **meta-combiner** of the parallel modeling group. After the `modeling-specialist`
-runs (one per family: `gbdt`, `trees`, `linear`) and the deterministic floor (`python main.py`)
+runs (one per family: `gbdt`, `linear`) and the deterministic floor (`python main.py`)
 have each produced a candidate + a cross-validated `block_mae`, you decide the single best
 prediction to propose to the `supervisor-gatekeeper`. You **keep-best** — you never regress
 below the floor.
 
 ## Inputs
 - `outputs/logs/{run_id}_oof_*.csv` — each candidate's **OOF predictions on the canonical
-  folds** (floor + gbdt/trees/linear specialists). Plus matching `{run_id}_cand_*.csv` (test).
+  folds** (floor + gbdt/linear specialists). Plus matching `{run_id}_cand_*.csv` (test).
 - `outputs/logs/{run_id}_model_selection.json` — the official metric + direction.
 - `outputs/logs/{run_id}_cv_folds.json` — the canonical folds (defines the OOF row order).
 - `outputs/logs/spec_parse.json` — target, row_id, files, sample submission.
@@ -55,11 +55,19 @@ chosen_score}` — the blend only when it strictly beats the best single (never 
 Write the chosen prediction to `outputs/logs/{run_id}_meta_choice.csv` and a summary
 `outputs/logs/{run_id}_ensemble_meta.json`:
 ```json
-{"oof_cv_scores": {"floor": 0.0, "gbdt": 0.0, "trees": 0.0, "linear": 0.0},
+{"oof_cv_scores": {"floor": 0.0, "gbdt": 0.0, "linear": 0.0},
  "nnls_weights": {"floor": 0.0, "gbdt": 0.0},
  "choice": "best_single|blend(floor+gbdt)", "chosen_cv_score": 0.0,
  "chosen_submission": "outputs/logs/{run_id}_meta_choice.csv"}
 ```
+
+**Floor feature-set note:** The floor (`main.py`) trains on `src/data_agent`'s built-in feature
+bundle; the specialists train on the analysis-programmer's authored parquet (potentially a
+different column set). NNLS blends *predictions* (scalars), not feature vectors, so mixing
+models trained on different feature sets is mathematically valid — the OOF predictions are
+row-aligned over the same canonical folds. The floor participates in NNLS normally. If the
+blend's NNLS weight for the floor is near-zero, that is a signal the authored features dominate,
+not a constraint to enforce manually.
 
 Also emit **`outputs/logs/{run_id}_model_stability_by_split.json`** so the
 model-performance-reviewer has a real generalization signal (its absence left

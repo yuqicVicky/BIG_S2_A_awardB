@@ -71,15 +71,19 @@ Write `outputs/scratch/{run_id}/feature_pipeline.py` that, resolving all names a
 
 1. Loads train + prediction per `spec_parse.json`.
 
-   **CRITICAL — period rank mapping for lag/rolling features in the prediction frame:**
-   The period column contains opaque IDs. Build `PERIOD_RANK` from
-   `validation_strategy.holdout_parameters.full_period_order` (which covers ALL periods including
-   val/prediction periods, parsed from `DATA_DESCRIPTION.md` by the guardian). If
-   `full_period_order` is absent, fall back to `period_order` (training only) and extend it with
-   val period IDs in the order they appear in the sample_submission/val covariate file, assigned
-   ranks starting at `len(period_order)`. **Never leave val period IDs out of PERIOD_RANK** — if
-   they map to -1, every lag/rolling feature in the prediction frame will be 100% NaN, causing
-   degenerate predictions (this was confirmed to cause leaderboard MAE 5× worse than CV).
+   **Period rank mapping for lag/rolling features (opaque period IDs only):**
+   This step is **only needed when the period column is NOT a parseable datetime** — check
+   `spec_parse.json.detected_structure.has_opaque_period_id`. If `has_opaque_period_id` is
+   false/absent, skip this block and derive temporal features directly from datetime parsing
+   (see datetime features below); do not build a rank over a datetime column.
+
+   When opaque period IDs are confirmed: build `PERIOD_RANK` from
+   `validation_strategy.holdout_parameters.full_period_order` if it exists (covers ALL periods
+   including val/prediction periods). If `full_period_order` is absent, fall back to
+   `period_order` (training only) and extend it with val period IDs in the order they appear in
+   the sample_submission/val covariate file, assigned ranks starting at `len(period_order)`.
+   **Never leave val period IDs out of PERIOD_RANK** — if they map to -1, every lag/rolling
+   feature in the prediction frame will be 100% NaN, causing degenerate predictions.
 2. Builds the features the plan calls for, **leakage-safe**:
    - **Per-fold aggregates / target encodings:** load `{run_id}_cv_folds.json`
      (`cv.load_canonical_folds`) and, for each fold, compute the group/target statistic on that
@@ -246,67 +250,6 @@ report to the orchestrator (the floor remains the deliverable). Do not attempt a
 - Do not add the raw row_id / join-key / datetime string as a feature.
 - Do not fit any target-derived feature on the full train frame before the fold split.
 - Do not hardcode any column name, file name, metric, or task type.
-
----
-
-## Feature implementation — agent-directed, code-enforced (Phase A)
-
-Feature engineering is **agent-directed but code-enforced**: you decide *which* features to build
-from `analysis_plan.json` / `data_profile.json` (resolving every column dynamically), but you
-implement them **inside the feature engine the models actually train on** — `src/data_agent/`'s
-`build_feature_bundle` path that the Phase-B modeling entrypoint consumes — as **fold-safe
-in-pipeline transformers**. Never hand-roll a standalone feature matrix (a parquet/CSV the modeling
-path does not read): that becomes an unconsumed decoy, and audits/critics will (correctly) treat it
-as not the model's feature set.
-
-Two safe ways to add a feature, both consumed and leakage-safe by construction:
-- extend the engine's preprocessor with a transformer fit *inside* the per-fold Pipeline (the
-  existing group-aggregate / group-median pattern); or
-- register per-run transformers via the optional `src/data_agent/custom_features.py`
-  `build_head_transformers()` seam — each returns `(name, transformer, [output_columns])` and is
-  inserted into the consumed per-fold pipeline automatically.
-
-Anything target-derived **must** be produced by an in-pipeline transformer (fit per fold), never
-precomputed over the full training data. The `build_feature_bundle` leakage guard checks this and
-emits the deterministic `leakage` gate; keep its `status == pass`.
-
-## Feature-pipeline checkpoint (for the critic)
-
-Immediately after features are implemented — **before any model training** — write a compact
-checkpoint the `optimizer` critic reads at the `feature_pipeline` boundary. Derive everything from
-the **consumed** engine build (call `build_feature_bundle`), not from a standalone matrix; never
-hardcode column names, paths, or counts.
-
-```python
-import json
-from pathlib import Path
-from src.data_agent.schema import discover_schema
-from src.data_agent.features import build_feature_bundle
-
-bundle = build_feature_bundle(discover_schema(Path("data")))  # the artifact the models consume
-ckpt = {
-  "run_id": run_id, "stage": "feature_pipeline", "producer_agent": "analysis-programmer",
-  "consumed_feature_artifact": "src/data_agent feature engine (build_feature_bundle + model Pipeline)",
-  "static_feature_columns": bundle.feature_columns,
-  "n_static_features": len(bundle.feature_columns),
-  "claim_summary": "features registered as fold-safe transformers in the consumed model pipeline; "
-                   "per-group target aggregates fit per CV fold (not precomputed); prediction rows "
-                   "in sample-submission order",
-  "leakage_guard": bundle.leakage_guard,   # code-enforced invariant over the static feature set
-  "grounding_sources": [f"outputs/logs/{run_id}_data_profile.json",
-                        f"outputs/logs/{run_id}_analysis_plan.json"],
-  "invariants_checked": ["features live in the consumed pipeline (no standalone matrix)",
-                         "target-derived features produced by in-pipeline per-fold transformers",
-                         "leakage_guard.status == 'pass'",
-                         "prediction row order == sample_submission"],
-  "known_risks": [],
-  "next_action": "modeling",
-}
-Path("outputs/logs").mkdir(parents=True, exist_ok=True)
-Path(f"outputs/logs/{run_id}_feature_pipeline_checkpoint.json").write_text(json.dumps(ckpt, indent=2))
-```
-
-Fill `claim_summary` and `known_risks` from the real build, not from this template.
 
 ---
 

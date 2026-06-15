@@ -1,90 +1,126 @@
 {
-  "run_id": "20260614_175934",
-  "parsed_at": "2026-06-14T18:00:00",
+  "run_id": "20260614_224500",
+  "parsed_at": "2026-06-14T22:45:00Z",
   "source": "DATA_DESCRIPTION.md",
-  "train_file": "data/train/train.csv",
-  "prediction_file": "data/test/test.csv",
-  "sample_submission_file": "data/test/sampleSubmission.csv",
-  "target_column": "count",
-  "row_id_column": "datetime",
-  "join_keys": ["datetime"],
-  "evaluation_metric": "rmsle",
+  "train_file": "data/train/dose_sys_train.csv",
+  "prediction_file": "data/val/covariates.csv",
+  "sample_submission_file": "data/sample_submission.csv",
+  "target_column": "rate_per_10000_ed_visits",
+  "row_id_column": "row_id",
+  "join_keys": ["period_id", "jurisdiction"],
+  "evaluation_metric": "mae",
+  "task_description": "Predict rate_per_10000_ed_visits (suspected nonfatal overdose ED visits per 10,000 total ED visits) for every row in sample_submission.csv. Scoring is restricted to the three broad categories: all_drugs, all_opioids, all_stimulants.",
   "output_format": "continuous",
   "task_type": "regression",
-  "confidence": 0.95,
+  "confidence": 0.97,
   "detected_structure": {
-    "time_columns": ["datetime"],
-    "group_columns": [],
-    "block_columns": [],
-    "panel_structure": false,
-    "join_keys": ["datetime"],
+    "time_columns": ["period_id"],
+    "group_columns": ["jurisdiction", "overdose_category"],
+    "block_columns": ["jurisdiction"],
+    "panel_structure": true,
+    "join_keys": ["period_id", "jurisdiction"],
     "split_pattern": {
-      "split_type": "within-period cross-sub-period",
-      "cv_recommendation": "Within each calendar month, train rows are days 1-19 and prediction rows are days 20-end. CV must hold out late-sub-period rows (days 14-19) as a validation set while keeping early-sub-period rows (days 1-13) in train; a simple last-N% chronological holdout will be misleadingly optimistic because the split pattern repeats within every month. Within-period aggregates (e.g. month-level means from days 1-13) are valid features.",
-      "sub_period_ranges": {
-        "train_days": "1-19",
-        "prediction_days": "20-end-of-month",
-        "overlap_months": 24
-      },
+      "split_type": "chronological",
+      "cv_recommendation": "Time-series split respecting chronological order of period_id. Train covers 2019-01-31 through 2025-05-31 (77 periods); val covers 2025-07-31 through 2025-12-31 (6 periods). Use GroupKFold or blocked time-series CV on period_id ordered chronologically. Hold out the most recent N periods as the validation fold; earlier periods form the training fold.",
+      "train_period_range": {"start": "2019-01-31", "end": "2025-05-31", "n_periods": 77},
+      "val_period_range": {"start": "2025-07-31", "end": "2025-12-31", "n_periods": 6},
       "sub_target_candidates": [
-        {"column": "registered", "corr_with_target": 0.9709},
-        {"column": "casual", "corr_with_target": 0.6904}
+        {"column": "overdose_category=benzodiazepine", "corr_with_target_all_drugs": 0.8367, "corr_with_target_all_opioids": 0.8365, "corr_with_target_all_stimulants": 0.8253, "note": "train-only category row; valid as auxiliary prediction target"},
+        {"column": "overdose_category=cocaine", "corr_with_target_all_drugs": 0.8188, "corr_with_target_all_opioids": 0.8194, "corr_with_target_all_stimulants": 0.8625, "note": "train-only category row; valid as auxiliary prediction target"},
+        {"column": "overdose_category=fentanyl", "corr_with_target_all_drugs": 0.7030, "corr_with_target_all_opioids": 0.6886, "corr_with_target_all_stimulants": 0.8447, "note": "train-only category row; valid as auxiliary prediction target"},
+        {"column": "overdose_category=methamphetamine", "corr_with_target_all_drugs": 0.7639, "corr_with_target_all_opioids": 0.7471, "corr_with_target_all_stimulants": 0.8752, "note": "train-only category row; valid as auxiliary prediction target"},
+        {"column": "overdose_category=heroin", "corr_with_target_all_drugs": 0.1766, "corr_with_target_all_opioids": 0.1991, "corr_with_target_all_stimulants": -0.1000, "note": "train-only category row; weak correlation, lower priority"}
       ]
     }
   },
   "file_schemas": {
-    "data/train/train.csv": {
-      "n_rows": 10886,
+    "data/train/dose_sys_train.csv": {
+      "n_rows": 31416,
+      "n_cols": 4,
+      "columns": ["period_id", "jurisdiction", "overdose_category", "rate_per_10000_ed_visits"],
+      "dtypes": {
+        "period_id": "object",
+        "jurisdiction": "object",
+        "overdose_category": "object",
+        "rate_per_10000_ed_visits": "float64"
+      }
+    },
+    "data/train/covariates.csv": {
+      "n_rows": 3927,
       "n_cols": 12,
-      "columns": ["datetime", "season", "holiday", "workingday", "weather", "temp", "atemp", "humidity", "windspeed", "casual", "registered", "count"],
+      "columns": ["period_id", "jurisdiction", "unemployment_rate", "labor_force", "temp_avg_f", "precip_in", "gtrends_overdose", "gtrends_fentanyl", "gtrends_naloxone", "gtrends_opioid", "gtrends_methamphetamine", "state_doh_release"],
       "dtypes": {
-        "datetime": "object",
-        "season": "int64",
-        "holiday": "int64",
-        "workingday": "int64",
-        "weather": "int64",
-        "temp": "float64",
-        "atemp": "float64",
-        "humidity": "int64",
-        "windspeed": "float64",
-        "casual": "int64",
-        "registered": "int64",
-        "count": "int64"
+        "period_id": "object",
+        "jurisdiction": "object",
+        "unemployment_rate": "float64",
+        "labor_force": "float64",
+        "temp_avg_f": "float64",
+        "precip_in": "float64",
+        "gtrends_overdose": "float64",
+        "gtrends_fentanyl": "float64",
+        "gtrends_naloxone": "float64",
+        "gtrends_opioid": "float64",
+        "gtrends_methamphetamine": "float64",
+        "state_doh_release": "object"
       }
     },
-    "data/test/test.csv": {
-      "n_rows": 6493,
-      "n_cols": 9,
-      "columns": ["datetime", "season", "holiday", "workingday", "weather", "temp", "atemp", "humidity", "windspeed"],
+    "data/val/covariates.csv": {
+      "n_rows": 357,
+      "n_cols": 12,
+      "columns": ["period_id", "jurisdiction", "unemployment_rate", "labor_force", "temp_avg_f", "precip_in", "gtrends_overdose", "gtrends_fentanyl", "gtrends_naloxone", "gtrends_opioid", "gtrends_methamphetamine", "state_doh_release"],
       "dtypes": {
-        "datetime": "object",
-        "season": "int64",
-        "holiday": "int64",
-        "workingday": "int64",
-        "weather": "int64",
-        "temp": "float64",
-        "atemp": "float64",
-        "humidity": "int64",
-        "windspeed": "float64"
+        "period_id": "object",
+        "jurisdiction": "object",
+        "unemployment_rate": "float64",
+        "labor_force": "float64",
+        "temp_avg_f": "float64",
+        "precip_in": "float64",
+        "gtrends_overdose": "float64",
+        "gtrends_fentanyl": "float64",
+        "gtrends_naloxone": "float64",
+        "gtrends_opioid": "float64",
+        "gtrends_methamphetamine": "float64",
+        "state_doh_release": "object"
       }
     },
-    "data/test/sampleSubmission.csv": {
-      "n_rows": 6493,
-      "n_cols": 2,
-      "columns": ["datetime", "count"],
+    "data/sample_submission.csv": {
+      "n_rows": 918,
+      "n_cols": 5,
+      "columns": ["row_id", "period_id", "jurisdiction", "overdose_category", "rate_per_10000_ed_visits"],
       "dtypes": {
-        "datetime": "object",
-        "count": "int64"
+        "row_id": "int64",
+        "period_id": "object",
+        "jurisdiction": "object",
+        "overdose_category": "object",
+        "rate_per_10000_ed_visits": "float64"
       }
     }
   },
-  "scoring_subset": null,
-  "file_sidecars": [],
+  "scoring_subset": {
+    "column": "overdose_category",
+    "scoring_values": ["all_drugs", "all_opioids", "all_stimulants"],
+    "train_only_values": ["benzodiazepine", "cocaine", "fentanyl", "heroin", "methamphetamine"],
+    "n_train_rows_scored": 11781
+  },
+  "file_sidecars": [
+    {
+      "path_train": "data/train/images/mat_density",
+      "path_pred": "data/val/images/mat_density",
+      "modality": "image",
+      "format": "png",
+      "filename_pattern": "{jurisdiction}_{period_id}.png",
+      "key_columns": ["jurisdiction", "period_id"],
+      "colormap": "viridis",
+      "n_files_train": 3927,
+      "n_files_pred": 357
+    }
+  ],
   "sample_submission_validated": true,
   "warnings": [
-    "WARN: within-period cross-sub-period split detected — train covers days 1-19 of each month, prediction covers days 20-end. A simple last-N% chronological holdout is misleadingly optimistic; CV must hold out late-sub-period days (e.g. days 14-19) while keeping early-sub-period days in train to match the real split structure.",
-    "WARN: evaluation_metric not explicitly named in DATA_DESCRIPTION.md — inferred as rmsle from Kaggle Bike Sharing Demand competition context (continuous count target, standard competition metric). Confirm before modeling.",
-    "WARN: sub_target_candidates 'registered' (corr=0.970) and 'casual' (corr=0.690) are train-only columns absent from prediction file. They are leakage as direct features but are valid as separate prediction sub-targets (predict each and sum to count)."
+    "WARN: sample_submission.csv has 5 columns (row_id, period_id, jurisdiction, overdose_category, rate_per_10000_ed_visits) — not a strict 2-column [row_id, target] schema, but the description explicitly defines this as the required format; accepted.",
+    "WARN: scoring_subset active — MAE will be computed only on all_drugs/all_opioids/all_stimulants rows (11781 of 31416 train rows). CV metric must be restricted to these categories to match leaderboard.",
+    "WARN: The prediction file (val/covariates.csv) has no target column. The dose_sys_train.csv contains the target for training only. The sample_submission.csv (918 rows = 6 periods x 51 jurisdictions x 3 categories) defines the prediction frame.",
+    "INFO: sub_target_candidates are train-only overdose_category rows (benzodiazepine, cocaine, fentanyl, methamphetamine, heroin) with high correlation to scoring targets. These can inform feature engineering (cross-category lag/aggregate features) but are NOT present in the prediction frame."
   ],
   "errors": []
 }

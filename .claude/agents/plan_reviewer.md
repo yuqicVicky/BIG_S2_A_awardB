@@ -79,6 +79,11 @@ For each, state **PASS / WARN / FAIL** with specific findings.
 - `two_column_submission == true` asserted → **WARN** if absent.
 - `sub_target_decomposition` echoes `spec_parse.detected_structure.split_pattern.sub_target_candidates`
   when non-empty → **WARN** if a non-empty candidate list is ignored.
+- If `sub_target_candidates` is non-empty AND `sub_target_decomposition` is present, the
+  `feature_plan` MUST contain a `sub_target_modeling` block with **concrete per-fold training
+  steps** for each sub-target (e.g. "train a separate model on `registered`, a separate model
+  on `casual`, then sum predictions") — a bare reference in `completeness_constraints` without
+  a concrete implementation plan is insufficient → **WARN** if the block is absent or vague.
 
 ---
 

@@ -58,8 +58,11 @@ environment variable. **Never** copy a stale `run_id` from `spec_parse.json` and
    - `high_influence_direct_features` — top features by |corr| the plan should be sure to keep.
    - `prioritize_target_aggregates_on` / `prioritize_interactions` — the high-|corr| groups/pairs
      to build first.
-   - `lag_features` — `suggested_lags` from `target_autocorrelation.strongest_lags`;
-     `rolling_windows` sized to the series; set `experimental: true` when the shortest
+   - `lag_features` — **only populate `suggested_lags` and `rolling_windows` when
+     `is_timeseries == true`** from the engine output; set both to empty lists otherwise
+     (non-time-series datasets have no meaningful temporal autocorrelation to exploit).
+     When `is_timeseries == true`: take lags from `target_autocorrelation.strongest_lags`;
+     size `rolling_windows` to the series length; set `experimental: true` when the shortest
      `per_group_series_length.min` cannot support the largest suggested lag (≈ < 3× the lag).
    Write the final `outputs/logs/{run_id}_feature_influence.json` (keep the engine's blocks; only
    replace/enrich `recommendations_for_planner`).

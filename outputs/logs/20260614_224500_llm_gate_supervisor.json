@@ -1,0 +1,26 @@
+{
+  "run_id": "20260614_224500",
+  "stage": "supervisor",
+  "status": "warn",
+  "reasons": [
+    "submission.csv: 918 rows, 2 columns, finite values, correct row order \u2014 PASS",
+    "report.pdf: present (29574 bytes), review approved (6/7 checks pass) \u2014 PASS",
+    "cv_strategy: forward_expanding_time (5-fold, horizon=6) correctly mirrors hidden test \u2014 PASS",
+    "leakage audit: WARN (medium subtgt_mean OOF/inference mismatch, low imputation) \u2014 no HIGH leakage \u2014 PASS",
+    "hardcoding audit: 0 unacceptable findings, 8 risky all explained as pipeline infrastructure \u2014 PASS",
+    "prediction_sanity: WARN \u2014 KS=0.539 distribution shift explained by scoring-category subset vs full-category train; not model drift \u2014 no FAIL checks \u2014 WARN",
+    "gbdt OOF block_mae=1.6536 beats floor=1.7002 by 2.7%; NNLS keep-best applied; no regression",
+    "No CRITICAL or HIGH severity issues detected; 3 MEDIUM (non-blocking), 2 LOW",
+    "prediction_sanity: pass \u2014 no reasons",
+    "task_inference: pass \u2014 Task type regression confirmed: target is rate_per_10000_ed_visits (continuous float), metric is MAE (regression metric), sample submission contains float placeholder values.",
+    "leakage: pass \u2014 no precomputed target leakage in the consumed feature set",
+    "schema: pass \u2014 sample_submission resolved (918 rows, 5 columns); row_id column 'row_id' and target column 'rate_per_10000_ed_visits' present",
+    "schema: pass \u2014 sample_submission resolved (918 rows, 5 columns); row_id column 'row_id' and target column 'rate_per_10000_ed_visits' present",
+    "feature_gate: pass \u2014 Ablation ran clean (status=ok). Script pruned 0 groups. Reviewer extra-pruned text_svd (8 cols, delta=-0.000853, dead weight). 4 groups retained: datetime_derived (delta=+0.017047, above prune_margin), other_features (delta=+0.0014, lags essential), image_features (delta=+0.001836, positive), per_fold_aggregates (kept despite small negative delta; fold-aware features systematically undervalued by single HGB proxy). Final feature_spec.json has 73 columns entering specialists.",
+    "task_inference: pass \u2014 Task type regression confirmed: target is rate_per_10000_ed_visits (continuous float), metric is MAE (regression metric), sample submission contains float placeholder values.",
+    "submission: pass \u2014 submission.csv exists with 918 rows"
+  ],
+  "reviewed_at": "2026-06-14T16:14:58.685200Z",
+  "supervisor_verdict_takes_precedence": true,
+  "next_action": "deliver"
+}

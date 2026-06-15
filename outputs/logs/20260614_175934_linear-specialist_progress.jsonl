@@ -1,6 +1,0 @@
-{"ts": 1781432694.547275, "event": "candidate_done", "elapsed_sec": 2.348, "role": "linear-specialist", "run_id": "20260614_175934", "model": "dummy_mean", "partial_cv": 142.7550018428953, "best_so_far": 142.7550018428953}
-{"ts": 1781432695.338881, "event": "candidate_done", "elapsed_sec": 3.139, "role": "linear-specialist", "run_id": "20260614_175934", "model": "ridge", "partial_cv": 90.64361678573222, "best_so_far": 90.64361678573222}
-{"ts": 1781432696.593023, "event": "candidate_done", "elapsed_sec": 4.393, "role": "linear-specialist", "run_id": "20260614_175934", "model": "elastic_net", "partial_cv": 90.47769520951982, "best_so_far": 90.47769520951982}
-{"ts": 1781432697.717408, "event": "seed_done", "elapsed_sec": 5.518, "role": "linear-specialist", "run_id": "20260614_175934", "fold": 0}
-{"ts": 1781432698.479389, "event": "seed_done", "elapsed_sec": 6.28, "role": "linear-specialist", "run_id": "20260614_175934", "fold": 1}
-{"ts": 1781432698.4978151, "event": "final_done", "elapsed_sec": 6.298, "role": "linear-specialist", "run_id": "20260614_175934", "best_so_far": 90.47769520951982}
