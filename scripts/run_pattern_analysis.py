@@ -97,15 +97,82 @@ def _recommendations(report: dict) -> dict:
     min_len = pgs.get("min")
     # mark lags experimental when the shortest per-group series can't support them
     experimental = bool(min_len is not None and strongest and min_len < 3 * max(strongest))
+
+    # ── Target-history lag inference strategy ────────────────────────────────
+    # Target-autocorrelation lags need the TARGET's *prior* values at inference
+    # time. The target is never in the predict frame (it is what we predict), so
+    # whether a target-history lag is usable — and HOW — depends on the predict
+    # frame's temporal geometry relative to training. Classify into four regimes:
+    #
+    #   static            — no time dimension / no autocorrelated target lags.
+    #   direct            — prediction strictly follows training AND the forecast
+    #                       horizon is short enough that every lag input still
+    #                       lands inside training; batch lag-fill is honest.
+    #   recursive_required— prediction strictly follows training but spans a
+    #                       multi-step horizon, so lag inputs fall inside the
+    #                       unlabelled predict block; only recursive inference
+    #                       (predict → backfill → predict) produces honest lags.
+    #   unavailable       — predict frame interleaves within the training periods
+    #                       (overlap / within-period split, predict_after_train
+    #                       false); prior target values do not exist on the predict
+    #                       frame and recursion cannot recover them → disable.
+    #
+    # None of this can be left to the Step-6A′ ablation gate: OOF uses a holdout
+    # temporally CONTIGUOUS with fold-train, so the lag is fully computable in OOF
+    # and looks strongly predictive there — ablation would wrongly RETAIN a feature
+    # that collapses to a constant (median fill) on the true predict frame. So the
+    # strategy is decided deterministically at the source.
+    tc = report.get("time_coverage") or {}
+    has_time = bool(tc.get("has_time"))
+    predict_after_train = bool(tc.get("predict_after_train"))
+    horizon = tc.get("forecast_horizon")
+    min_lag = min(strongest) if strongest else None
+
+    if not (has_time and strongest):
+        strategy = "static"
+    elif not predict_after_train:
+        strategy = "unavailable"
+    elif horizon is not None and min_lag is not None and 0 < horizon <= min_lag:
+        strategy = "direct"
+    else:
+        strategy = "recursive_required"
+
+    _avail = {"static": "n/a", "direct": "available",
+              "recursive_required": "available", "unavailable": "unavailable"}[strategy]
+    _drop = strategy in ("static", "unavailable")
+    lag_block = {
+        "suggested_lags": [] if _drop else strongest,
+        "rolling_windows": [] if _drop else ([3] if strongest else []),
+        "experimental": True if strategy == "unavailable" else experimental,
+        "lag_inference_strategy": strategy,
+        "inference_availability": _avail,
+        "forecast_horizon": horizon,
+        "requires_recursive_inference": strategy == "recursive_required",
+    }
+    if strategy == "recursive_required":
+        lag_block["availability_warning"] = (
+            "Target-based lag/rolling features REQUIRE RECURSIVE INFERENCE: "
+            f"prediction follows training but spans a multi-step horizon "
+            f"(forecast_horizon={horizon} > shortest lag={min_lag}), so lag inputs "
+            "fall inside the unlabelled predict block. Batch lag-fill would make "
+            "them constant (median) beyond the first step while looking predictive "
+            "in the contiguous OOF holdout. The predict path must build these lags "
+            "recursively: predict each step, backfill the prediction, then advance.")
+    elif strategy == "unavailable":
+        lag_block["availability_warning"] = (
+            "Target-based lag/rolling features DISABLED: prediction does not "
+            "strictly follow training (predict_after_train=false), so the target's "
+            "prior values do not exist on the predict frame and recursion cannot "
+            "recover them. These features would be constant (median-filled) at "
+            "inference while looking predictive in the temporally-contiguous OOF "
+            "holdout — a false signal the ablation gate cannot catch. Do not build "
+            "them on the target; use only covariate/datetime/aggregate signal.")
+
     return {
         "high_influence_direct_features": high_influence,
         "prioritize_target_aggregates_on": high_influence[:4],
         "prioritize_interactions": inter[:3],
-        "lag_features": {
-            "suggested_lags": strongest,
-            "rolling_windows": [3] if strongest else [],
-            "experimental": experimental,
-        },
+        "lag_features": lag_block,
         "series_length_periods": shape.get("n_periods"),
         "note": ("Advisory prioritisation only — these correlations never become "
                  "model features; the programmer still builds aggregates per-fold."),

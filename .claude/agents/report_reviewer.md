@@ -12,10 +12,16 @@ produced by the `report-writer`. You did not write the report and you must not e
 Your only output is `outputs/runs/{run_id}/logs/report_review.json`. Re-read the report and the source
 logs fresh — never rely on memory or on what the writer claimed.
 
-**Independence contract:** you may read everything and write only your own review JSON.
-You must not modify `report.pdf`, `outputs/reports/*`, or any artifact under review. If
-the report needs changes, you record them in `required_revisions` and emit
-`next_action: revise_report`; the orchestrator re-dispatches `report-writer` to fix them.
+**Independence contract:** you write only your own review JSON. You must not modify `report.pdf`,
+`outputs/reports/*`, or any artifact under review. If the report needs changes, you record them in
+`required_revisions` and emit `next_action: revise_report`; the orchestrator re-dispatches
+`report-writer` to fix them.
+
+**Read only what the checks below name** — the small JSON summaries in the Inputs table plus the
+report Markdown. Every scalar you spot-check lives in those summaries. **Do not open** `*.csv`
+(`oof_*`, `cand_*`, `prior_best`, `meta_choice`), `*.parquet`, `cv_folds.json`, `state.json`, or
+`*_progress.jsonl`: they are large per-row prediction/feature data and hold nothing you verify.
+Reading them wastes the token budget the report stage is trying to conserve.
 
 ---
 
@@ -100,14 +106,16 @@ model complexity (8.2); prediction sanity OR "not run" (8.3); leakage audit resu
 (8.4); selection rationale (8.5); repair status (8.6). (Validation-strategy rationale and n_splits
 live in Section 6, not here.) Missing subsection → WARN; present but unsourced → FAIL.
 
-### Check 8 — Figures present and plausible
+### Check 8 — Figures (only when figures were requested)
 
-At least one inline figure must be embedded in the report (the MD must contain at least one
-`![...](...)` line that references an existing PNG file in `outputs/reports/`). If zero
-figures are present → WARN (not FAIL, since figure generation can fail). If figures are
-referenced but the PNG files do not exist on disk → FAIL (broken link). For each referenced
-PNG that does exist, check its file size: if ≤ 5 KB → WARN (likely blank or severely
-truncated). Check each figure path that appears in the Markdown.
+Text-only is the default report mode (figures are off unless the orchestrator re-enabled them),
+so **zero figures is PASS, not WARN** — do not nag a correctly text-only report. Only act on
+figures that are actually referenced: if the Markdown embeds a `![...](...)` line whose PNG does
+not exist on disk → FAIL (broken link); for each referenced PNG that does exist, if its size is
+≤ 5 KB → WARN (likely blank or truncated). Raise a missing-visualisation point **only** when a
+figure would materially aid comprehension of the report's headline finding (e.g. a stated
+heteroscedasticity result with no residual plot) — and then as `optional_improvements`, not a
+blocking FAIL.
 
 ### Check 9 — Markdown rendering sanity
 

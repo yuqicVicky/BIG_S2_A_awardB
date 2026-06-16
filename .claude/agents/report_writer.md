@@ -22,7 +22,16 @@ filename, a JSON key, a variable name, or a path — only the findings, in plain
 ## Where to read each fact (writer-only map — NONE of these names appears in the report)
 
 This table tells **you** which log holds which fact. The filenames below are your plumbing; the
-reader never sees them. Read every file that exists before composing a word.
+reader never sees them. **Read ONLY the files in this map** (the ones that exist for this run) —
+they are small JSON summaries holding every scalar fact the report needs.
+
+**Never read prediction or feature data — it is large and contains nothing the report needs.**
+Specifically, do NOT open: `*.csv` (e.g. `oof_*.csv`, `cand_*.csv`, `prior_best.csv`,
+`meta_choice.csv` — raw per-row predictions; the *scores* you need are already in
+`ensemble_meta.json` / `model_selection.json`), `*.parquet` (feature matrices), `cv_folds.json`
+(fold index arrays — read `n_splits`/`horizon` from `validation_strategy.json` instead),
+`state.json`, `profile.json`, and `*_progress.jsonl`. Reading these wastes the token budget on
+data that never appears in the report.
 
 | Fact you need | Read it from |
 |---|---|
@@ -40,10 +49,11 @@ reader never sees them. Read every file that exists before composing a word.
 | Final gate / repair status | `supervisor_gatekeeper.json` |
 
 Read `analysis_plan.json.modeling_mode` to know whether the general or specialist set of logs
-exists. `run_id` is passed in the prompt.
+exists. `run_id` is passed in the prompt. To discover which mapped files are present, list **only
+the small JSON** (never glob the whole directory into context):
 
 ```bash
-ls -lh outputs/runs/{run_id}/logs/
+ls outputs/runs/{run_id}/logs/*.json
 ```
 
 ---
@@ -138,10 +148,22 @@ After the first use, use the term without re-explaining.
 - Separate major sections with a `---` rule. Round sensibly (4 sig figs for scores, 1 decimal for
   percentages).
 
-### Figures — required for every report
+### Figures — OFF by default (token-saving)
 
-Generate at least the following four inline charts using Python + matplotlib and embed them as
-`![caption](path)` links in the Markdown. Save each PNG to `outputs/reports/{run_id}_fig_N.png`.
+**Default: generate NO figures.** When the prompt sets `no_figures=true` (the orchestrator's
+default per token-saving rule 4), write a text-only report — skip this whole subsection, embed no
+images, and **do not read any prediction/OOF data**. A polished text report with clean tables is
+the standard deliverable; figures are re-enabled only when the `report-reviewer` explicitly cites
+a missing visualisation and the orchestrator re-dispatches you without `no_figures`.
+
+Note which figures cost what before enabling: figures 2 and 3 below require reading the large
+`oof_*.csv` prediction files — the single most expensive read in this stage. Figures 1 and 4 are
+cheap (fold metadata + a short importance list). When figures are requested, prefer 1 and 4; add
+2 and 3 only if heteroscedasticity / distribution-shift is the report's headline finding.
+
+When figures ARE requested, generate the following inline charts using Python + matplotlib and
+embed them as `![caption](path)` links in the Markdown. Save each PNG to
+`outputs/reports/{run_id}_fig_N.png`.
 
 1. **CV fold structure** (`fig_1_cv_folds.png`): a horizontal bar chart where each row is a fold,
    the blue bar is the training window, and the orange bar is the validation window. Label the

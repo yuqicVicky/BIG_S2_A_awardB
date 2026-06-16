@@ -92,6 +92,17 @@ For each, state **PASS / WARN / FAIL** with specific findings.
 - **Overfit guard (time-series):** lag/rolling/interaction features on few periods must be flagged
   `experimental` (so the Step-6A′ ablation gate validates them) — an unflagged speculative feature
   asserted as beneficial → **WARN**.
+- **Inference availability of target-history lags (FAIL).** A lag/rolling feature whose name/group_keys
+  make it a function of the **target / a sub-target's past values** is honestly computable on the
+  predict frame only when prediction strictly **follows** training. Read
+  `feature_influence.json.time_coverage.predict_after_train` (and
+  `recommendations_for_planner.lag_features.inference_availability`). If `predict_after_train == false`
+  (overlap / within-period split) — or the target column is absent from the prediction file's schema in
+  `spec_parse.json` — and the plan still emits a buildable target-history lag (not marked `disabled` /
+  `inference_availability: "unavailable"`) → **FAIL**. Rationale: the feature's input does not exist on
+  the predict frame, so it collapses to a median-filled **constant** at inference while scoring strongly
+  in the temporally-contiguous OOF holdout — the ablation gate cannot catch it, so it must be blocked at
+  the plan. (Lags on covariates/datetime present in both frames are fine.)
 - **Overfit guard (small-sample, non-time-series):** compute `n_train_rows` from
   `data_profile.json` and count total planned features (direct_numeric + all engineered groups).
   If total features > `n_train_rows / 10`, every engineered feature group (`interactions`,

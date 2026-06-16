@@ -193,6 +193,10 @@ def _analyze_time_coverage(
                     result["temporal_overlap"] = not (
                         tr.max() < pr.min() or pr.max() < tr.min())
                     result["predict_after_train"] = bool(pr.min() > tr.max())
+                    # forecast horizon = #consecutive prediction steps beyond train
+                    if result["predict_after_train"]:
+                        result["forecast_horizon"] = int(result.get(
+                            "predict_n_unique_periods") or 0)
         return result
     for frame_name, df in [("train", train_df), ("predict", predict_df)]:
         if col not in df.columns:
@@ -218,6 +222,12 @@ def _analyze_time_coverage(
         p_max = pd.to_datetime(result["predict_max"])
         result["temporal_overlap"] = not (t_max < p_min or p_max < t_min)
         result["predict_after_train"] = p_min > t_max
+        # forecast horizon = #consecutive prediction steps beyond the last train period.
+        # Conservative global proxy (≥ per-group horizon): when it exceeds the shortest
+        # autocorrelated lag, batch lag-fill breaks and recursive inference is required.
+        if result["predict_after_train"]:
+            result["forecast_horizon"] = int(result.get(
+                "predict_n_unique_timestamps") or 0)
 
     # Within-period pattern: check if train and predict partition on a sub-unit
     if col in train_df.columns and col in predict_df.columns:

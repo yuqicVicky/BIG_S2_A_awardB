@@ -19,6 +19,7 @@ All I/O goes through `outputs/runs/{run_id}/logs/` (unprefixed filenames). Per d
 |-------|------|
 | `data-format-converter`, `data-profiler`, `data-pattern-analyzer`, `task-inference-agent`, `analysis-planner`, `analysis-programmer`, `model-search-agent`, `modeling-specialist` (gbdt/linear), `ensemble-meta`, `report-writer` | doer |
 | `validation-and-schema-guardian` | doer — CV strategy (Step 3) + submission validation (Step 7) |
+| `modeling-watchdog` | monitor — live efficiency supervisor for the parallel modeling group (Step 6B); never edits models or submission |
 | `plan-reviewer` | reviewer — feature plan |
 | `feature-engineering-reviewer` | reviewer — ablation evidence |
 | `model-performance-reviewer` (review + lead) | reviewer — modeling result + round consolidation |
@@ -47,7 +48,7 @@ Reviewers never edit what they review. Re-dispatch the **doer** when a reviewer 
 
 ## Token-saving rules
 
-1. **Step 3c skip:** `split_structure == "i.i.d."` AND total columns ≤ 20 → write stub
+1. **Step 3b skip:** `split_structure == "i.i.d."` AND total columns ≤ 20 → write stub
    `feature_influence.json {"skipped":true}`, skip dispatch.
 2. **Round-2 specialist skip:** read `ensemble_meta.json` — families with NNLS weight < 0.05
    → reuse existing `cand_{fam}.csv` / `oof_{fam}.csv`, skip retraining.
@@ -87,18 +88,20 @@ Budget guard is the only hard exit. This rule covers doer crashes only.
 ### Step 2 — Task + profile *(sequential)*
 | | 2a `task-inference-agent` | 2b `data-profiler` |
 |---|---|---|
-| In | `DATA_DESCRIPTION.md`, `data/*.csv` | `logs/spec_parse.json`, `data/*.csv` |
+| In | `DATA_DESCRIPTION.md`?, `data/*.csv`, user request | `logs/spec_parse.json`, `data/*.csv` |
 | Out | `logs/spec_parse.json`, `logs/llm_gate_task_inference.json` | `logs/data_profile.json`, `logs/missingness_profile.json`, `logs/imputation_plan.json` |
+
+`DATA_DESCRIPTION.md` is the primary authority **when present**; if absent, `task-inference-agent` infers task/target/metric from the user request + data profile and notes the degraded source in `spec_parse.json`.
 
 Failure: repair-retry ≤2, then minimal fallback (`schema.discover_schema()` + `build_feature_bundle().profile`).
 
 ### Step 3 — Pre-run setup *(sequential)*
-| | 3a `validation-and-schema-guardian` | 3c `data-pattern-analyzer` |
+| | 3a `validation-and-schema-guardian` | 3b `data-pattern-analyzer` |
 |---|---|---|
 | In | `logs/spec_parse.json`, `logs/data_profile.json` | `logs/spec_parse.json`, `logs/data_profile.json`, `logs/validation_strategy.json`, `data/*.csv` |
 | Out | `logs/validation_strategy.json`, `logs/cv_folds.json`, `logs/llm_gate_schema.json` | `logs/feature_influence.json` |
 
-**Apply token-saving rule 1 before 3c.** Failure: log & continue (advisory).
+**Apply token-saving rule 1 before 3b.** Failure: log & continue (advisory).
 
 ### Step 4 — Feature plan
 | | |
@@ -150,14 +153,16 @@ On failure: `AWARDB_SKIP_ABLATION=1` (pass-through).
 |---|---|
 | Out | `logs/model_search.json`, `logs/final_model.json`, `logs/oof_*.csv`, `logs/prediction_sanity.json`, `logs/promotion.json`, `logs/prior_best.csv`, `root/submission.csv` |
 
-*`specialist`:* **(Apply token-saving rule 2 in round 2.)** Dispatch in parallel: `modeling-specialist` × 2 (gbdt, linear)
+*`specialist`:* **(Apply token-saving rule 2 in round 2.)** Dispatch in parallel: `modeling-specialist` × 2 (gbdt, linear), and **dispatch `modeling-watchdog` concurrently** (same dispatch turn) to consume the specialists' heartbeats.
 
 | Each specialist In | `logs/cv_folds.json`, `logs/feature_spec.json`, `logs/spec_parse.json`, `logs/validation_strategy.json`, `logs/features_train.parquet`, `logs/features_pred.parquet` |
 |---|---|
 | Each specialist Out | `logs/agent_{fam}.json`, `logs/cand_{fam}.csv` (float proba), `logs/oof_{fam}.csv` (float proba), `logs/{fam}-specialist_progress.jsonl` |
 | Set per specialist | `AWARDB_TIME_BUDGET_SEC`≈1000s, `AWARDB_HEARTBEAT_PATH=logs/{fam}-specialist_progress.jsonl` |
+| `modeling-watchdog` In | `logs/{fam}-specialist_progress.jsonl` (live heartbeats), remaining wall-clock + token budget |
+| `modeling-watchdog` Out | `logs/{role}_watchdog.json` per killed/restarted specialist |
 
-Then dispatch `ensemble-meta`:
+A run projected to overrun its time slice is killed by the watchdog and relaunched once on a leaner budget; the deterministic floor is never regressed. Then dispatch `ensemble-meta`:
 
 | In | `logs/cand_*.csv`, `logs/oof_*.csv`, `logs/cv_folds.json`, `logs/spec_parse.json`, `logs/oof_floor.csv`, `logs/model_selection.json` |
 |---|---|
@@ -223,7 +228,7 @@ Conservative default: `validation_strategy.json` missing → dispatch both.
 
 **8b** · Dispatch `supervisor-gatekeeper`:
 
-| In | all `logs/`, `root/submission.csv`, `root/report.pdf`, `DATA_DESCRIPTION.md`, sample submission |
+| In | all `logs/`, `root/submission.csv`, `root/report.pdf`, `DATA_DESCRIPTION.md`?, sample submission |
 |---|---|
 | Out | `logs/supervisor_gatekeeper.json`, `logs/llm_gate_supervisor.json` |
 

@@ -1,6 +1,6 @@
 ---
 name: modeling-watchdog
-description: Live efficiency supervisor for the parallel modeling group. Shares the worker's progress heartbeat file, derives each specialist's time budget from the wall-clock that actually remains, detects a run projected to overrun its slice, kills it, and reports a leaner budget for one restart. Keeps each round under its time slice without ever regressing the deterministic floor. Dispatched by the orchestrator alongside background-launched specialists in Step 5.
+description: Live efficiency supervisor for the parallel modeling group. Shares the worker's progress heartbeat file, derives each specialist's time budget from the wall-clock that actually remains, detects a run projected to overrun its slice, kills it, and reports a leaner budget for one restart. Keeps each round under its time slice without ever regressing the deterministic floor. Dispatched by the orchestrator concurrently with the parallel modeling specialists in Step 6B.
 tools: Read, Bash, Glob, Grep
 model: claude-sonnet-4-6
 ---

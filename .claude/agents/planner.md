@@ -119,6 +119,17 @@ applicable family, each **fold-safe**:
   shortest `per_group_series_length.min` cannot support it (≈ < 3× the lag) or when
   `recommendations_for_planner.lag_features.experimental` is true. With no influence file, keep
   today's "few periods ⇒ experimental" heuristic.
+- **Inference availability (target-history lags). FAIL to ignore.** A lag/rolling feature built on
+  the **target** (or a sub-target) needs the target's *prior* values at prediction time, which only
+  exist when the predict frame strictly **follows** training. Read `feature_influence.json.
+  time_coverage.predict_after_train` (and `recommendations_for_planner.lag_features.
+  inference_availability`): when prediction does **not** strictly follow training (`predict_after_train
+  == false` — overlap / within-period split), the target's history is absent on the predict frame, so
+  such a lag would be median-filled to a **constant** at inference while looking predictive in the
+  temporally-contiguous OOF holdout — a false signal the Step-6A′ ablation gate **cannot** catch. In
+  that case **do not emit target-history lags**: leave them out of `feature_plan.lag_features` (or
+  list them with `"inference_availability": "unavailable", "disabled": true` and an empty build), and
+  record the reason in `plan_warnings`. Lags on covariates/datetime present in both frames are fine.
 - **Influence-driven emphasis.** Build `per_fold_target_aggregates` and `interactions` first on the
   highest-|corr| features in `feature_influence.ranked` / `recommendations_for_planner`
   (`prioritize_target_aggregates_on`, `prioritize_interactions`, `high_influence_direct_features`).
@@ -397,7 +408,7 @@ fabricate a `..._000000` timestamp — use the canonical run_id so the field is 
     "text_tfidf_svd": [{"column": "...", "svd_components": 8, "experimental": true}],
     "per_fold_target_aggregates": [{"name": "...", "group_keys": ["..."]}],
     "interactions": ["..."],
-    "lag_features": [{"name": "...", "group_keys": ["..."], "experimental": true}],
+    "lag_features": [{"name": "...", "group_keys": ["..."], "experimental": true, "inference_availability": "available|unavailable"}],
     "imputation": {"column": "strategy"},
     "image_features": {
       "source_sidecar": "<file_sidecars[i].path_*>", "join_keys": ["..."],

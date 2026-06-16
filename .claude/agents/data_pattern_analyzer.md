@@ -64,6 +64,14 @@ environment variable. **Never** copy a stale `run_id` from `spec_parse.json` and
      When `is_timeseries == true`: take lags from `target_autocorrelation.strongest_lags`;
      size `rolling_windows` to the series length; set `experimental: true` when the shortest
      `per_group_series_length.min` cannot support the largest suggested lag (≈ < 3× the lag).
+     **Inference-availability gate (do NOT override):** when the engine sets
+     `lag_features.inference_availability == "unavailable"` (target-history lags whose prior
+     values do not exist on the predict frame because `time_coverage.predict_after_train` is
+     false), keep `suggested_lags` and `rolling_windows` **empty** and preserve the engine's
+     `availability_warning`. Never re-populate target-based lags in this case — they would be a
+     constant on the predict frame yet look predictive in the temporally-contiguous OOF holdout,
+     a false signal the ablation gate cannot catch. (Covariate/datetime/aggregate features are
+     unaffected — only target-history lags are gated.)
    Write the final `outputs/runs/{run_id}/logs/feature_influence.json` (keep the engine's blocks; only
    replace/enrich `recommendations_for_planner`).
 

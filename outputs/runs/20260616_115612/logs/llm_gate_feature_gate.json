@@ -1,8 +1,0 @@
-{
-  "run_id": "20260616_115612",
-  "stage": "feature_gate",
-  "status": "pass",
-  "reasons": [
-    "Both authored feature groups (other_features n=17, per_fold_aggregates n=6) have negative accuracy-delta — removing either hurts OOF accuracy. No dead-weight groups identified. No leakage audit present (round 1). Script prune set (empty) confirmed correct. feature_spec.json unchanged with 23 total feature columns entering specialists."
-  ]
-}
