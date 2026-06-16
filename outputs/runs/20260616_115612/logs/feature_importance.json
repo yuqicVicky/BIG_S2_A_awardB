@@ -1,0 +1,25 @@
+{
+  "run_id": "20260616_115612",
+  "final_model_features": [
+    "Pclass",
+    "Sex",
+    "Age",
+    "SibSp",
+    "Parch",
+    "Ticket",
+    "Fare",
+    "Cabin",
+    "Embarked"
+  ],
+  "feature_importance": {
+    "Pclass": 0.33848103596101514,
+    "Age": 0.07722109457217757,
+    "SibSp": 0.03532249888573559,
+    "Parch": 0.08162940708348335,
+    "Fare": 0.25730652238496265
+  },
+  "excluded_features": {},
+  "invariant_check": {
+    "importance_subset_of_model": true
+  }
+}

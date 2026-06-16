@@ -17,7 +17,7 @@ classification without any dataset-specific hardcoding.
 
 from __future__ import annotations
 
-from dataclasses import asdict, dataclass, field
+from dataclasses import asdict, dataclass, field, replace
 import re
 from typing import Any
 
@@ -404,6 +404,34 @@ def _metric_matches_task(metric: str, task: str) -> bool:
     if task == REGRESSION:
         return metric in _REG_METRICS
     return metric in _CLASS_METRICS
+
+
+def apply_metric_decision(task: "TaskSpec", metric_decision: dict | None) -> "TaskSpec":
+    """Override the resolved metric with the planner's ``analysis_plan.json``
+    ``metric_decision`` when present and consistent with the task family.
+
+    The planner (Step 4) is the single metric authority: it reads the
+    task-inference output and emits ``metric_decision.primary_metric`` (preferring
+    the MAE family for regression). Every floor scorer reads ``TaskSpec.metric``, so
+    applying the override here makes the planner's choice flow to the modeling
+    specialists, the ablation gate, the ensemble and CV without per-call-site logic.
+
+    Guard rails: an unknown metric, or a classification metric paired with a
+    regression task (or vice versa), is ignored — the deterministically resolved
+    metric stands. This keeps ``prefer_mae_family`` from ever scoring a
+    classification task with MAE.
+    """
+    if not isinstance(metric_decision, dict):
+        return task
+    m = metric_decision.get("primary_metric")
+    if not isinstance(m, str):
+        return task
+    m = m.strip().lower()
+    if m not in _GREATER_IS_BETTER or not _metric_matches_task(m, task.task_type):
+        return task
+    if m == task.metric:
+        return task
+    return replace(task, metric=m, greater_is_better=_GREATER_IS_BETTER[m])
 
 
 def _choose_positive_label(labels: list) -> Any:

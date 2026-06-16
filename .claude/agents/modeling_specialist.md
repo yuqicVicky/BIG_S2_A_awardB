@@ -18,7 +18,12 @@ produce a *candidate* (a CV score + a candidate submission); you **never** touch
 | `family` | Models | Why it earns a seat on the panel |
 |----------|--------|-----------------------------------|
 | `gbdt`   | LightGBM / XGBoost / CatBoost / HistGradientBoosting (whichever are installed) | usually the strongest single learner; aggressive randomized tuning |
-| `linear` | Ridge / ElasticNet over leakage-safe per-group target aggregates, one-hot, and the TF-IDF→SVD text block | fast, low-variance; rarely wins outright but adds **diversity** the blend exploits |
+| `linear` | **Regression:** Ridge / ElasticNet. **Classification:** LogisticRegression (regularized) — it has `predict_proba`. Over leakage-safe per-group target aggregates, one-hot, and the TF-IDF→SVD text block | fast, low-variance; rarely wins outright but adds **diversity** the blend exploits |
+
+**Classification rule (proba-capable only).** A classification candidate **must** be able to
+emit a positive-class probability. Prefer `LogisticRegression`; **never** deliver a proba-less
+`RidgeClassifier` / `LinearSVC` as the candidate unless it is wrapped in `CalibratedClassifierCV`
+(the engine does this automatically). A hard-label candidate breaks the probability-domain blend.
 
 ## Inputs
 - `data/DATA_DESCRIPTION.md` — the authority for the task (read it first).
@@ -77,14 +82,24 @@ writes the candidate submission to `outputs/runs/{run_id}/logs/cand_<family>.csv
 `outputs/runs/{run_id}/logs/oof_<family>.csv`, and the candidate JSON.
 
 ## Output — shared candidate schema
-The script writes `outputs/runs/{run_id}/logs/agent_<family>.json`:
+The script writes `outputs/runs/{run_id}/logs/agent_<family>.json`. `cv_metric` is the
+**resolved official metric** from `model_selection.json` / the planner's `metric_decision`
+(e.g. `accuracy` for classification, `block_mae`/`mae` for regression) — never assume
+`block_mae`. `lower_is_better` follows that metric.
 ```json
 {"role": "<family>-specialist", "approach": "<family>", "selected_model": "...",
- "cv_metric": "block_mae", "cv_score": 0.0, "lower_is_better": true,
+ "cv_metric": "<resolved metric>", "cv_score": 0.0, "lower_is_better": false,
  "candidate_submission": "outputs/runs/{run_id}/logs/cand_<family>.csv",
  "oof_path": "outputs/runs/{run_id}/logs/oof_<family>.csv", "canonical_folds": true,
  "authored_features_used": [], "monotonic_applied": false}
 ```
+
+**Classification column contract (probability domain).** For classification the engine writes
+`oof_<family>.csv` and `cand_<family>.csv` carrying the **continuous positive-class probability**
+(a genuine out-of-fold prediction for the OOF — never an in-sample refit) — **not** a thresholded
+0/1 label. The single 0/1 threshold is applied once downstream by `ensemble-meta` at the
+submission boundary. This is what lets the NNLS blend combine families instead of collapsing to
+the dominant one.
 Report your `cv_score` back to the orchestrator and state plainly whether you beat the floor's
 score. Do **not** overwrite `submission.csv`.
 

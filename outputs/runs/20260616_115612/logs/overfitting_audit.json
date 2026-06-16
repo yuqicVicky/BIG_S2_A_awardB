@@ -1,0 +1,8 @@
+{
+  "run_id": "20260616_115612",
+  "selected_model": "blend(floor+linear+gbdt)",
+  "metric": "accuracy",
+  "primary_holdout_score": null,
+  "stability": {},
+  "assessment": "high_variance"
+}

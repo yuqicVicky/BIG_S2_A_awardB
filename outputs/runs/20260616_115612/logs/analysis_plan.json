@@ -1,0 +1,337 @@
+{
+  "run_id": "20260616_115612",
+  "planned_at": "2026-06-16T12:00:00Z",
+  "modeling_mode": "specialist",
+  "data_coverage": {
+    "available_sources": [
+      {
+        "source": "data/train.csv",
+        "column": "PassengerId",
+        "dtype": "int64",
+        "usage": "key",
+        "justification": "Row ID / unique passenger identifier; n_unique=891 equals n_rows; not a causal covariate; used only for joining and submission ordering"
+      },
+      {
+        "source": "data/train.csv",
+        "column": "Survived",
+        "dtype": "int64",
+        "usage": "target",
+        "justification": "Binary classification label; class distribution 0:549, 1:342"
+      },
+      {
+        "source": "data/train.csv",
+        "column": "Pclass",
+        "dtype": "int64",
+        "usage": "direct_feature",
+        "justification": "Passenger class (1/2/3); abs_corr=0.3385 with target per feature_influence; 3 unique values, used as ordinal numeric directly"
+      },
+      {
+        "source": "data/train.csv",
+        "column": "Name",
+        "dtype": "object",
+        "usage": "aggregate",
+        "justification": "n_unique=891 (pure ID); raw string excluded; title extracted (Mr/Mrs/Miss/Master/Rare) as a derived categorical feature carrying socio-gender signal"
+      },
+      {
+        "source": "data/train.csv",
+        "column": "Sex",
+        "dtype": "object",
+        "usage": "direct_feature",
+        "justification": "Strongest predictor; abs_corr=0.5531 (target_range female 74.2% vs male 18.9%); 2 categories, one-hot encoded"
+      },
+      {
+        "source": "data/train.csv",
+        "column": "Age",
+        "dtype": "float64",
+        "usage": "direct_feature",
+        "justification": "Continuous numeric; abs_corr=0.0772; 19.87% missing in train — impute from fold-train median grouped by title; included as direct feature post-imputation"
+      },
+      {
+        "source": "data/train.csv",
+        "column": "SibSp",
+        "dtype": "int64",
+        "usage": "direct_feature",
+        "justification": "Siblings/spouses aboard; abs_corr=0.0353; no missing; used directly and in family_size interaction"
+      },
+      {
+        "source": "data/train.csv",
+        "column": "Parch",
+        "dtype": "int64",
+        "usage": "direct_feature",
+        "justification": "Parents/children aboard; abs_corr=0.0816; no missing; used directly and in family_size interaction"
+      },
+      {
+        "source": "data/train.csv",
+        "column": "Ticket",
+        "dtype": "object",
+        "usage": "aggregate",
+        "justification": "High-cardinality (681 unique); raw string excluded; ticket prefix extracted as low-cardinality categorical; ticket group size computed per fold as fold-safe aggregate"
+      },
+      {
+        "source": "data/train.csv",
+        "column": "Fare",
+        "dtype": "float64",
+        "usage": "direct_feature",
+        "justification": "Continuous numeric; abs_corr=0.2573; no missing in train; used directly and in Pclass×Fare interaction"
+      },
+      {
+        "source": "data/train.csv",
+        "column": "Cabin",
+        "dtype": "object",
+        "usage": "aggregate",
+        "justification": "77.1% missing; raw string excluded; deck letter (first char) extracted as low-cardinality ordinal; binary has_cabin flag captures missingness as informative signal"
+      },
+      {
+        "source": "data/train.csv",
+        "column": "Embarked",
+        "dtype": "object",
+        "usage": "direct_feature",
+        "justification": "Port of embarkation; abs_corr=0.2166 target range; 3 categories, 0.22% missing; one-hot encoded after imputing with mode from fold-train"
+      },
+      {
+        "source": "data/test.csv",
+        "column": "PassengerId",
+        "dtype": "int64",
+        "usage": "key",
+        "justification": "Row ID in prediction frame; used for submission ordering only"
+      },
+      {
+        "source": "data/test.csv",
+        "column": "Pclass",
+        "dtype": "int64",
+        "usage": "direct_feature",
+        "justification": "Same covariate as train; present in prediction frame"
+      },
+      {
+        "source": "data/test.csv",
+        "column": "Name",
+        "dtype": "object",
+        "usage": "aggregate",
+        "justification": "Same extraction as train (title from Name string)"
+      },
+      {
+        "source": "data/test.csv",
+        "column": "Sex",
+        "dtype": "object",
+        "usage": "direct_feature",
+        "justification": "Same covariate as train"
+      },
+      {
+        "source": "data/test.csv",
+        "column": "Age",
+        "dtype": "float64",
+        "usage": "direct_feature",
+        "justification": "20.57% missing in test; imputed from fold-train group medians (by title)"
+      },
+      {
+        "source": "data/test.csv",
+        "column": "SibSp",
+        "dtype": "int64",
+        "usage": "direct_feature",
+        "justification": "Same covariate as train"
+      },
+      {
+        "source": "data/test.csv",
+        "column": "Parch",
+        "dtype": "int64",
+        "usage": "direct_feature",
+        "justification": "Same covariate as train"
+      },
+      {
+        "source": "data/test.csv",
+        "column": "Ticket",
+        "dtype": "object",
+        "usage": "aggregate",
+        "justification": "Same extraction as train (ticket prefix + group size from fold-train counts)"
+      },
+      {
+        "source": "data/test.csv",
+        "column": "Fare",
+        "dtype": "float64",
+        "usage": "direct_feature",
+        "justification": "0.24% missing in test; imputed with fold-train median; used as direct feature"
+      },
+      {
+        "source": "data/test.csv",
+        "column": "Cabin",
+        "dtype": "object",
+        "usage": "aggregate",
+        "justification": "78.23% missing in test; same deck extraction and has_cabin flag as train"
+      },
+      {
+        "source": "data/test.csv",
+        "column": "Embarked",
+        "dtype": "object",
+        "usage": "direct_feature",
+        "justification": "Same covariate as train; no missing in test"
+      },
+      {
+        "source": "data/gender_submission.csv",
+        "column": "PassengerId",
+        "dtype": "int64",
+        "usage": "key",
+        "justification": "Submission row identifier; defines required row order for output"
+      },
+      {
+        "source": "data/gender_submission.csv",
+        "column": "Survived",
+        "dtype": "int64",
+        "usage": "excluded",
+        "justification": "Sample submission placeholder predictions; not an input to feature engineering or training"
+      }
+    ],
+    "uncovered_columns": [],
+    "text_columns_exploited": [],
+    "datetime_sources": [],
+    "target_aggregate_keys": [
+      ["Sex"],
+      ["Pclass"],
+      ["Embarked"],
+      ["Sex", "Pclass"]
+    ],
+    "image_sidecars": []
+  },
+  "feature_plan": {
+    "direct_numeric": ["Pclass", "Age", "SibSp", "Parch", "Fare"],
+    "categorical_encoding": [
+      {
+        "column": "Sex",
+        "strategy": "one_hot"
+      },
+      {
+        "column": "Embarked",
+        "strategy": "one_hot"
+      },
+      {
+        "column": "title",
+        "strategy": "ordinal",
+        "note": "Derived from Name; categories: Mr, Mrs, Miss, Master, Rare — ordinal by survival expectation"
+      },
+      {
+        "column": "deck",
+        "strategy": "ordinal",
+        "note": "Derived from Cabin first character; missing deck encoded as separate category"
+      },
+      {
+        "column": "ticket_prefix",
+        "strategy": "target_enc_per_fold",
+        "note": "Prefix extracted from Ticket string; target-encoded per fold to avoid leakage"
+      }
+    ],
+    "datetime_derived": [],
+    "text_tfidf_svd": [],
+    "per_fold_target_aggregates": [
+      {
+        "name": "tgt_mean_Sex",
+        "group_keys": ["Sex"]
+      },
+      {
+        "name": "tgt_mean_Pclass",
+        "group_keys": ["Pclass"]
+      },
+      {
+        "name": "tgt_mean_Embarked",
+        "group_keys": ["Embarked"]
+      },
+      {
+        "name": "tgt_mean_Sex_Pclass",
+        "group_keys": ["Sex", "Pclass"]
+      },
+      {
+        "name": "ticket_group_size",
+        "group_keys": ["Ticket"],
+        "note": "Count of passengers sharing the same Ticket number; computed on fold-train rows only"
+      }
+    ],
+    "interactions": [
+      "Sex_x_Pclass",
+      "Sex_x_Age",
+      "Pclass_x_Fare",
+      "family_size"
+    ],
+    "lag_features": [],
+    "imputation": {
+      "Age": "median_by_title_group_fold_train",
+      "Cabin": "missing_category",
+      "Embarked": "mode_fold_train",
+      "Fare": "median_fold_train"
+    },
+    "exclude_columns": ["PassengerId", "Name_raw", "Ticket_raw", "Cabin_raw"],
+    "rationale": "All signals exploited: direct numerics, Sex/Embarked one-hot, title/deck/ticket_prefix extracted from high-cardinality strings, per-fold target aggregates on top-3 predictors (Sex, Pclass, Embarked, Sex×Pclass) and ticket group size. Interactions cover the three prioritized pairs plus family size. No lag features (non-time-series). All target-derived aggregates fit per fold; ticket_prefix target-encoding per fold. ~22 total features on 891 rows (ratio 0.025) — well below overfit threshold.",
+    "derived_features_note": {
+      "title": "Extracted from Name column using regex on salutation (Mr/Mrs/Miss/Master/Rare); fold-safe (no target information)",
+      "deck": "First character of Cabin string; missing assigned separate 'Unknown' category",
+      "has_cabin": "Binary flag: 1 if Cabin is non-null, 0 otherwise — captures the informative missingness pattern",
+      "ticket_prefix": "Alphabetic prefix of Ticket string; numeric-only tickets get prefix 'NUM'",
+      "ticket_group_size": "Count of passengers per Ticket value computed on fold-train only",
+      "family_size": "SibSp + Parch + 1 (total household size aboard)"
+    }
+  },
+  "representation_strategy": {
+    "chosen": "tabular_ml",
+    "rationale": "i.i.d. tabular data confirmed by guardian (stratified_kfold); no time series, no image sidecars, no free-text columns (text_like_columns=[]) — standard feature engineering with categorical extraction from Name/Cabin/Ticket is sufficient.",
+    "capability_gaps": [],
+    "programmer_instructions": "Extract title from Name regex, deck letter from Cabin, ticket prefix+group size from Ticket; build Sex×Pclass, Sex×Age, Pclass×Fare interactions and family_size; all target-derived aggregates strictly per fold; impute Age by title-group median from fold-train."
+  },
+  "metric_decision": {
+    "primary_metric": "accuracy",
+    "greater_is_better": true,
+    "prefer_mae_family": false,
+    "source": "description_explicit",
+    "rationale": "spec_parse.json.evaluation_metric = 'accuracy' explicitly; binary classification task with class_label output format."
+  },
+  "modeling_hints": {
+    "prefer_regularized": false,
+    "reasoning_prefer_regularized": "n_train=891, total_features~22, ratio=0.025 — well below 0.10 threshold; regularized models not forced by data size",
+    "native_missing_handling_preferred": true,
+    "apply_log1p_hint": false,
+    "apply_log1p_reason": "Binary classification target; data_profile.target_distribution.recommend_log_transform=false; log transform not applicable",
+    "class_balance": {"0": 549, "1": 342},
+    "is_timeseries": false,
+    "n_train_rows": 891,
+    "n_features_planned": 22,
+    "priority_notes": [
+      "Sex is the dominant predictor (target rate 74.2% female vs 18.9% male) — models must capture this signal and its interactions with Pclass and Age",
+      "Age (19.9%) and Cabin (77.1%) have substantial missingness — use CatBoost/HistGBT for native NaN handling; Age imputation by title group adds signal",
+      "Moderate class imbalance (38.4% positive) — stratified folds already set by guardian; monitor class-weight sensitivity in linear models"
+    ],
+    "model_family_recommendation": {
+      "primary": "gbdt",
+      "secondary": "linear",
+      "rationale": "n_rows=891 (adequate for GBDT), 2 high-cardinality categoricals (Ticket cardinality 681, Cabin 147), Age+Cabin missingness >5% — GBDT with native NaN handling is preferred; linear second for diversity.",
+      "key_signals": {
+        "n_train_rows": 891,
+        "features_per_row_ratio": 0.025,
+        "has_high_missingness": true,
+        "target_autocorrelation_strength": "none",
+        "n_high_cardinality_categoricals": 2
+      }
+    }
+  },
+  "completeness_constraints": {
+    "submission_frame_expansion": "prediction frame has 418 rows (data/test.csv); sample submission (data/gender_submission.csv) also has 418 rows — direct 1:1 mapping; no cross-join expansion needed",
+    "full_train_refit": true,
+    "sub_target_decomposition": [],
+    "missing_value_handling_required": true,
+    "two_column_submission": true
+  },
+  "critique": {
+    "verdict": "PASS",
+    "checks_performed": [1, 2, 3, 4, 5, 6, 7],
+    "blocking_issues": [],
+    "advisory_issues": [
+      "Cabin has 77.1% missing — deck extraction will have low coverage; has_cabin binary flag compensates by capturing the informative missingness pattern"
+    ],
+    "fixes_applied": [
+      "Ensured Name_raw, Ticket_raw, Cabin_raw appear in exclude_columns to prevent raw high-cardinality strings from entering the model",
+      "gender_submission.csv Survived column justified-excluded (sample submission placeholder, not a training input)",
+      "Verified no duplicate feature entries across interaction/aggregate blocks",
+      "Confirmed no datetime_derived features planned (data_profile datetime_like_columns are numeric columns mislabeled by profiler; no actual datetime strings present)",
+      "Verified metric_decision uses accuracy (binary classification, description_explicit) — MAE family not applicable to classification",
+      "Confirmed n_features_planned (~22) / n_train_rows (891) = 0.025 < 0.10 — no experimental flag required on engineered groups by overfit rule"
+    ]
+  },
+  "plan_warnings": [
+    "Cabin deck extraction covers only ~22.9% of train rows (77.1% missing) — has_cabin binary flag is the primary signal carrier for this column; deck letter adds marginal discriminative power for the minority with known cabin"
+  ]
+}

@@ -1,0 +1,65 @@
+{
+  "task_type": "binary_classification",
+  "output_kind": "label",
+  "selected_model_name": "blend(floor+linear+gbdt)",
+  "metric_name": "accuracy",
+  "greater_is_better": true,
+  "selected_metrics": {
+    "accuracy": 0.8100558659217877,
+    "f1": 0.7424242424242424,
+    "roc_auc": 0.8442687747035572,
+    "log_loss": 0.47249263069235353
+  },
+  "model_scores": [
+    {
+      "name": "dummy_most_frequent",
+      "status": "ok",
+      "score": 0.6145251396648045,
+      "detail": {
+        "accuracy": 0.6145251396648045,
+        "f1": 0.0,
+        "roc_auc": 0.5,
+        "log_loss": 13.893922256140133
+      }
+    },
+    {
+      "name": "dummy_stratified",
+      "status": "ok",
+      "score": 0.5195530726256983,
+      "detail": {
+        "accuracy": 0.5195530726256983,
+        "f1": 0.3484848484848485,
+        "roc_auc": 0.4848484848484848,
+        "log_loss": 17.317062522145672
+      }
+    },
+    {
+      "name": "logistic_regression",
+      "status": "ok",
+      "score": 0.8100558659217877,
+      "detail": {
+        "accuracy": 0.8100558659217877,
+        "f1": 0.7424242424242424,
+        "roc_auc": 0.8442687747035572,
+        "log_loss": 0.47249263069235353
+      }
+    },
+    {
+      "name": "hist_gradient_boosting",
+      "status": "ok",
+      "score": 0.7932960893854749,
+      "detail": {
+        "accuracy": 0.7932960893854749,
+        "f1": 0.7338129496402878,
+        "roc_auc": 0.8204216073781291,
+        "log_loss": 0.72331805315234
+      }
+    }
+  ],
+  "holdout_strategy": {
+    "type": "stratified_holdout",
+    "random_state": 42,
+    "n_train": 712,
+    "n_holdout": 179
+  }
+}

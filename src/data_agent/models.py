@@ -44,6 +44,7 @@ try:  # sklearn is preferred, but baseline models can run without it.
         HistGradientBoostingRegressor,
         RandomForestRegressor,
     )
+    from sklearn.calibration import CalibratedClassifierCV
     from sklearn.impute import SimpleImputer
     from sklearn.linear_model import ElasticNet, LogisticRegression, Ridge
     from sklearn.metrics import (
@@ -113,6 +114,11 @@ class ModelResult:
     holdout_label_classes: list | None = None
     holdout_by_model: Any = None  # name -> pred (regression) or (pred, proba) (classification)
     residual_analysis: dict = field(default_factory=dict)
+    # Positive-class test probability for binary classification, ALWAYS populated
+    # (even when output_kind == "label") so the keep-best / ensemble can blend in
+    # probability space and threshold exactly once at the submission boundary. None
+    # for regression and multiclass.
+    test_proba: Any = None
 
 
 class GroupMeanRegressor:
@@ -498,7 +504,8 @@ def train_and_predict(
     if bundle.task.task_type == REGRESSION:
         return _train_regression(bundle, block_column, random_state, families=families,
                                  folds=folds, scored_mask=scored_mask)
-    return _train_classification(bundle, random_state, families=families)
+    return _train_classification(bundle, random_state, families=families,
+                                 folds=folds, scored_mask=scored_mask)
 
 
 def _candidate_family(name: str) -> str:
@@ -1089,7 +1096,9 @@ def _tune_top_models(factories, cand_score, oof_preds, scores, X, y, folds,
 # ── classification path ─────────────────────────────────────────────────────────
 
 def _train_classification(bundle: FeatureBundle, random_state: int,
-                          families: set[str] | None = None) -> ModelResult:
+                          families: set[str] | None = None,
+                          folds: list[tuple[np.ndarray, np.ndarray]] | None = None,
+                          scored_mask: np.ndarray | None = None) -> ModelResult:
     task = bundle.task
     raw_y = bundle.target
     valid_mask = raw_y.notna()
@@ -1117,13 +1126,6 @@ def _train_classification(bundle: FeatureBundle, random_state: int,
     X = train_df[bundle.feature_columns].copy()
     X_pred = bundle.predict_df[bundle.feature_columns].copy()
 
-    split = _make_holdout_split(
-        train_df, bundle.feature_columns, y, bundle.profile.get("time_column"), random_state, stratify_labels=y.to_numpy()
-    )
-    train_idx, holdout_idx, holdout_strategy = split
-    X_train, X_holdout = X.iloc[train_idx], X.iloc[holdout_idx]
-    y_train, y_holdout = y.iloc[train_idx], y.iloc[holdout_idx]
-
     metric = task.metric
     greater = task.greater_is_better
     candidates = _build_classification_candidates(bundle, train_df, random_state, task)
@@ -1136,27 +1138,109 @@ def _train_classification(bundle: FeatureBundle, random_state: int,
         filtered = [(n, f) for (n, f) in candidates if _candidate_family(n) in keep]
         if any(_candidate_family(n) in families for n, _ in filtered):
             candidates = filtered
+
     scores: list[dict] = []
     fitted_candidates = []
     holdout_capture: dict[str, tuple] = {}
+    per_fold_scores: dict[str, list] = {}
 
-    for name, estimator_factory in candidates:
-        try:
-            estimator = estimator_factory()
-            estimator.fit(X_train, y_train)
-            pred = np.asarray(estimator.predict(X_holdout))
-            proba = _safe_proba(estimator, X_holdout, n_classes)
-            holdout_capture[name] = (pred, proba)
-            detail = _classification_metrics(y_holdout.to_numpy(), pred, proba, n_classes, positive_index)
-            selection_metric = detail.get(metric)
-            if selection_metric is None:
-                selection_metric = detail.get(ACCURACY, 0.0)
-            scores.append(
-                {"name": name, "status": "ok", "score": float(selection_metric), "detail": detail}
-            )
-            fitted_candidates.append((float(selection_metric), name, estimator_factory))
-        except Exception as exc:
-            scores.append({"name": name, "status": "failed", "error": str(exc)})
+    # Guard fold/frame alignment: the label-mapping keep-step above may drop rows,
+    # which would misalign canonical fold indices with X. If any fold index is out
+    # of range, fall back to the single-holdout path rather than corrupt the OOF.
+    if folds is not None:
+        _max_idx = max((int(np.max(va)) for _, va in folds if len(va)), default=-1)
+        if _max_idx >= len(X):
+            folds = None
+
+    if folds is not None:
+        # ── canonical-fold OOF (mirrors _train_regression) ───────────────────────
+        # Every candidate is scored on the SAME full-length OOF assembled from the
+        # shared canonical folds, so keep-best / NNLS blending are apples-to-apples
+        # and never double-dip a single 80/20 holdout. No separate holdout is taken.
+        n_rows = len(X)
+        y_np = y.to_numpy()
+        sm_local = None
+        if scored_mask is not None:
+            _sm = np.asarray(scored_mask, dtype=bool)
+            if len(_sm) == n_rows:
+                sm_local = _sm
+        for name, estimator_factory in candidates:
+            try:
+                oof_pred = np.full(n_rows, -1, dtype=int)
+                oof_proba = np.full((n_rows, n_classes), np.nan, dtype=float)
+                covered = np.zeros(n_rows, dtype=bool)
+                fold_metric_scores: list[float] = []
+                for tr_idx, va_idx in folds:
+                    est = estimator_factory()
+                    est.fit(X.iloc[tr_idx], y.iloc[tr_idx])
+                    oof_pred[va_idx] = np.asarray(est.predict(X.iloc[va_idx])).astype(int)
+                    p = _safe_proba(est, X.iloc[va_idx], n_classes)
+                    if p is not None:
+                        oof_proba[va_idx] = p
+                    covered[va_idx] = True
+                    fmask = np.zeros(n_rows, dtype=bool)
+                    fmask[va_idx] = True
+                    if sm_local is not None:
+                        fmask &= sm_local
+                    if fmask.any():
+                        _fp = oof_proba[fmask] if np.isfinite(oof_proba[fmask]).all() else None
+                        _fdet = _classification_metrics(
+                            y_np[fmask], oof_pred[fmask], _fp, n_classes, positive_index)
+                        fold_metric_scores.append(
+                            float(_fdet.get(metric) if _fdet.get(metric) is not None
+                                  else _fdet.get(ACCURACY, 0.0)))
+                mask = covered.copy()
+                if sm_local is not None:
+                    mask &= sm_local
+                proba_ok = bool(mask.any()) and np.isfinite(oof_proba[mask]).all()
+                detail = _classification_metrics(
+                    y_np[mask], oof_pred[mask],
+                    oof_proba[mask] if proba_ok else None, n_classes, positive_index)
+                selection_metric = detail.get(metric)
+                if selection_metric is None:
+                    selection_metric = detail.get(ACCURACY, 0.0)
+                detail["cv_scores"] = [round(s, 4) for s in fold_metric_scores]
+                detail["cv_mean"] = (float(np.mean(fold_metric_scores))
+                                     if fold_metric_scores else float(selection_metric))
+                detail["cv_std"] = float(np.std(fold_metric_scores)) if fold_metric_scores else 0.0
+                scores.append({"name": name, "status": "ok",
+                               "score": float(selection_metric), "detail": detail})
+                fitted_candidates.append((float(selection_metric), name, estimator_factory))
+                holdout_capture[name] = (
+                    oof_pred, oof_proba if np.isfinite(oof_proba).any() else None)
+                per_fold_scores[name] = fold_metric_scores
+            except Exception as exc:
+                scores.append({"name": name, "status": "failed", "error": str(exc)})
+        holdout_y_true_arr = y_np
+        holdout_strategy: dict = {"type": "canonical_external", "n_splits": len(folds),
+                                  "n_oof_rows": int(n_rows)}
+    else:
+        # ── single 80/20 stratified holdout (backward-compatible: no canonical
+        # folds, e.g. the deterministic-fallback path) ───────────────────────────
+        split = _make_holdout_split(
+            train_df, bundle.feature_columns, y,
+            bundle.profile.get("time_column"), random_state, stratify_labels=y.to_numpy())
+        train_idx, holdout_idx, holdout_strategy = split
+        X_train, X_holdout = X.iloc[train_idx], X.iloc[holdout_idx]
+        y_train, y_holdout = y.iloc[train_idx], y.iloc[holdout_idx]
+        for name, estimator_factory in candidates:
+            try:
+                estimator = estimator_factory()
+                estimator.fit(X_train, y_train)
+                pred = np.asarray(estimator.predict(X_holdout))
+                proba = _safe_proba(estimator, X_holdout, n_classes)
+                holdout_capture[name] = (pred, proba)
+                detail = _classification_metrics(
+                    y_holdout.to_numpy(), pred, proba, n_classes, positive_index)
+                selection_metric = detail.get(metric)
+                if selection_metric is None:
+                    selection_metric = detail.get(ACCURACY, 0.0)
+                scores.append({"name": name, "status": "ok",
+                               "score": float(selection_metric), "detail": detail})
+                fitted_candidates.append((float(selection_metric), name, estimator_factory))
+            except Exception as exc:
+                scores.append({"name": name, "status": "failed", "error": str(exc)})
+        holdout_y_true_arr = np.asarray(y_holdout)
 
     if not fitted_candidates:
         raise RuntimeError("All candidate models failed; cannot produce predictions.")
@@ -1169,16 +1253,47 @@ def _train_classification(bundle: FeatureBundle, random_state: int,
     final_model = selected_factory()
     final_model.fit(X, y)
 
-    if task.output_kind == "probability" and n_classes == 2:
+    # Binary classification keep-best/ensemble blends in PROBABILITY space and
+    # thresholds exactly once at the submission boundary. So we always want a
+    # positive-class test probability — even when the delivered output_kind is
+    # "label". If the selected model has no predict_proba (e.g. RidgeClassifier /
+    # LinearSVC), calibrate it so a probability still exists instead of raising.
+    test_proba = None
+    if n_classes == 2:
         proba = _safe_proba(final_model, X_pred, n_classes)
         if proba is None:
-            raise RuntimeError("Probability output requested but the selected model lacks predict_proba.")
-        predictions = np.clip(proba[:, positive_index], 0.0, 1.0)
+            calibrated = _calibrate_for_proba(selected_factory, X, y)
+            if calibrated is not None:
+                final_model = calibrated
+                proba = _safe_proba(final_model, X_pred, n_classes)
+        if proba is not None:
+            test_proba = np.clip(proba[:, positive_index], 0.0, 1.0)
+
+    if task.output_kind == "probability" and n_classes == 2:
+        if test_proba is None:
+            raise RuntimeError("Probability output requested but the selected model lacks predict_proba and could not be calibrated.")
+        predictions = test_proba
         output_kind = "probability"
     else:
         pred_int = np.asarray(final_model.predict(X_pred)).astype(int)
         predictions = np.array([int_to_label[i] for i in pred_int], dtype=object)
         output_kind = "label"
+
+    # Per-fold CV stability for the selected model (canonical-fold path only), so
+    # the model-performance-reviewer sees a real generalization signal instead of a
+    # null. Mirrors the regression stability keys. The "cv_mae_*" key names are kept
+    # for reviewer parity even though the value is the classification metric.
+    if folds is not None and isinstance(holdout_strategy, dict):
+        _fs = per_fold_scores.get(selected_name) or []
+        if _fs:
+            _cm = float(np.mean(_fs))
+            _cs = float(np.std(_fs))
+            holdout_strategy["stability"] = {
+                "split_scores": [round(s, 4) for s in _fs],
+                "cv_mae_mean": round(_cm, 4),
+                "cv_mae_std": round(_cs, 4),
+                "relative_stability": round(_cs / _cm, 4) if _cm > 0 else None,
+            }
 
     selected_detail = _selected_detail(scores, selected_name)
     sel_pred, sel_proba = holdout_capture.get(selected_name, (None, None))
@@ -1194,11 +1309,12 @@ def _train_classification(bundle: FeatureBundle, random_state: int,
         extra_metrics=selected_detail,
         target_clip_min=None,
         target_clip_max=None,
-        holdout_y_true=np.asarray(y_holdout),
+        holdout_y_true=holdout_y_true_arr,
         holdout_y_pred=sel_pred,
         holdout_y_proba=sel_proba,
         holdout_label_classes=list(classes),
         holdout_by_model=holdout_capture,
+        test_proba=test_proba,
     )
 
 
@@ -1251,6 +1367,26 @@ def _safe_proba(estimator, X, n_classes: int) -> np.ndarray | None:
         if 0 <= cls_int < n_classes:
             full[:, cls_int] = proba[:, col]
     return full
+
+
+def _calibrate_for_proba(estimator_factory, X, y):
+    """Wrap a proba-less classifier (e.g. RidgeClassifier / LinearSVC) in
+    CalibratedClassifierCV so a positive-class probability exists for blending.
+    Returns the fitted calibrated estimator, or None if calibration is unavailable
+    (sklearn missing) or fails. Uses internal CV so it is fit on the same X, y."""
+    if not SKLEARN_AVAILABLE:
+        return None
+    try:
+        # cv folds bounded by the smallest class count so calibration never fails
+        # on a tiny minority class.
+        import collections
+        min_class = min(collections.Counter(np.asarray(y)).values())
+        cv = max(2, min(3, int(min_class)))
+        calibrated = CalibratedClassifierCV(estimator_factory(), method="sigmoid", cv=cv)
+        calibrated.fit(X, y)
+        return calibrated
+    except Exception:
+        return None
 
 
 def block_averaged_mae(y_true: pd.Series | np.ndarray, y_pred: np.ndarray, blocks: pd.Series) -> float:
@@ -1363,16 +1499,31 @@ def _rmse(y_true, y_pred) -> float:
 def _score_function(
     metric: str | None, block_column: str | None, holdout_frame: pd.DataFrame
 ) -> tuple[Callable, str]:
-    """Return the ``(scorer, name)`` pair for the resolved regression metric.
+    """Return the ``(scorer, name)`` pair for the resolved task metric.
 
-    Award B is graded by block-averaged MAE, so a discovered block column selects
-    ``block_mae`` (the resolved default when no other metric is stated). An
-    explicit ``rmse`` / ``mae`` in the description still wins. Dataset-agnostic.
+    Honours the single resolved metric carried on ``TaskSpec.metric`` (which the
+    planner's ``analysis_plan.json.metric_decision`` may have set) — classification
+    metrics included, so a binary/multiclass ablation is no longer silently scored
+    as MAE. Award B's regression default remains block-averaged MAE: a discovered
+    block column selects ``block_mae`` when no explicit metric is stated, and an
+    explicit ``rmse`` / ``mae`` still wins. Dataset-agnostic.
+
+    Predictions reach this scorer as a continuous regressor proxy in classification
+    ablation, so ``accuracy`` / ``f1`` round to the nearest integer class (matching
+    ``modeling_group._metric_score``) and ``roc_auc`` consumes the raw score.
     """
     if metric == RMSE:
         return _rmse, "rmse"
     if metric == MAE:
         return (lambda y_true, y_pred: float(mean_absolute_error(y_true, y_pred))), "mae"
+    if metric == ACCURACY:
+        return (lambda y_true, y_pred: float(np.mean(np.rint(y_pred) == np.rint(y_true)))), "accuracy"
+    if metric in (F1, F1_MACRO):
+        avg = "macro" if metric == F1_MACRO else "binary"
+        return (lambda y_true, y_pred: float(
+            f1_score(np.rint(y_true), np.rint(y_pred), average=avg, zero_division=0))), metric
+    if metric == ROC_AUC:
+        return (lambda y_true, y_pred: float(roc_auc_score(y_true, y_pred))), "roc_auc"
     # block_mae (resolved default when a block/category column exists and no
     # explicit metric was given) or any unrecognised metric.
     if block_column and block_column in holdout_frame.columns:

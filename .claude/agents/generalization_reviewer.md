@@ -58,6 +58,19 @@ holdout kept separate? Does it simulate the hidden-evaluation gap?
   classification) → WARN (HIGH severity — likely leakage/overfit).
 - large train↔val gap (relative gap > 0.50 → FAIL; > 0.30 → WARN).
 
+**Classification-specific** (you are now dispatched on every classification task, even plain
+i.i.d. `stratified_kfold`, because these failures don't need a structural leakage surface):
+- **Predicted class balance vs base rate** — compare the submission's per-class share to the
+  training base rate. A class whose predicted share is far from its base rate (ratio < 0.6 or
+  > 1.66) signals a miscalibrated/threshold-collapsed deliverable → WARN (this is the failure
+  where a trivial single-feature baseline can beat the model).
+- **OOF honesty** — for each `oof_<family>.csv`, a saved OOF whose own accuracy ≫ the candidate's
+  reported `cv_score` (gap > 0.10), or that correlates > 0.95 with the target, is an in-sample /
+  leaky OOF (not a genuine out-of-fold prediction) → FAIL; it inflates the keep-best decision.
+- **Probability-domain blend** — confirm `cand_*.csv` carry a **continuous** positive-class
+  probability (not just {0,1}); a hard-label candidate means the NNLS blend collapsed to one
+  family → WARN with a fix note to blend in probability space and threshold once.
+
 ---
 
 ## Output — `outputs/runs/{run_id}/logs/overfitting_leakage_audit.json`

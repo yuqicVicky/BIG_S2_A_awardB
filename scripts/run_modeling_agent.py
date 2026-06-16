@@ -133,6 +133,42 @@ def _patch_schema_from_spec_parse(schema, repo: Path, run_id: str) -> None:
         print("[schema] covariate files nulled (will re-derive from corrected anchors)")
 
 
+def _extract_oof_1d(oof_raw) -> np.ndarray | None:
+    """Extract a 1-D OOF prediction array from what the engine stores in
+    ``holdout_by_model``.
+
+    - Regression: stores a 1-D array directly → return as-is.
+    - Classification: stores a ``(pred_labels, proba_matrix)`` tuple → return the
+      **positive-class probability** (last column of the proba matrix for binary)
+      so keep-best / ensemble blend in probability space and threshold exactly once
+      at the submission boundary. Falls back to the 1-D label array only when no
+      proba is available (e.g. a proba-less model that could not be calibrated).
+    - Any other shape: return None so the caller falls back to the engine score.
+    """
+    if oof_raw is None:
+        return None
+    # Tuple / list → classification (pred_labels, proba)
+    if isinstance(oof_raw, (tuple, list)) and len(oof_raw) == 2:
+        pred, proba = oof_raw[0], oof_raw[1]
+        if proba is not None:
+            pa = np.asarray(proba, dtype=float)
+            if pa.ndim == 2 and pa.shape[1] >= 2:
+                return pa[:, -1]  # positive-class proba (binary canonical col 1)
+            if pa.ndim == 1:
+                return pa
+        arr = np.asarray(pred, dtype=float)
+        if arr.ndim == 1:
+            return arr
+        return None
+    try:
+        arr = np.asarray(oof_raw, dtype=float)
+        if arr.ndim == 1:
+            return arr
+    except (ValueError, TypeError):
+        pass
+    return None
+
+
 def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--approach", default="full", choices=sorted(_APPROACH_FAMILIES))
@@ -186,7 +222,17 @@ def main() -> None:
     families = _APPROACH_FAMILIES[args.approach]
     schema = discover_schema(repo / "data")
     _patch_schema_from_spec_parse(schema, repo, args.run_id)
-    bundle = build_feature_bundle(schema)
+    # Honour the planner's analysis_plan.json metric_decision (single metric
+    # authority) so this specialist scores on the same metric as the ablation gate
+    # and ensemble.
+    metric_decision = None
+    plan_path = logs / "analysis_plan.json"
+    if plan_path.exists():
+        try:
+            metric_decision = json.loads(plan_path.read_text(encoding="utf-8")).get("metric_decision")
+        except (ValueError, OSError):
+            metric_decision = None
+    bundle = build_feature_bundle(schema, metric_decision=metric_decision)
 
     # Code-enforced leakage floor over the static feature set this candidate trains
     # on (deterministic; an LLM auditor verdict overrides via the llm_gate file).
@@ -213,28 +259,51 @@ def main() -> None:
                            folds=folds, scored_mask=scored_mask)
 
     desc = _read_description(schema.description_path)
-    preds, mono = apply_monotonic_constraints(
-        mr.predictions, bundle.sample_submission, schema, desc)
-    sub = _build_submission(bundle, schema.row_id_column, schema.target_column, preds, mr.output_kind)
+    # Classification candidate carries the CONTINUOUS positive-class probability
+    # (not a thresholded 0/1 label) so ensemble-meta can NNLS-blend in probability
+    # space and threshold exactly once at the submission boundary. Writing hard
+    # labels here is what previously collapsed the blend to the dominant model.
+    cand_proba = getattr(mr, "test_proba", None)
+    if cand_proba is not None:
+        cand_vals, mono = apply_monotonic_constraints(
+            np.asarray(cand_proba, dtype=float), bundle.sample_submission, schema, desc)
+        sub = _build_submission(bundle, schema.row_id_column, schema.target_column,
+                                cand_vals, "probability")
+    else:
+        preds, mono = apply_monotonic_constraints(
+            mr.predictions, bundle.sample_submission, schema, desc)
+        sub = _build_submission(bundle, schema.row_id_column, schema.target_column, preds, mr.output_kind)
 
     cand_csv = logs / f"cand_{args.approach}.csv"
     sub.to_csv(cand_csv, index=False)
 
     # OOF on the (canonical) folds — train-row aligned, for common-OOF keep-best.
+    # For classification, holdout_by_model stores (pred_labels, proba) tuples;
+    # extract the 1-D label array so write_oof and cv_score computation work uniformly.
+    # The classification engine uses a simple holdout split (not k-fold), so oof_full
+    # may have fewer rows than the full training set. Only apply scored_mask when
+    # lengths match (regression / full-OOF case); a partial holdout OOF is still
+    # written but without the canonical scored_mask.
     oof_path = None
-    oof_full = (getattr(mr, "holdout_by_model", None) or {}).get(mr.selected_model_name)
+    oof_raw = (getattr(mr, "holdout_by_model", None) or {}).get(mr.selected_model_name)
+    oof_full = _extract_oof_1d(oof_raw)
     if oof_full is not None:
         oof_path = logs / f"oof_{args.approach}.csv"
-        write_oof(oof_path, oof_full, scored_mask=scored_mask)
+        n_valid = int(pd.to_numeric(bundle.target, errors="coerce").notna().sum())
+        oof_scored_mask = scored_mask if (scored_mask is not None and len(oof_full) == n_valid) else None
+        write_oof(oof_path, oof_full, scored_mask=oof_scored_mask)
 
     # cv_score must be reported on the SAME footing every other candidate (and the
-    # ensemble keep-best) uses: MAE on the canonical-fold OOF restricted to the scored
-    # rows. The engine's internal model_scores may aggregate over all categories / a
-    # different block path, producing a number that is not comparable to the ensemble's
-    # (the source of the "0.85 vs 1.67" confusion). Prefer the scored-OOF MAE; fall back
-    # to the engine score only if the OOF/target rows do not line up.
+    # ensemble keep-best) uses: the resolved official metric on the canonical-fold
+    # OOF restricted to the scored rows. The engine's internal model_scores may
+    # aggregate over all categories / a different block path, producing a number that
+    # is not comparable to the ensemble's. Score with the metric-aware ``_score``
+    # (accuracy for classification — the OOF is positive-class proba, rounded at 0.5;
+    # mae/block_mae for regression) so cv_score matches the reported cv_metric and is
+    # never silently a MAE on classification labels.
+    from src.data_agent.cv import _score as _cv_metric_score
     cv_score = None
-    cv_score_source = "scored_oof_mae"
+    cv_score_source = "scored_oof_metric"
     try:
         if oof_full is not None:
             y_valid = pd.to_numeric(bundle.target, errors="coerce")
@@ -245,7 +314,8 @@ def main() -> None:
                 if scored_mask is not None:
                     keep &= np.asarray(scored_mask, dtype=bool)
                 if keep.any():
-                    cv_score = float(np.abs(oof_arr[keep] - y_valid[keep]).mean())
+                    cv_score = float(_cv_metric_score(
+                        y_valid[keep], oof_arr[keep], mr.metric_name, None))
     except Exception as exc:  # noqa: BLE001
         print(f"[cv] scored-OOF cv_score unavailable: {type(exc).__name__}: {exc}")
     if cv_score is None:

@@ -1,0 +1,123 @@
+{
+  "train_rows": 891,
+  "prediction_rows": 418,
+  "sample_submission_rows": 418,
+  "target_column": "Survived",
+  "row_id_column": "PassengerId",
+  "join_keys": [],
+  "time_column": null,
+  "category_column": null,
+  "block_column": null,
+  "task_type": "binary_classification",
+  "metric": "accuracy",
+  "output_kind": "label",
+  "task_evidence": {
+    "task_source": "description",
+    "description_task": "binary_classification",
+    "description_metric": "accuracy",
+    "description_output": null,
+    "data_task": "binary_classification",
+    "n_unique_target": 2,
+    "target_is_numeric": true,
+    "target_integer_like": true,
+    "sample_is_integer": true,
+    "sample_is_float": false
+  },
+  "feature_columns": [
+    "Pclass",
+    "Name",
+    "Sex",
+    "Age",
+    "SibSp",
+    "Parch",
+    "Ticket",
+    "Fare",
+    "Cabin",
+    "Embarked"
+  ],
+  "numeric_columns": [
+    "Pclass",
+    "Age",
+    "SibSp",
+    "Parch",
+    "Fare"
+  ],
+  "categorical_columns": [
+    "Sex",
+    "Ticket",
+    "Cabin",
+    "Embarked"
+  ],
+  "text_columns": [
+    "Name"
+  ],
+  "group_aggregate_keys": [],
+  "target_summary": {
+    "count": 891,
+    "missing": 0,
+    "mean": 0.3838383838383838,
+    "std": 0.4865924542648585,
+    "min": 0.0,
+    "median": 0.0,
+    "max": 1.0
+  },
+  "target_distribution": {
+    "n_classes": 2,
+    "majority_class_rate": 0.6161616161616161,
+    "classes": [
+      {
+        "label": 0,
+        "count": 549,
+        "fraction": 0.6161616161616161
+      },
+      {
+        "label": 1,
+        "count": 342,
+        "fraction": 0.3838383838383838
+      }
+    ]
+  },
+  "missing_rates": {
+    "Pclass": 0.0,
+    "Name": 0.0,
+    "Sex": 0.0,
+    "Age": 0.19865319865319866,
+    "SibSp": 0.0,
+    "Parch": 0.0,
+    "Ticket": 0.0,
+    "Fare": 0.0,
+    "Cabin": 0.7710437710437711,
+    "Embarked": 0.002244668911335578
+  },
+  "excluded_columns": {},
+  "train_only_columns": [],
+  "feature_audit": {
+    "detected_row_id_column": "PassengerId",
+    "detected_datetime_columns": [],
+    "datetime_feature_sources": [],
+    "generated_time_features": {},
+    "final_feature_columns": [
+      "Pclass",
+      "Name",
+      "Sex",
+      "Age",
+      "SibSp",
+      "Parch",
+      "Ticket",
+      "Fare",
+      "Cabin",
+      "Embarked"
+    ],
+    "time_target_signal": {}
+  },
+  "leakage_guard": {
+    "status": "pass",
+    "severity": "none",
+    "findings": [],
+    "checked": {
+      "n_features": 10,
+      "n_group_keys": 0
+    },
+    "summary": "no precomputed target leakage in the consumed feature set"
+  }
+}

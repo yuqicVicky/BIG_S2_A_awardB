@@ -7,7 +7,14 @@
 - Baseline models must be evaluated before candidate models.
 - Candidate selection is data-driven. No single algorithm is always preferred.
 - **Selection uses blocked GroupKFold cross-validation** (whole periods held out).
-  Metric resolution: `block_mae` (primary, when a category/block column exists) with `mae`/`rmse` as fallbacks.
+  Metric resolution: the **planner is the single metric authority** — it reads the
+  task-inference output and writes `analysis_plan.json.metric_decision.primary_metric`, which the
+  ablation gate, modeling specialists, ensemble keep-best and CV all read (consumed in
+  `build_feature_bundle` → `apply_metric_decision`). Defaults when the description names no metric:
+  regression → `block_mae` (a category/block column exists) else `mae`, **preferring the MAE family
+  over RMSE/R²**; classification → `accuracy` (`roc_auc` for probability output, `f1` under strong
+  imbalance). `prefer_mae_family` is regression-only — a classification metric never scores a
+  regression task or vice versa.
 - The block for block-averaged MAE is the **period/time column** when one exists.
   A near-unique-per-row period key is **coarsened to whole-period blocks** so the blocked CV
   holds genuine periods out rather than collapsing to random KFold.
@@ -41,3 +48,23 @@ exactly and is otherwise unchanged at the defaults:
 | `AWARDB_HEARTBEAT_PATH` | unset | when set, the engine streams per-candidate/seed progress for the watchdog |
 
 Specialists never set these themselves — no fixed seed/iteration counts in any agent.
+
+## Keep-best (common-OOF NNLS)
+
+Every candidate's OOF on `cv_folds.json` is scored on the one official metric. The keep-best
+owner (`model-search-agent` in general mode / `ensemble-meta` in specialist mode) performs a
+**non-negative least-squares (NNLS) blend** across all candidate OOF vectors, then applies those
+weights to test predictions. `submission.csv` is overwritten **only on a strict improvement**
+over the current best; the prior best is saved to `prior_best.csv` for rollback.
+The floor seeded in Step 6A guarantees a deliverable even if all specialists fail.
+
+## Sidecar modalities (images, etc.)
+
+When `spec_parse.json.file_sidecars` is non-empty:
+- The planner includes `feature_plan.image_features` in `analysis_plan.json`.
+- The programmer extracts dependency-light image features (colormap-inversion → scalar summaries
+  via numpy + PIL + matplotlib; **no torch**), joined by `key_columns`, written to the
+  `image_features` group of `feature_spec.json`.
+- Image features are a **static per-key observation** — not target-derived, no per-fold leakage.
+- Validated like any group by the Step-6A′ ablation gate.
+- If Pillow or the sidecar is absent: gracefully skip; the floor still ships.

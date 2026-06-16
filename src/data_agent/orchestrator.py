@@ -466,11 +466,20 @@ def _run_award_b(repo_root, run_id, logs_dir, artifacts_dir, goal, random_state)
         m = modeling_.model_result_obj
         base = (modeling_.model_results.get("baseline") or {}).get("selection_score")
         cand = (modeling_.model_results.get("candidate") or {}).get("selection_score")
+        # For classification, pass the selected model's holdout positive-class proba +
+        # truth so the OOF-honesty check can flag an in-sample/leaky OOF.
+        oof_pred = oof_truth = None
+        proba = getattr(m, "holdout_y_proba", None)
+        if m.task_type != "regression" and proba is not None:
+            pa = np.asarray(proba, dtype=float)
+            if pa.ndim == 2 and pa.shape[1] >= 2:
+                oof_pred, oof_truth = pa[:, -1], m.holdout_y_true
         return check_prediction_sanity(
             predictions=m.predictions, train_target=bundle.target, task_type=m.task_type,
             holdout_y_true=m.holdout_y_true, holdout_y_pred=m.holdout_y_pred,
             metric_name=m.metric_name, baseline_score=base, candidate_score=cand,
-            greater_is_better=m.greater_is_better, clip_fraction=_clip_fraction(m), run_id=run_id)
+            greater_is_better=m.greater_is_better, clip_fraction=_clip_fraction(m),
+            oof_predictions=oof_pred, oof_truth=oof_truth, reported_cv_score=cand, run_id=run_id)
 
     def _sanity_correction(_corr):
         drop = [c for c in _leak_suspect_cols if c in _feat_state["columns"]]
@@ -522,6 +531,12 @@ def _run_award_b(repo_root, run_id, logs_dir, artifacts_dir, goal, random_state)
         from .cv import write_oof as _write_oof_floor
         _sel = mr.selected_model_name
         _oof_full = (getattr(mr, "holdout_by_model", None) or {}).get(_sel)
+        # Classification stores (pred_labels, proba) — write the positive-class
+        # probability (continuous), matching the specialist/ensemble proba contract so
+        # keep-best blends in probability space. Regression stores a 1-D array as-is.
+        if isinstance(_oof_full, (tuple, list)) and len(_oof_full) == 2:
+            _pa = np.asarray(_oof_full[1], dtype=float) if _oof_full[1] is not None else None
+            _oof_full = _pa[:, -1] if (_pa is not None and _pa.ndim == 2 and _pa.shape[1] >= 2) else np.asarray(_oof_full[0], dtype=float)
         if _oof_full is not None:
             _write_oof_floor(logs_dir / f"oof_floor.csv", _oof_full, scored_mask=_scored_mask)
     except Exception as _oof_exc:
@@ -551,8 +566,17 @@ def _run_award_b(repo_root, run_id, logs_dir, artifacts_dir, goal, random_state)
     except Exception as _mg_exc:
         print(f"[modeling-group] skipped ({type(_mg_exc).__name__}: {_mg_exc}); keeping floor")
 
-    # Write validation_strategy.json
-    _write_json(mr.holdout_strategy, logs_dir / f"validation_strategy.json")
+    # Write validation_strategy.json ONLY when the guardian has not already authored
+    # it (Issue 7): the guardian's strategy file (chosen_strategy + holdout_parameters
+    # + leakage_risks, and the canonical cv_folds.json derived from it) is
+    # authoritative and must survive the floor run. The floor's own internal 80/20
+    # holdout is still recorded under model_selection.json.holdout_strategy, so no
+    # diagnostic is lost. Overwriting here previously clobbered the guardian's
+    # stratified_kfold strategy with a flat stratified_holdout dict, making
+    # validation_strategy.json disagree with cv_folds.json.
+    _vs_out = logs_dir / "validation_strategy.json"
+    if not _vs_out.exists():
+        _write_json(mr.holdout_strategy, _vs_out)
 
     # Write model_stability_by_split.json and overfitting_audit.json
     stability = mr.holdout_strategy.get("stability", {})

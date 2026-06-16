@@ -1,0 +1,121 @@
+{
+  "run_id": "20260616_115612",
+  "reviewed_at": "2026-06-16T04:56:00Z",
+  "review_pass": 2,
+  "final_gate": true,
+  "keep_best_decision": {
+    "action": "kept_current",
+    "reason": "ensemble_meta already promoted gbdt (cv_accuracy=0.852974 > floor 0.810056) and overwrote submission.csv before final gate; current submission reflects the best candidate",
+    "ensemble_meta_score": 0.852974,
+    "floor_score": 0.810056
+  },
+  "logs_present": {
+    "spec_parse.json": true,
+    "data_profile.json": true,
+    "analysis_plan.json": true,
+    "validation_strategy.json": true,
+    "ensemble_meta.json": true,
+    "submission_validation.json": true,
+    "feature_audit_review.json": true,
+    "feature_ablation.json": true,
+    "feature_gate.json": true,
+    "overfitting_leakage_audit.json": true,
+    "prediction_sanity.json": true,
+    "model_performance_review.json": true,
+    "report_review.json": true,
+    "hardcoding_audit_pre.json": false,
+    "hardcoding_audit_post.json": false,
+    "model_search.json": false,
+    "final_model.json": false
+  },
+  "submission_status": {
+    "exists": true,
+    "columns": [
+      "PassengerId",
+      "Survived"
+    ],
+    "columns_ok": true,
+    "row_count": 418,
+    "row_count_ok": true,
+    "row_order_matches_sample": true,
+    "all_finite": true,
+    "values_valid_class_labels": true,
+    "validation_verdict": "PASS"
+  },
+  "prediction_sanity_status": {
+    "overall_verdict": "PASS",
+    "high_overfitting_risk": false,
+    "key_findings": [
+      "All 418 rows finite; 2 unique class labels {0,1}",
+      "Positive rate: train=0.384, pred=0.347, delta=0.037 (within tolerance)",
+      "CV accuracy 0.8530 vs floor 0.8101 (5.3% improvement)"
+    ]
+  },
+  "overfitting_protocol_status": {
+    "robust_selection_applied": true,
+    "validation_strategy_appropriate": true,
+    "cv_strategy": "stratified_kfold",
+    "leakage_audit_verdict": "PASS",
+    "high_overfitting_risk": false,
+    "train_val_gap_acceptable": true,
+    "note": "agent_gbdt.json/agent_linear.json fields null (specialist wrote to ensemble_meta.json directly); ensemble_meta.json confirms gbdt nnls_weight=1.0, accuracy=0.852974"
+  },
+  "report_status": {
+    "exists": true,
+    "review_approved": true
+  },
+  "feature_ablation_status": {
+    "ran": true,
+    "pruned_groups": [],
+    "kept_groups": [
+      "other_features",
+      "per_fold_aggregates"
+    ],
+    "verdict": "pass \u2014 both groups demonstrate positive utility"
+  },
+  "cv_validation": {
+    "strategy": "stratified_kfold",
+    "appropriate_for_task": true,
+    "issue": null,
+    "note": "Binary classification on Titanic (i.i.d. tabular); stratified_kfold is the correct CV strategy; no temporal or group structure detected"
+  },
+  "issues": [
+    {
+      "severity": "MEDIUM",
+      "source_log": "hardcoding_audit_pre.json",
+      "description": "hardcoding_audit_pre.json absent (pre-Step-3 audit did not run). feature_audit_review.json (round 2) notes hardcoded REPO_ROOT absolute path and Titanic-specific TITLE_MAP literals in feature_pipeline.py. These are LOW-severity leakage findings per the reviewer but violate the no-hardcoding policy.",
+      "fixable": false
+    },
+    {
+      "severity": "MEDIUM",
+      "source_log": "feature_audit_review.json",
+      "description": "feature_pipeline.py contains absolute dev-machine REPO_ROOT path and hardcoded Titanic title strings (TITLE_MAP). Reviewer rated LOW severity; did not block delivery. feature_importance.json records only floor-model 5 columns, not the full 23-column engineered feature set.",
+      "fixable": false
+    },
+    {
+      "severity": "LOW",
+      "source_log": "gate_leakage.json",
+      "description": "Name column (n_unique == n_rows = 891) flagged as ID-like; auto-dropped before modeling. Handled correctly \u2014 not a residual issue.",
+      "fixable": false
+    },
+    {
+      "severity": "LOW",
+      "source_log": "model_performance_review.json",
+      "description": "model_performance_review.json fields are null (reviewer wrote analysis_review_1.json and analysis_review_2.json instead). analysis_review_2.json next_action=stop_and_report \u2014 correctly terminated after round 2.",
+      "fixable": false
+    },
+    {
+      "severity": "LOW",
+      "source_log": "agent_gbdt.json / agent_linear.json",
+      "description": "Specialist agent output files have null fields; specialist performance details captured in ensemble_meta.json and oof_gbdt.csv/oof_linear.csv instead. No functional impact \u2014 predictions and CV scores are valid.",
+      "fixable": false
+    }
+  ],
+  "critical_issues": [],
+  "repair_needed": false,
+  "model_rerun_required": false,
+  "overall_verdict": "WARN",
+  "delivery_recommendation": "proceed",
+  "next_action": "deliver",
+  "rationale": "No CRITICAL or HIGH issues. submission.csv is valid: 2 columns (PassengerId, Survived), 418 rows in sample-submission order, integer 0/1 values, all finite, no nulls. report.pdf exists and approved. Ensemble (gbdt LightGBM, cv_accuracy=0.8530) beats floor (0.8101). Prediction sanity PASS. overfitting_leakage_audit PASS. report_review approved. WARN status reflects: (a) hardcoding audit pre/post absent (audit did not run this session), (b) Titanic-specific literals in feature_pipeline.py noted by feature reviewer at LOW severity, (c) deterministic supervisor carried leakage warn for Name column drop (handled correctly). None of these block delivery."
+}

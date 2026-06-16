@@ -149,12 +149,20 @@ def _finite_predictions(mr: ModelResult) -> bool:
 
 
 def _oof_pair(mr: ModelResult):
-    """Aligned ``(y_true, y_pred)`` out-of-fold arrays for a regression result, or
-    ``(None, None)``. Floor + specialists share data, seed, and deterministic folds,
-    so their OOF rows align by position — the basis for a CV-scored cross-family
-    blend (no extra holdout needed)."""
+    """Aligned ``(y_true, y_pred)`` out-of-fold arrays, or ``(None, None)``. Floor +
+    specialists share data, seed, and deterministic folds, so their OOF rows align by
+    position — the basis for a CV-scored cross-family blend (no extra holdout needed).
+    For binary CLASSIFICATION ``y_pred`` is the positive-class **probability** (from
+    ``holdout_y_proba``) — never the hard label — so the blend stays in probability
+    space and is thresholded exactly once at the submission boundary."""
     yt = getattr(mr, "holdout_y_true", None)
     yp = getattr(mr, "holdout_y_pred", None)
+    if getattr(mr, "task_type", None) and mr.task_type != "regression":
+        proba = getattr(mr, "holdout_y_proba", None)
+        if proba is not None:
+            pa = np.asarray(proba, dtype=float)
+            if pa.ndim == 2 and pa.shape[1] >= 2:
+                yp = pa[:, -1]  # positive-class proba
     if yt is None or yp is None:
         return None, None
     yt = np.asarray(yt, dtype=float)
@@ -166,6 +174,16 @@ def _oof_pair(mr: ModelResult):
     return yt, yp
 
 
+def _blend_test_vec(mr: ModelResult) -> np.ndarray:
+    """The test-prediction vector to blend: positive-class probability for binary
+    classification (so a convex blend is meaningful and labels are produced once at
+    submission time), else the model's point predictions."""
+    tp = getattr(mr, "test_proba", None)
+    if tp is not None:
+        return np.asarray(tp, dtype=float)
+    return np.asarray(mr.predictions, dtype=float)
+
+
 def _metric_score(y_true: np.ndarray, y_pred: np.ndarray, metric_name: str,
                   blocks: np.ndarray | None) -> float:
     """Score a prediction vector on the resolved official metric (matches the floor)."""
@@ -174,7 +192,15 @@ def _metric_score(y_true: np.ndarray, y_pred: np.ndarray, metric_name: str,
         return float(np.sqrt(np.mean((y_true - y_pred) ** 2)))
     if metric_name == "block_mae" and blocks is not None and len(blocks) == len(y_true):
         return float(pd.DataFrame({"e": err, "b": blocks}).groupby("b")["e"].mean().mean())
-    return float(np.mean(err))  # mae (and block_mae fallback when no usable block)
+    if metric_name == "accuracy":
+        # Classification correctness (greater-is-better). Round to the nearest integer
+        # class so a continuous blend / probabilities compare correctly on {0,1}.
+        return float(np.mean(np.rint(y_pred) == np.rint(y_true)))
+    if metric_name in ("mae", "block_mae"):  # block_mae fallback when no usable block
+        return float(np.mean(err))
+    # Never silently score an unrecognised metric as MAE — that would invert the
+    # keep-best direction for a greater-is-better classification metric.
+    raise ValueError(f"_metric_score: unsupported metric_name {metric_name!r}")
 
 
 def _aligned_blocks(bundle, schema, n_oof: int, scored_mask=None) -> np.ndarray | None:
@@ -218,13 +244,13 @@ def _try_blend(floor_modeling, cand_modelings, *, bundle, schema, description,
     fy, fp = _oof_pair(floor_mr)
     if fy is None:
         return None
-    cols = [("floor", fp, np.asarray(floor_mr.predictions, dtype=float))]
+    cols = [("floor", fp, _blend_test_vec(floor_mr))]
     for key, cm in cand_modelings:
         cmr = cm.model_result_obj
         cy, cp = _oof_pair(cmr)
         if cy is None or cy.shape != fy.shape or not np.allclose(cy, fy, rtol=0, atol=1e-9):
             continue  # candidate OOF rows not aligned to the floor's — skip
-        tp = np.asarray(cmr.predictions, dtype=float)
+        tp = _blend_test_vec(cmr)  # proba for classification → blend in probability space
         if tp.shape != cols[0][2].shape:  # align to the floor's TEST predictions
             continue
         cols.append((key, cp, tp))
@@ -243,6 +269,9 @@ def _try_blend(floor_modeling, cand_modelings, *, bundle, schema, description,
     if not _is_better(blend_cv, best_score, greater):
         return None  # blend doesn't strictly help → keep the incumbent
     # Same convex weights on the test predictions; convexity keeps them in range.
+    # For classification these are probabilities — the blend stays continuous and is
+    # thresholded to a class label exactly once downstream by _format_predictions
+    # (output_kind == "label" rounds at 0.5). Do NOT threshold here.
     blended_test = np.column_stack([c[2] for c in cols]) @ w
     try:
         blended_test, _ = apply_monotonic_constraints(

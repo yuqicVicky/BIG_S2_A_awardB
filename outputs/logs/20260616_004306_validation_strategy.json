@@ -1,6 +1,0 @@
-{
-  "type": "random_holdout",
-  "random_state": 42,
-  "n_train": 24,
-  "n_holdout": 6
-}

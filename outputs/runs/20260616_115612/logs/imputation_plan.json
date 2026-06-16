@@ -1,0 +1,16 @@
+{
+  "columns": {
+    "Age": {
+      "strategy": "median_per_fold"
+    },
+    "Cabin": {
+      "strategy": "mode"
+    },
+    "Embarked": {
+      "strategy": "mode"
+    },
+    "Fare": {
+      "strategy": "median_per_fold"
+    }
+  }
+}

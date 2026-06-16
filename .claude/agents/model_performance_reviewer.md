@@ -27,7 +27,7 @@ Write **only** the file for your current mode. Never edit model code, feature fi
 | Input | Source |
 |-------|--------|
 | `model_search.json` / `final_model.json` | `outputs/runs/{run_id}/logs/` (general mode) |
-| `ensemble_meta.json` | `outputs/runs/{run_id}/logs/` (specialist mode) |
+| `ensemble_meta.json` | `outputs/runs/{run_id}/logs/` (specialist mode) — authoritative source for `current_best_cv_score` via field `blend_at_chosen_threshold`; also read `nnls_weights`, `oof_cv_scores`, `chosen_threshold` |
 | `model_stability_by_split.json` | `outputs/runs/{run_id}/logs/` — per-model `cv_mae_std` / `relative_stability` / `split_scores` (the generalization signal; use it to populate `train_val_gap`/stability instead of leaving it null) |
 | `state.json` | `outputs/runs/{run_id}/logs/` — the selected model's `residual_analysis` block (`by_pred_quantile`, `high_value_bias`, `heteroscedasticity_corr`, `high_value_underprediction`) for evidence-grounded fix suggestions |
 | `prediction_sanity.json` | `outputs/runs/{run_id}/logs/` |
@@ -44,6 +44,11 @@ Write **only** the file for your current mode. Never edit model code, feature fi
 Judge — using LLM judgment, not fixed rules:
 - **Score gap:** best CV score + producing family; train↔val gap and overfitting; improvement
   vs baseline and vs the previous round; plateau / diminishing returns.
+  - **In specialist mode:** `current_best_cv_score` = `ensemble_meta.json.blend_at_chosen_threshold`
+    (the post-threshold-optimized NNLS blend OOF), **not** individual family OOFs. Read
+    `nnls_weights` and `oof_cv_scores` for family-level context, but all trajectory comparisons
+    (vs baseline, vs prior round) must use the blend score. Fetch the prior round's blend score
+    from `analysis_review_{round-1}.json.current_best_cv_score`, not from individual agent files.
   - **Scoring-subset alignment is not a regression.** If `cv_folds.json.scoring_restricted` is
     true, block_mae is computed over the submission's scoring categories only (a smaller, harder
     population), so the absolute CV is **higher** than an all-category score by design and

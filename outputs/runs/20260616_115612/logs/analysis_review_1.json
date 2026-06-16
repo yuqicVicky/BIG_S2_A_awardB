@@ -1,0 +1,69 @@
+{
+  "round": 1,
+  "reviewer": "model-performance-reviewer (lead)",
+  "source_reports": [
+    "model_performance_review.json",
+    "feature_audit_review.json",
+    "overfitting_leakage_audit.json"
+  ],
+  "current_best_cv_score": 0.8484848484848485,
+  "metric": "accuracy",
+  "greater_is_better": true,
+  "baseline_cv_score": 0.6145251396648045,
+  "prev_round_cv_score": null,
+  "round_over_round_improvement_pct": null,
+  "improvement_vs_baseline_pct": 38.1,
+  "blend_score": 0.8473625140291807,
+  "blend_note": "NNLS blend (0.8474) marginally below gbdt alone (0.8485) because cand_gbdt.csv carries hard labels not probabilities — NNLS was in mixed domain. Fix in round 2 by exporting predict_proba.",
+  "merged_high_impact_suggestions": [
+    {
+      "source_reviewer": "generalization-reviewer",
+      "category": "prediction_postprocess",
+      "suggestion": "Export predict_proba[:,1] (not predict()) from gbdt specialist into cand_gbdt.csv so NNLS blends continuous probabilities from both families. Apply threshold (>=0.5) once to blended probability to produce integer class labels for submission.",
+      "expected_impact": "medium",
+      "implementation_hint": "In gbdt specialist write step: df['Survived'] = model.predict_proba(X_test)[:,1]. In ensemble-meta: submission['Survived'] = (blended_proba >= 0.5).astype(int). Also export oof probabilities (not argmax) into cand_gbdt.csv for OOF blend scoring.",
+      "priority": "high"
+    },
+    {
+      "source_reviewer": "feature-leakage-reviewer",
+      "category": "feature_engineering",
+      "suggestion": "Add is_alone flag (family_size == 1) and fare_per_person (Fare / family_size, fold-median-filled Fare) as explicit features. Both are strong survival signals that complement existing family_size and Fare features and are fold-safe (no target used).",
+      "expected_impact": "medium",
+      "implementation_hint": "out['is_alone'] = (df['SibSp'] + df['Parch'] == 0).astype(int); out['fare_per_person'] = df['Fare'].fillna(fold_fare_median) / out['family_size'].clip(lower=1)",
+      "priority": "high"
+    },
+    {
+      "source_reviewer": "model-performance-reviewer",
+      "category": "feature_engineering",
+      "suggestion": "Add is_child binary flag (Age < 12 after fold-imputed Age) and is_large_family (family_size >= 5). These non-linear segments have distinct survival rates not fully captured by the continuous Age and family_size features.",
+      "expected_impact": "medium",
+      "implementation_hint": "After per-fold Age imputation: out['is_child'] = (imputed_age < 12).astype(int); out['is_large_family'] = (out['family_size'] >= 5).astype(int). Fold-safe, no target used.",
+      "priority": "high"
+    },
+    {
+      "source_reviewer": "feature-leakage-reviewer",
+      "category": "feature_engineering",
+      "suggestion": "Compute tgt_mean_title (per-fold survival rate by title group) as a per-fold aggregate alongside existing tgt_mean_Sex / tgt_mean_Pclass. Title captures finer social-status signal than ordinal encoding alone.",
+      "expected_impact": "medium",
+      "implementation_hint": "Inside fold loop: grp = fold_train.groupby('_title')[TARGET_COL].mean(); fold_val['tgt_mean_title'] = fold_val['_title'].map(grp).fillna(global_mean). Declare source='per_fold' in feature_spec.json.",
+      "priority": "high"
+    },
+    {
+      "source_reviewer": "generalization-reviewer",
+      "category": "cv_validity",
+      "suggestion": "Use floor canonical 5-fold OOF score (not 80/20 holdout self-reported score) as the promotion threshold in ensemble-meta so all candidates are compared apples-to-apples. Re-score oof_floor.csv against train targets using cv_folds.json fold assignments.",
+      "expected_impact": "medium",
+      "implementation_hint": "After floor training, re-score oof_floor.csv rows against train targets via cv_folds.json. Write that score to model_selection.json.cv_score and use it as promotion_threshold in ensemble-meta.",
+      "priority": "high"
+    }
+  ],
+  "high_priority_suggestion_count": 5,
+  "blocking_leakage": false,
+  "leakage_severity_note": "feature_audit_review: all findings LOW severity (hardcoded path, title literals, stale feature_importance). overfitting_leakage_audit: two MEDIUM findings (probability domain blend, floor threshold mismatch) — no HIGH-severity leakage. No blocking condition triggered.",
+  "approved_for_final": false,
+  "revert_promotion": false,
+  "blacklist_candidate": null,
+  "actionability_gate": "pass — 4 feature-actionable suggestions (feature_engineering x3, cv_validity x1) plus 1 prediction_postprocess fix; round 2 will deepen model search",
+  "next_action": "continue_round",
+  "notes": "GBDT achieves 0.8485 accuracy (+38.1% vs baseline 0.6145). Top priorities for round 2: (1) fix gbdt to export predict_proba for proper probability-domain NNLS blend; (2) add is_alone + fare_per_person + is_child features; (3) add tgt_mean_title per-fold aggregate; (4) align floor promotion threshold to canonical OOF. No blocking leakage. Feature-actionable work justifies a round-2 run."
+}

@@ -1,0 +1,74 @@
+{
+  "round": 2,
+  "reviewer": "model-performance-reviewer",
+  "current_best_cv_score": 0.852974,
+  "metric": "accuracy",
+  "greater_is_better": true,
+  "baseline_cv_score": 0.6145251396648045,
+  "improvement_vs_baseline_pct": 38.8,
+  "prev_round_cv_score": 0.8484848484848485,
+  "round_over_round_improvement_pct": 0.73,
+  "train_val_gap": null,
+  "cv_relative_stability": 0.0143,
+  "overfit_risk": "low",
+  "blend_at_chosen_threshold": 0.852974,
+  "blend_note": "NNLS gave linear weight=0.0; gbdt alone (0.852974) is the promoted submission. Blend OOF was 0.8519 at label level — marginally below gbdt alone, likely due to hard-label blending; ensemble-meta correctly chose gbdt. Linear is dead weight (weight=0, OOF=0.8328, 2.4pp below gbdt).",
+  "ensemble_assessment": {
+    "gbdt_oof": 0.852974,
+    "linear_oof": 0.8327721661054994,
+    "blend_oof": 0.8518518518518519,
+    "nnls_weights": {"gbdt": 1.0, "linear": 0.0},
+    "diversity_note": "Linear (C=0.05, 31 configs, 5-seed averaged) is 2.4pp below gbdt. Blend is still below gbdt alone — hard-label ensemble gains are limited vs probability ensemble. No third family (e.g. RandomForest) available to add uncorrelated diversity.",
+    "untried_family": "RandomForestClassifier or ExtraTreesClassifier — uncorrelated with LightGBM on small datasets"
+  },
+  "per_fold_scores": [0.871508, 0.859551, 0.837079, 0.842697, 0.853933],
+  "fold_range": 0.034429,
+  "stability_note": "5-fold std=0.0122, relative_stability=1.43% — good stability. No fold dominates. Overfit risk is low.",
+  "round2_vs_round1": {
+    "round1_best_score": 0.8484848484848485,
+    "round2_best_score": 0.852974,
+    "absolute_gain": 0.004489,
+    "pct_of_baseline": 0.73,
+    "verdict": "Positive gain (+0.45pp, +0.73% of baseline) from round-1 feature additions: is_child, is_large_family, is_alone, fare_per_person, tgt_mean_title, tgt_mean_Sex_Pclass, and predict_proba fix all confirmed in agent_gbdt.json feature list (28 features vs ~22 inferred round 1)."
+  },
+  "prediction_sanity": {
+    "verdict": "PASS",
+    "train_pos_rate": 0.384,
+    "pred_pos_rate": 0.347,
+    "delta": 0.037,
+    "note": "Slight under-prediction of survivals (3.7pp gap). Not alarming for Titanic; test set may genuinely have fewer survivors."
+  },
+  "residual_analysis_note": "state.json residual_analysis is empty — binary classification; no quantile regression residuals available. Confusion matrix from floor evaluation (test): FN=20 (missed survivors) is the primary error mode, FP=14. The gbdt specialist likely reduces both vs the floor logistic regression.",
+  "suggestions": [
+    {
+      "priority": "low",
+      "category": "ensemble",
+      "suggestion": "Drop linear family in any future round (NNLS weight=0, OOF 2.4pp below gbdt). Replace with RandomForestClassifier (200 trees, max_features=sqrt) to add uncorrelated diversity against LightGBM.",
+      "expected_impact": "low",
+      "implementation_hint": "Add family='rf' specialist with sklearn RandomForestClassifier; drop linear specialist dispatch. NNLS blend will assign positive weight only if RF adds genuine uncorrelated signal."
+    },
+    {
+      "priority": "low",
+      "category": "hyperparameter_tuning",
+      "suggestion": "LightGBM learning_rate and depth ranges not reported in agent_gbdt.json. Lower lr (0.01-0.03) with more trees (500-800) and min_child_samples tuning may squeeze 0.5-1pp on 891 rows.",
+      "expected_impact": "low",
+      "implementation_hint": "In gbdt specialist: extend lr grid to [0.01, 0.02, 0.03, 0.05]; num_leaves in [15, 31, 63]; min_child_samples in [5, 10, 20]. Use early stopping with OOF."
+    },
+    {
+      "priority": "low",
+      "category": "feature_engineering",
+      "suggestion": "Cabin deck column 'deck' is present but 77% missing. Verify it is ordinal (A=1..G=7, missing=0) not raw label-encoded — ordinal representation gives the GBDT better monotone structure over deck number.",
+      "expected_impact": "low",
+      "implementation_hint": "deck_map = {'A':1,'B':2,'C':3,'D':4,'E':5,'F':6,'G':7}; df['deck'] = df['Cabin'].str[0].map(deck_map).fillna(0). Already in feature set — confirm ordinal not label encoding."
+    }
+  ],
+  "do_not_repeat": [
+    "Adding is_alone / fare_per_person — implemented in round 2 (confirmed in agent_gbdt.json feature list)",
+    "Adding is_child / is_large_family — implemented in round 2",
+    "Adding tgt_mean_title / tgt_mean_Sex_Pclass per-fold aggregates — implemented in round 2",
+    "Fixing predict_proba export — implemented in round 2 (agent_gbdt.json probability_output=true)",
+    "Aligning floor promotion threshold — noted; floor_self_reported used consistently"
+  ],
+  "partial_verdict": "pass",
+  "notes": "Round 2 GBDT 0.8530 accuracy (+0.45pp vs round 1, +38.8% vs baseline 0.6145). CV stable (1.43% relative std). All round-1 feature suggestions implemented; predict_proba fix confirmed. Linear dead weight (NNLS=0). This is round 2 of the 2-round cap — no further round warranted. Recommend stop_and_report."
+}

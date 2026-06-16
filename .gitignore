@@ -31,3 +31,6 @@ data/*
 
 # Claude local/session files if any
 .claude/settings.local.json
+
+# CatBoost training artifacts
+catboost_info/

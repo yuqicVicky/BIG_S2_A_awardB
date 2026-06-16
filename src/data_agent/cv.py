@@ -557,4 +557,14 @@ def _score(y_true: np.ndarray, y_pred: np.ndarray, metric_name: str, blocks: np.
         return float(np.sqrt(np.mean((y_true - y_pred) ** 2)))
     if metric_name == "block_mae" and blocks is not None and len(blocks) == len(y_true):
         return float(pd.DataFrame({"e": err, "b": blocks}).groupby("b")["e"].mean().mean())
-    return float(np.mean(err))
+    if metric_name == "accuracy":
+        # Classification correctness (greater-is-better). y_pred may be a continuous
+        # NNLS blend or probabilities — round to the nearest integer class so a
+        # binary {0,1} target compares correctly; hard-label preds are unchanged.
+        return float(np.mean(np.rint(y_pred) == np.rint(y_true)))
+    # mae (and the intended block_mae fallback when no usable block is present).
+    if metric_name in ("mae", "block_mae"):
+        return float(np.mean(err))
+    # Never silently score an unrecognised metric as MAE: a classification metric
+    # scored as MAE inverts the keep-best direction (greater_is_better mismatch).
+    raise ValueError(f"_score: unsupported metric_name {metric_name!r}")

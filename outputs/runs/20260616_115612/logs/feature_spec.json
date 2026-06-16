@@ -1,0 +1,93 @@
+{
+  "run_id": "20260616_115612",
+  "format": "parquet",
+  "features_train": "/Users/yuqic/Documents/Claude/Projects/STAI-X challenge/award-b-repo/outputs/runs/20260616_115612/logs/features_train.parquet",
+  "features_pred": "/Users/yuqic/Documents/Claude/Projects/STAI-X challenge/award-b-repo/outputs/runs/20260616_115612/logs/features_pred.parquet",
+  "feature_columns": [
+    "Age",
+    "Emb_C",
+    "Emb_Q",
+    "Emb_S",
+    "Fare",
+    "Parch",
+    "Pclass",
+    "Pclass_x_Fare",
+    "Sex_female",
+    "Sex_male",
+    "Sex_x_Age",
+    "Sex_x_Pclass",
+    "SibSp",
+    "deck",
+    "family_size",
+    "fare_per_person",
+    "has_cabin",
+    "is_alone",
+    "is_child",
+    "is_large_family",
+    "tgt_mean_Embarked",
+    "tgt_mean_Pclass",
+    "tgt_mean_Sex",
+    "tgt_mean_Sex_Pclass",
+    "tgt_mean_title",
+    "ticket_group_size",
+    "ticket_prefix_enc",
+    "title"
+  ],
+  "per_fold_aggregates": [
+    {
+      "name": "tgt_mean_Sex",
+      "group_keys": [
+        "Sex"
+      ],
+      "source": "per_fold"
+    },
+    {
+      "name": "tgt_mean_Pclass",
+      "group_keys": [
+        "Pclass"
+      ],
+      "source": "per_fold"
+    },
+    {
+      "name": "tgt_mean_Embarked",
+      "group_keys": [
+        "Embarked"
+      ],
+      "source": "per_fold"
+    },
+    {
+      "name": "tgt_mean_Sex_Pclass",
+      "group_keys": [
+        "Sex",
+        "Pclass"
+      ],
+      "source": "per_fold"
+    },
+    {
+      "name": "tgt_mean_title",
+      "group_keys": [
+        "_title"
+      ],
+      "source": "per_fold"
+    },
+    {
+      "name": "ticket_group_size",
+      "group_keys": [
+        "Ticket"
+      ],
+      "source": "per_fold"
+    },
+    {
+      "name": "ticket_prefix_enc",
+      "group_keys": [
+        "Ticket"
+      ],
+      "source": "per_fold"
+    }
+  ],
+  "datetime_derived": [],
+  "text_svd": [],
+  "image_features": [],
+  "target_transform": "none",
+  "notes": "Round 2. Binary classification (Titanic). Features: direct numerics (Pclass/Age/SibSp/Parch/Fare), Sex one-hot, Embarked one-hot (mode-imputed per fold on train), title ordinal (from Name), deck ordinal (from Cabin), has_cabin flag, family_size, is_alone (SibSp+Parch==0), is_large_family (family_size>=4), is_child (Age<12 post fold-imputation), fare_per_person (Fare/family_size), interactions (Sex_x_Pclass, Sex_x_Age, Pclass_x_Fare). Per-fold target aggregates: tgt_mean_Sex, tgt_mean_Pclass, tgt_mean_Embarked, tgt_mean_Sex_Pclass, tgt_mean_title; ticket_group_size and ticket_prefix_enc also per-fold. Age imputed by title-group median from fold-train; Fare by fold-train median. No capability gaps. representation_strategy=tabular_ml."
+}

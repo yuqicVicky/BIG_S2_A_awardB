@@ -1,0 +1,31 @@
+{
+  "run_id": "20260616_115612",
+  "round": 1,
+  "reviewer": "feature-engineering-reviewer",
+  "baseline_mae": 0.830527,
+  "prune_margin": 0.00830527,
+  "metric_name": "accuracy",
+  "script_pruned_groups": [],
+  "final_pruned_groups": [],
+  "final_pruned_columns": [],
+  "restored_groups": [],
+  "extra_pruned_groups": [],
+  "per_group_decisions": {
+    "other_features": {
+      "script_decision": "keep",
+      "final_decision": "keep",
+      "n_cols": 17,
+      "delta": -0.043771,
+      "rationale": "Large negative delta (removing lowers accuracy by 4.4pp) — clearly essential core features. Keep."
+    },
+    "per_fold_aggregates": {
+      "script_decision": "keep",
+      "final_decision": "keep",
+      "n_cols": 6,
+      "delta": -0.013468,
+      "rationale": "Negative delta (removing lowers accuracy by 1.3pp) — fold-safe target aggregates help. Keep."
+    }
+  },
+  "rationale": "Metric is accuracy (higher is better); negative delta means removing the group HURTS accuracy. Both groups have delta < 0: other_features (-0.044) and per_fold_aggregates (-0.013) both help significantly. No dead-weight candidates (both groups demonstrate clear positive utility). No leakage audit present (round 1). Script prune set (empty) confirmed — feature_spec.json unchanged.",
+  "next_action": "proceed_to_specialists"
+}

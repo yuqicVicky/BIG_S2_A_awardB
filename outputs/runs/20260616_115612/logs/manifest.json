@@ -1,0 +1,65 @@
+{
+  "run_id": "20260616_115612",
+  "submission_path": "/Users/yuqic/Documents/Claude/Projects/STAI-X challenge/award-b-repo/submission.csv",
+  "report_path": null,
+  "schema": {
+    "data_dir": "/Users/yuqic/Documents/Claude/Projects/STAI-X challenge/award-b-repo/data",
+    "description_path": "/Users/yuqic/Documents/Claude/Projects/STAI-X challenge/award-b-repo/data/DATA_DESCRIPTION.md",
+    "train_target_file": "/Users/yuqic/Documents/Claude/Projects/STAI-X challenge/award-b-repo/data/train.csv",
+    "train_covariates_file": "/Users/yuqic/Documents/Claude/Projects/STAI-X challenge/award-b-repo/data/test.csv",
+    "validation_covariates_file": "/Users/yuqic/Documents/Claude/Projects/STAI-X challenge/award-b-repo/data/test.csv",
+    "sample_submission_file": "/Users/yuqic/Documents/Claude/Projects/STAI-X challenge/award-b-repo/data/gender_submission.csv",
+    "row_id_column": "PassengerId",
+    "target_column": "Survived",
+    "join_keys": [],
+    "time_column": null,
+    "category_column": null,
+    "block_column": null,
+    "inferred_notes": [
+      "train_target_file: train.csv",
+      "train_covariates_file: test.csv",
+      "validation_covariates_file: test.csv",
+      "sample_submission_file: gender_submission.csv",
+      "No explicit join keys inferred; row-order fallback may be used."
+    ]
+  },
+  "summary": {
+    "run_id": "20260616_115612",
+    "task_type": "binary_classification",
+    "selected_model": "blend(floor+linear+gbdt)",
+    "metric": "accuracy",
+    "output_kind": "label",
+    "submission_valid": true,
+    "report_review": "SKIPPED"
+  },
+  "submission_check": {
+    "expected_columns": [
+      "PassengerId",
+      "Survived"
+    ],
+    "actual_columns": [
+      "PassengerId",
+      "Survived"
+    ],
+    "output_kind": "label",
+    "n_rows_sample": 418,
+    "n_rows_submission": 418,
+    "columns_ok": true,
+    "row_count_ok": true,
+    "row_id_alignment_ok": true,
+    "missing_predictions": 0,
+    "all_finite": true,
+    "dtype_ok": true,
+    "distinct_predicted_labels": [
+      0,
+      1
+    ],
+    "labels_subset_of_sample": true
+  },
+  "artifacts": {
+    "confusion_matrix_plot": "/Users/yuqic/Documents/Claude/Projects/STAI-X challenge/award-b-repo/outputs/artifacts/20260616_115612_confusion_matrix.png",
+    "roc_curve_plot": "/Users/yuqic/Documents/Claude/Projects/STAI-X challenge/award-b-repo/outputs/artifacts/20260616_115612_roc_curve.png",
+    "feature_importance_plot": "/Users/yuqic/Documents/Claude/Projects/STAI-X challenge/award-b-repo/outputs/artifacts/20260616_115612_feature_importance.png"
+  },
+  "state_path": "/Users/yuqic/Documents/Claude/Projects/STAI-X challenge/award-b-repo/outputs/runs/20260616_115612/logs/state.json"
+}

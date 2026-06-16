@@ -21,7 +21,7 @@ import pandas as pd
 
 from .leakage_guard import scan_precomputed_target_leakage
 from .schema import SchemaSpec, read_table
-from .task import TaskSpec, resolve_task_spec
+from .task import TaskSpec, apply_metric_decision, resolve_task_spec
 
 
 @dataclass
@@ -71,7 +71,8 @@ _AUDIT_MAX_GROUPS = 50
 
 # ── public entry point ────────────────────────────────────────────────────────
 
-def build_feature_bundle(spec: SchemaSpec, force_task_type: str | None = None) -> FeatureBundle:
+def build_feature_bundle(spec: SchemaSpec, force_task_type: str | None = None,
+                         metric_decision: dict | None = None) -> FeatureBundle:
     target_df = read_table(spec.train_target_file)
     sample_submission = read_table(spec.sample_submission_file)
     train_cov = read_table(spec.train_covariates_file) if spec.train_covariates_file else None
@@ -161,6 +162,10 @@ def build_feature_bundle(spec: SchemaSpec, force_task_type: str | None = None) -
         target_column=spec.target_column,
         force_task_type=force_task_type,
     )
+    # The planner (Step 4) is the single metric authority — honour its
+    # analysis_plan.json metric_decision when one was passed in (consistency
+    # guard-railed inside apply_metric_decision).
+    task = apply_metric_decision(task, metric_decision)
 
     # ── target-signal audit for time features ─────────────────────────────────
     generated_time_features = [f for fs in time_audit["generated_features"].values() for f in fs]

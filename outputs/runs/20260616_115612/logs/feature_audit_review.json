@@ -1,0 +1,56 @@
+{
+  "round": 2,
+  "reviewer": "feature-leakage-reviewer",
+  "overall_verdict": "pass",
+  "leakage_findings": [
+    {
+      "severity": "low",
+      "feature": "REPO_ROOT (line 16 of feature_pipeline.py)",
+      "issue": "Absolute dev-machine path '/Users/yuqic/Documents/Claude/Projects/STAI-X challenge/award-b-repo' hardcoded as REPO_ROOT. Persists from round 1. Breaks on any other machine or CI path.",
+      "required_fix": "Resolve REPO_ROOT at runtime via Path(__file__).resolve().parents[N] or an environment variable, never a literal absolute path."
+    },
+    {
+      "severity": "low",
+      "feature": "TITLE_MAP / TITLE_ORDINAL (lines 51-58 of feature_pipeline.py)",
+      "issue": "Title strings ('Mr', 'Miss', 'Mrs', 'Master', 'Don', 'Rev', etc.) and ordinal mapping are Titanic-specific literals hardcoded in the pipeline. Persists from round 1. Violates no-hardcoding rule.",
+      "required_fix": "Build title vocabulary dynamically by extracting unique titles from the Name column at runtime, assign ordinals by frequency rank, and preserve the Rare-fallback pattern without hardcoding individual title strings."
+    },
+    {
+      "severity": "low",
+      "feature": "feature_importance.json",
+      "issue": "feature_importance.json still lists only 5 raw floor-model columns (Pclass, Age, SibSp, Parch, Fare). The 28-column engineered feature set (tgt_mean_title, is_alone, fare_per_person, is_child, is_large_family, etc.) has no recorded importance. Persists from round 1.",
+      "required_fix": "Populate feature_importance.json from specialist models (gbdt/linear) that train on the engineered feature_spec.json columns, not the floor model's raw columns."
+    }
+  ],
+  "suggestions": [
+    {
+      "priority": "high",
+      "category": "feature_engineering",
+      "suggestion": "Add tgt_mean_title x Pclass interaction. title already encodes social status and Pclass is the strongest floor-model feature (importance 0.338). Their product captures high-survival segments (e.g. Mrs in Pclass 1) beyond separate tgt_mean_title and tgt_mean_Pclass features.",
+      "expected_impact": "medium",
+      "implementation_hint": "Inside fold loop after computing tgt_mean_title: tgt_mean_title_x_Pclass = fold_val['_title'].map(title_grp_mean) * fold_val['Pclass']. Apply full-train version to prediction frame. Declare source=per_fold in feature_spec.json."
+    },
+    {
+      "priority": "medium",
+      "category": "feature_engineering",
+      "suggestion": "Add Age_x_Pclass interaction. Age (floor importance 0.077) and Pclass (0.338) are the two strongest numerics. Their product captures elderly 3rd-class passengers (low survival) vs young 1st-class passengers not covered by Sex_x_Age alone.",
+      "expected_impact": "medium",
+      "implementation_hint": "feat_train['Age_x_Pclass'] = oof_arrays['Age_imputed'] * train_raw['Pclass'].values; for pred frame use feat_pred['Age'] * pred_raw['Pclass'].values."
+    },
+    {
+      "priority": "medium",
+      "category": "feature_engineering",
+      "suggestion": "Add fare_per_person binned (quartile ordinal). fare_per_person is a continuous ratio; Fare has floor importance 0.257. Quartile encoding (fit on fold-train boundaries) exposes nonlinear Fare/family_size thresholds to linear models in the ensemble.",
+      "expected_impact": "low",
+      "implementation_hint": "Inside fold loop: pd.qcut(fold_train['fare_per_person'], q=4, duplicates='drop') to get bin edges; apply to fold_val and prediction frame. Encode as ordinal int 0-3."
+    },
+    {
+      "priority": "low",
+      "category": "feature_pruning",
+      "suggestion": "Once specialists populate feature_importance.json on the 28-column set, prune features whose importance falls below the bottom decile of the observed distribution. Likely candidates: Emb_Q (sparse Embarked=Q), is_large_family (collinear with family_size).",
+      "expected_impact": "low",
+      "implementation_hint": "Sort specialist feature importances; drop columns below bottom-decile threshold that lack ablation evidence (i.e. not in the per_fold_aggregates group which showed delta=-0.013)."
+    }
+  ],
+  "notes": "Round 2: all 7 per_fold_aggregates (tgt_mean_Sex, tgt_mean_Pclass, tgt_mean_Embarked, tgt_mean_Sex_Pclass, tgt_mean_title, ticket_group_size, ticket_prefix_enc) correctly declared source=per_fold and fit inside the canonical fold loop using fold_assignment from cv_folds.json. CV is stratified_kfold i.i.d. — no time ordering, so ~val_mask train construction carries no forward-look risk. No row_id/PassengerId in feature set. Three low-severity issues (2 hardcoding, 1 stale importance file) carried from round 1; none are CV leakage. New round-2 features (is_alone, fare_per_person, is_child, is_large_family, tgt_mean_title) are all fold-safe."
+}

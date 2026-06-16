@@ -57,15 +57,24 @@ for oof_csv in sorted(glob.glob(f"outputs/runs/{run_id}/logs/oof_*.csv")):
     cand_csv = oof_csv.replace("_oof_", "_cand_")
     if not os.path.exists(cand_csv):
         continue
+    # The engine writes oof_*.csv as [row_index, oof_pred] and cand_*.csv as
+    # [row_id, target]. For CLASSIFICATION both carry the CONTINUOUS positive-class
+    # probability (never a thresholded 0/1 label) — so the blend stays in probability
+    # space and is thresholded exactly once in Step 1b.
     oof  = pd.read_csv(oof_csv)["oof_pred"].to_numpy()
     test = pd.read_csv(cand_csv)[spec["target_column"]].to_numpy()
     if len(oof) == len(y_true):
         specialist_cands.append({"name": name, "oof": oof, "test": test})
 
+# Metric + direction come from model_selection.json — NEVER assume block_mae. It is
+# `accuracy` (greater-is-better) for classification, `block_mae`/`mae`/`rmse` for
+# regression. `_score` (used inside nnls_keep_best) rounds proba at 0.5 for accuracy.
+metric_name = ms.get("metric_name") or ms.get("metric")
+greater_is_better = bool(ms.get("greater_is_better", False))
 res = nnls_keep_best(
     specialist_cands, y_true,
-    metric_name=ms.get("metric_name", "block_mae"),
-    greater_is_better=bool(ms.get("greater_is_better", False)),
+    metric_name=metric_name,
+    greater_is_better=greater_is_better,
 )
 ```
 
@@ -90,7 +99,15 @@ if chosen is None or len(chosen) != len(sub):
     # force promote=False below so the floor's submission.csv stays untouched.
     meta_choice_ready = False
 else:
-    out = pd.DataFrame({row_id: sub[row_id].to_numpy(), target: np.asarray(chosen, dtype=float)})
+    chosen = np.asarray(chosen, dtype=float)
+    # THRESHOLD EXACTLY ONCE. The blend is a continuous probability. If the submission
+    # target is an integer LABEL (classification), round the blended proba at 0.5 to a
+    # 0/1 label and match the sample dtype; if it is float (regression / probability
+    # submission), keep the continuous value. Resolve the kind from the sample dtype —
+    # never hardcode. (This is the single place a class label is produced.)
+    if pd.api.types.is_integer_dtype(sub[target].dtype):
+        chosen = np.rint(chosen).astype(sub[target].dtype)
+    out = pd.DataFrame({row_id: sub[row_id].to_numpy(), target: chosen})
     out.to_csv(f"outputs/runs/{run_id}/logs/meta_choice.csv", index=False)
     meta_choice_ready = True
 ```
@@ -115,7 +132,7 @@ if os.path.exists(floor_oof_csv):
     if common.sum() >= 5:
         floor_canonical_oof = float(_cv_score(
             y_true[common], floor_oof[common],
-            ms.get("metric_name", "block_mae"), None,
+            metric_name, None,   # the resolved official metric, never assume block_mae
         ))
 
 # Fallback: if floor_self_score missing, use canonical (documents the protocol mismatch risk)

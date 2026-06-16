@@ -1,0 +1,59 @@
+{
+  "run_id": "20260616_115612",
+  "reviewed_at": "2026-06-16T03:59:53.395105Z",
+  "mode": "schema_review",
+  "detected_structure": {
+    "has_time": false,
+    "has_group": false,
+    "has_panel": false,
+    "sub_period_pattern": null,
+    "temporal_overlap": null,
+    "class_imbalance": true,
+    "minority_class_rate": 0.3838,
+    "distribution_shift_columns": []
+  },
+  "chosen_strategy": "stratified_kfold",
+  "strategy_rationale": "No time or group structure detected (split_structure confirms i.i.d. tabular data). Binary classification with minority class rate ~38% \u2014 moderate imbalance warrants stratified sampling to ensure each fold preserves the target class ratio, making OOF scores leaderboard-aligned. Stratified k-fold (5 folds) is the first-match priority for class_imbalance on i.i.d. data and best simulates the hidden evaluation where test passengers are drawn from the same distribution without temporal ordering.",
+  "holdout_parameters": {
+    "sub_period_feature": null,
+    "holdout_threshold": null,
+    "holdout_fraction": null,
+    "time_column": null,
+    "group_column": null,
+    "n_splits": 5,
+    "stratify_column": "Survived",
+    "random_state": 42,
+    "period_order": null,
+    "horizon": null,
+    "n_folds": null,
+    "full_period_order": null
+  },
+  "simulates_hidden_evaluation": "Each fold holds out ~20% of passengers stratified by survival rate; the hidden test set is similarly drawn from the same passenger pool without temporal or group ordering. OOF accuracy tracks leaderboard accuracy closely.",
+  "leakage_risks": [
+    {
+      "risk_type": "high_cardinality_id",
+      "column": "Name",
+      "severity": "medium",
+      "action": "Extract title/social feature only; do not use raw Name string as a model feature"
+    },
+    {
+      "risk_type": "high_cardinality_id",
+      "column": "Ticket",
+      "severity": "medium",
+      "action": "Extract ticket prefix / group-size aggregate per fold; do not use raw ticket as feature"
+    },
+    {
+      "risk_type": "high_cardinality_id",
+      "column": "Cabin",
+      "severity": "medium",
+      "action": "Extract deck letter only; 77% missing \u2014 treat missingness as informative feature"
+    },
+    {
+      "risk_type": "distribution_shift",
+      "column": "[]",
+      "severity": "low",
+      "action": "Monitor; train/test come from the same manifest so shift is sampling noise"
+    }
+  ],
+  "validation_limitations": "Stratified k-fold assumes train and test passengers are i.i.d. If test passengers were selected with any hidden temporal or cabin-class bias, OOF accuracy will overestimate leaderboard accuracy. Distribution shift detected in columns [] (train vs test mean z-score > 0.3)."
+}

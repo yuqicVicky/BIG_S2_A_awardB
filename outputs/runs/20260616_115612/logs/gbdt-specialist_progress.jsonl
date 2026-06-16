@@ -1,0 +1,84 @@
+{"status": "data_loaded", "n_train": 891, "n_test": 418, "n_features": 23, "ts": 0.020350933074951172}
+{"status": "hints_applied", "primary_family": "gbdt", "native_nan": true, "regularized": false, "log1p": false, "ts": 0.020535707473754883}
+{"status": "floor_bar", "floor_accuracy": 0.8100558659217877, "ts": 0.020704030990600586}
+{"status": "tuning_start", "n_configs": 30, "ts": 0.8193478584289551}
+{"status": "new_best", "cfg_idx": 0, "cv_accuracy": 0.8394827694432239, "config": {"n_estimators": 302, "learning_rate": 0.1, "num_leaves": 43, "max_depth": 5, "min_child_samples": 17, "subsample": 0.8394633936788146, "colsample_bytree": 0.6624074561769746, "reg_alpha": 0.1, "reg_lambda": 1.0, "seed": 0}, "ts": 0.9923479557037354}
+{"status": "new_best", "cfg_idx": 1, "cv_accuracy": 0.8484589793484402, "config": {"n_estimators": 530, "learning_rate": 0.05, "num_leaves": 38, "max_depth": 7, "min_child_samples": 45, "subsample": 0.6571467271687763, "colsample_bytree": 0.8603553891795411, "reg_alpha": 0.0, "reg_lambda": 0.1, "seed": 1}, "ts": 1.1875839233398438}
+{"status": "tuning_done", "best_cv_accuracy": 0.8484589793484402, "best_config": {"n_estimators": 530, "learning_rate": 0.05, "num_leaves": 38, "max_depth": 7, "min_child_samples": 45, "subsample": 0.6571467271687763, "colsample_bytree": 0.8603553891795411, "reg_alpha": 0.0, "reg_lambda": 0.1, "seed": 1}, "ts": 9.975818872451782}
+{"status": "full_refit_start", "ts": 9.976073980331421}
+{"status": "full_refit_done", "seeds": [42, 123, 777], "ts": 10.377528667449951}
+{"status": "data_loaded", "n_train": 891, "n_test": 418, "n_features": 23, "ts": 0.022114992141723633}
+{"status": "hints_applied", "primary_family": "gbdt", "native_nan": true, "regularized": false, "log1p": false, "ts": 0.02229595184326172}
+{"status": "floor_bar", "floor_accuracy": 0.8100558659217877, "ts": 0.022433996200561523}
+{"status": "tuning_start", "n_configs": 30, "ts": 0.7645151615142822}
+{"status": "new_best", "cfg_idx": 0, "cv_accuracy": 0.839483, "config": {"n_estimators": 302, "learning_rate": 0.1, "num_leaves": 43, "max_depth": 5, "min_child_samples": 17, "subsample": 0.8394633936788146, "colsample_bytree": 0.6624074561769746, "reg_alpha": 0.1, "reg_lambda": 1.0, "seed": 0}, "ts": 0.9305319786071777}
+{"status": "new_best", "cfg_idx": 1, "cv_accuracy": 0.848459, "config": {"n_estimators": 530, "learning_rate": 0.05, "num_leaves": 38, "max_depth": 7, "min_child_samples": 45, "subsample": 0.6571467271687763, "colsample_bytree": 0.8603553891795411, "reg_alpha": 0.0, "reg_lambda": 0.1, "seed": 1}, "ts": 1.1395399570465088}
+{"status": "tuning_done", "best_cv_accuracy": 0.848459, "best_config": {"n_estimators": 530, "learning_rate": 0.05, "num_leaves": 38, "max_depth": 7, "min_child_samples": 45, "subsample": 0.6571467271687763, "colsample_bytree": 0.8603553891795411, "reg_alpha": 0.0, "reg_lambda": 0.1, "seed": 1}, "ts": 10.263911008834839}
+{"status": "full_refit_start", "ts": 10.264147996902466}
+{"status": "full_refit_done", "seeds": [42, 123, 777], "ts": 10.672485828399658}
+{"status": "done", "cv_accuracy": 0.848459, "promoted": true, "ts": 10.675839900970459}
+{"ts": 0.0, "msg": "start", "step": "init"}
+{"ts": 0.04529929161071777, "msg": "Data loaded: X_train=(891, 28), X_pred=(418, 28)", "step": "data_loaded"}
+{"ts": 0.9781131744384766, "msg": "LightGBM available", "step": "lib_check"}
+{"ts": 0.9951291084289551, "msg": "Features: 28", "step": "features"}
+{"ts": 0.9953689575195312, "msg": "Starting CV, TUNE_ITER=8, BUDGET_SEC=900", "step": "cv_start"}
+{"ts": 0.9959192276000977, "msg": "Fold 0: tr=712, va=179", "step": "fold_0_start"}
+{"ts": 1.0460562705993652, "msg": "Fold 0 trial 0: acc=0.8659", "step": "fold_0_trial_0"}
+{"ts": 1.0780000686645508, "msg": "Fold 0 trial 1: acc=0.8547", "step": "fold_0_trial_1"}
+{"ts": 1.0927863121032715, "msg": "Fold 0 trial 2: acc=0.8659", "step": "fold_0_trial_2"}
+{"ts": 1.1838672161102295, "msg": "Fold 0 trial 3: acc=0.8715", "step": "fold_0_trial_3"}
+{"ts": 1.2064931392669678, "msg": "Fold 0 trial 4: acc=0.8659", "step": "fold_0_trial_4"}
+{"ts": 1.2520701885223389, "msg": "Fold 0 trial 5: acc=0.8715", "step": "fold_0_trial_5"}
+{"ts": 1.2829790115356445, "msg": "Fold 0 trial 6: acc=0.8603", "step": "fold_0_trial_6"}
+{"ts": 1.311690092086792, "msg": "Fold 0 trial 7: acc=0.8659", "step": "fold_0_trial_7"}
+{"ts": 1.311814308166504, "msg": "Fold 0 done: best_acc=0.8715", "step": "fold_0_done"}
+{"ts": 1.3122351169586182, "msg": "Fold 1: tr=713, va=178", "step": "fold_1_start"}
+{"ts": 1.3383162021636963, "msg": "Fold 1 trial 0: acc=0.8539", "step": "fold_1_trial_0"}
+{"ts": 1.40388822555542, "msg": "Fold 1 trial 1: acc=0.8427", "step": "fold_1_trial_1"}
+{"ts": 1.4546313285827637, "msg": "Fold 1 trial 2: acc=0.8483", "step": "fold_1_trial_2"}
+{"ts": 1.5401721000671387, "msg": "Fold 1 trial 3: acc=0.8427", "step": "fold_1_trial_3"}
+{"ts": 1.633852243423462, "msg": "Fold 1 trial 4: acc=0.8371", "step": "fold_1_trial_4"}
+{"ts": 1.6680121421813965, "msg": "Fold 1 trial 5: acc=0.8539", "step": "fold_1_trial_5"}
+{"ts": 1.7285661697387695, "msg": "Fold 1 trial 6: acc=0.8596", "step": "fold_1_trial_6"}
+{"ts": 1.8435389995574951, "msg": "Fold 1 trial 7: acc=0.8483", "step": "fold_1_trial_7"}
+{"ts": 1.843675136566162, "msg": "Fold 1 done: best_acc=0.8596", "step": "fold_1_done"}
+{"ts": 1.844189167022705, "msg": "Fold 2: tr=713, va=178", "step": "fold_2_start"}
+{"ts": 1.8605680465698242, "msg": "Fold 2 trial 0: acc=0.8202", "step": "fold_2_trial_0"}
+{"ts": 1.8984570503234863, "msg": "Fold 2 trial 1: acc=0.8202", "step": "fold_2_trial_1"}
+{"ts": 1.9338130950927734, "msg": "Fold 2 trial 2: acc=0.8202", "step": "fold_2_trial_2"}
+{"ts": 1.9607641696929932, "msg": "Fold 2 trial 3: acc=0.8146", "step": "fold_2_trial_3"}
+{"ts": 1.9782590866088867, "msg": "Fold 2 trial 4: acc=0.8258", "step": "fold_2_trial_4"}
+{"ts": 2.0087311267852783, "msg": "Fold 2 trial 5: acc=0.8371", "step": "fold_2_trial_5"}
+{"ts": 2.02620530128479, "msg": "Fold 2 trial 6: acc=0.8146", "step": "fold_2_trial_6"}
+{"ts": 2.060671091079712, "msg": "Fold 2 trial 7: acc=0.8371", "step": "fold_2_trial_7"}
+{"ts": 2.0607962608337402, "msg": "Fold 2 done: best_acc=0.8371", "step": "fold_2_done"}
+{"ts": 2.061155080795288, "msg": "Fold 3: tr=713, va=178", "step": "fold_3_start"}
+{"ts": 2.0865511894226074, "msg": "Fold 3 trial 0: acc=0.8315", "step": "fold_3_trial_0"}
+{"ts": 2.1625311374664307, "msg": "Fold 3 trial 1: acc=0.8315", "step": "fold_3_trial_1"}
+{"ts": 2.188037157058716, "msg": "Fold 3 trial 2: acc=0.8371", "step": "fold_3_trial_2"}
+{"ts": 2.2157931327819824, "msg": "Fold 3 trial 3: acc=0.8427", "step": "fold_3_trial_3"}
+{"ts": 2.2754781246185303, "msg": "Fold 3 trial 4: acc=0.8427", "step": "fold_3_trial_4"}
+{"ts": 2.328853130340576, "msg": "Fold 3 trial 5: acc=0.8371", "step": "fold_3_trial_5"}
+{"ts": 2.3652563095092773, "msg": "Fold 3 trial 6: acc=0.8427", "step": "fold_3_trial_6"}
+{"ts": 2.4281232357025146, "msg": "Fold 3 trial 7: acc=0.8315", "step": "fold_3_trial_7"}
+{"ts": 2.4282641410827637, "msg": "Fold 3 done: best_acc=0.8427", "step": "fold_3_done"}
+{"ts": 2.4288361072540283, "msg": "Fold 4: tr=713, va=178", "step": "fold_4_start"}
+{"ts": 2.4489080905914307, "msg": "Fold 4 trial 0: acc=0.8427", "step": "fold_4_trial_0"}
+{"ts": 2.4753291606903076, "msg": "Fold 4 trial 1: acc=0.8483", "step": "fold_4_trial_1"}
+{"ts": 2.5101850032806396, "msg": "Fold 4 trial 2: acc=0.8483", "step": "fold_4_trial_2"}
+{"ts": 2.543131113052368, "msg": "Fold 4 trial 3: acc=0.8539", "step": "fold_4_trial_3"}
+{"ts": 2.5792739391326904, "msg": "Fold 4 trial 4: acc=0.8427", "step": "fold_4_trial_4"}
+{"ts": 2.646982192993164, "msg": "Fold 4 trial 5: acc=0.8202", "step": "fold_4_trial_5"}
+{"ts": 2.669192314147949, "msg": "Fold 4 trial 6: acc=0.8483", "step": "fold_4_trial_6"}
+{"ts": 2.740821123123169, "msg": "Fold 4 trial 7: acc=0.8371", "step": "fold_4_trial_7"}
+{"ts": 2.7409589290618896, "msg": "Fold 4 done: best_acc=0.8539", "step": "fold_4_done"}
+{"ts": 2.7412171363830566, "msg": "OOF accuracy: 0.8530", "step": "oof_done"}
+{"ts": 2.7433252334594727, "msg": "oof_gbdt.csv written", "step": "oof_write"}
+{"ts": 2.744436025619507, "msg": "cand_gbdt.csv written", "step": "cand_write"}
+{"ts": 0.8297128677368164, "msg": "start round2 training", "step": "init"}
+{"ts": 1.1235249042510986, "msg": "Fold 0 done: best_acc=0.8715", "step": "fold_0_done"}
+{"ts": 1.6106398105621338, "msg": "Fold 1 done: best_acc=0.8596", "step": "fold_1_done"}
+{"ts": 1.8131399154663086, "msg": "Fold 2 done: best_acc=0.8371", "step": "fold_2_done"}
+{"ts": 2.1909329891204834, "msg": "Fold 3 done: best_acc=0.8427", "step": "fold_3_done"}
+{"ts": 2.4797399044036865, "msg": "Fold 4 done: best_acc=0.8539", "step": "fold_4_done"}
+{"ts": 2.4828569889068604, "msg": "All done: oof_acc=0.8530", "step": "complete"}

@@ -1,0 +1,38 @@
+{
+  "train": {
+    "role": "train",
+    "n_rows": 891,
+    "columns": {
+      "Age": {
+        "missing_count": 177,
+        "missing_rate": 0.1987
+      },
+      "Cabin": {
+        "missing_count": 687,
+        "missing_rate": 0.771
+      },
+      "Embarked": {
+        "missing_count": 2,
+        "missing_rate": 0.0022
+      }
+    }
+  },
+  "prediction": {
+    "role": "prediction",
+    "n_rows": 418,
+    "columns": {
+      "Age": {
+        "missing_count": 86,
+        "missing_rate": 0.2057
+      },
+      "Fare": {
+        "missing_count": 1,
+        "missing_rate": 0.0024
+      },
+      "Cabin": {
+        "missing_count": 327,
+        "missing_rate": 0.7823
+      }
+    }
+  }
+}

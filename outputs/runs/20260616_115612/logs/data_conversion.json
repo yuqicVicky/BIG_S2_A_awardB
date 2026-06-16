@@ -1,0 +1,12 @@
+{
+  "converted_files": [],
+  "already_csv": [
+    "data/gender_submission.csv",
+    "data/test.csv",
+    "data/train.csv"
+  ],
+  "skipped_files": [
+    {"file": "data/DATA_DESCRIPTION.md", "reason": "documentation"}
+  ],
+  "errors": []
+}

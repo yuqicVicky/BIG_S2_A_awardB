@@ -267,7 +267,18 @@ def main() -> None:
 
         schema = discover_schema(repo / "data")
         _patch_schema_from_spec_parse(schema, repo, args.run_id)
-        bundle = build_feature_bundle(schema)
+        # The planner owns metric selection — read its analysis_plan.json
+        # metric_decision so the ablation scores on the SAME metric the modeling
+        # specialists and ensemble use (e.g. accuracy for classification, never
+        # the regression-default MAE).
+        metric_decision = None
+        plan_path = logs / "analysis_plan.json"
+        if plan_path.exists():
+            try:
+                metric_decision = json.loads(plan_path.read_text(encoding="utf-8")).get("metric_decision")
+            except (ValueError, OSError):
+                metric_decision = None
+        bundle = build_feature_bundle(schema, metric_decision=metric_decision)
         added = _append_authored_features(bundle, spec_path)
         if not added:
             return _passthrough("no authored features joined (nothing to ablate)")
@@ -280,6 +291,12 @@ def main() -> None:
         folds, scored_mask = cf.folds, cf.scored_mask
 
         baseline_mae, metric_name, model_name = _oof_block_mae(bundle, schema, folds, scored_mask)
+        # Prune direction follows the metric's orientation: error metrics (mae/rmse/
+        # block_mae) are lower-is-better, classification metrics (accuracy/f1/roc_auc)
+        # are greater-is-better. ``improve_sign`` makes "removing the group improves
+        # OOF" a single signed comparison below regardless of orientation.
+        greater_is_better = bool(getattr(bundle.task, "greater_is_better", False))
+        improve_sign = 1.0 if greater_is_better else -1.0
         # Conservative auto-prune: only drop a group whose removal IMPROVES OOF by
         # more than ``prune_margin`` (1% of baseline by default). A single untuned
         # HGB is a weak proxy for the tuned multi-model stack, so we never auto-drop
@@ -307,11 +324,14 @@ def main() -> None:
             if not gcols:
                 continue
             mae_wo, _, _ = _oof_block_mae(_pruned_view(bundle, set(gcols)), schema, folds, scored_mask)
-            # delta < 0  => removing the group IMPROVES OOF (group hurts).
-            # delta > 0  => removing the group WORSENS OOF (group helps).
+            # delta keeps the raw score difference (score_without − baseline) for the
+            # reviewer. ``improvement`` re-signs it so improvement>0 always means
+            # "removing the group IMPROVES OOF" for BOTH orientations — error metrics
+            # improve when the score drops, classification metrics when it rises.
             # Auto-prune only when removal improves OOF by more than prune_margin.
             delta = mae_wo - baseline_mae
-            decision = "prune" if delta < -prune_margin else "keep"
+            improvement = improve_sign * delta
+            decision = "prune" if improvement > prune_margin else "keep"
             results[gname] = {"mae_without": round(mae_wo, 6), "delta": round(delta, 6),
                               "decision": decision, "n_cols": len(gcols), "cols": gcols}
             if decision == "prune":

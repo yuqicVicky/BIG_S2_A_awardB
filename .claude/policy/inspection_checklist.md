@@ -24,6 +24,23 @@ Before considering the run complete, verify:
 - `outputs/runs/{run_id}/logs/data_conversion.json` written during Step 1.
 - `outputs/runs/{run_id}/logs/missingness_profile.json` and `imputation_plan.json` written during Step 2.
 
+## Definition of done
+
+The run is complete when **all** of the following hold:
+
+- `submission.csv` + `report.pdf` exist in the repo root; submission has exactly two columns
+  (`<row_id>`, `<target>`), sample-submission row order, finite predictions, no NaN.
+- Each `*_review.json` was written by its **reviewer** (not a doer), and no reviewer edited
+  the artifact it reviewed.
+- Step-6A′ ran the feature ablation gate (`feature_ablation.json` + `feature_gate.json` present),
+  or `AWARDB_SKIP_ABLATION=1` was set under the budget shortcut.
+- Step 6 ran `model-performance-reviewer` (review) + the lead's `analysis_review_{r}.json`
+  each round; `feature-leakage-reviewer` ran whenever its risk-surface condition fired;
+  `generalization-reviewer` ran whenever that condition fired OR the task is classification.
+- `prediction_sanity.json` exists and is `pass`.
+- `supervisor_gatekeeper.json` final gate is `deliver`; `report_review.json` is approved.
+- No orphan inputs (every file read was produced by an earlier step).
+
 ## Restructure additions (watchdog + optimizer/critic)
 
 - For each modeling round, the per-round wall-clock stayed within its derived slice (no round

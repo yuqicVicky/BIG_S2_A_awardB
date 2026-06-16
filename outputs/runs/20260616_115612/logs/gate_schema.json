@@ -1,0 +1,13 @@
+{
+  "stage": "schema",
+  "run_id": "20260616_115612",
+  "status": "pass",
+  "reasons": [
+    "row_id_column (PassengerId) and target_column (Survived) both present in spec_parse.json",
+    "sample_submission resolved and validated (418 rows, 2 columns)",
+    "binary_classification confirmed; stratified_kfold chosen; cv_folds.json written with 5 folds over 891 rows"
+  ],
+  "suggested_corrections": {},
+  "checked": {},
+  "critic": "llm:schema"
+}

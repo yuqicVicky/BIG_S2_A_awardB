@@ -276,6 +276,32 @@ Output:
 
 ---
 
+## Part 2.7 — Metric decision (you are the single metric authority)
+
+You decide the **one scoring metric** the whole pipeline uses — the ablation gate, the modeling
+specialists, the ensemble keep-best, and CV all read `metric_decision.primary_metric` from your
+plan. Resolve it from `spec_parse.json`, never hardcode a literal:
+
+1. **Explicit metric wins.** If `spec_parse.evaluation_metric` names a metric (MAE, RMSE, RMSLE,
+   accuracy, F1, AUC-ROC, …), use it verbatim and set `source: "description_explicit"`. The
+   description is authority.
+2. **Otherwise default from `task_type`** (`source: "task_type_default"`):
+   - `regression` → `block_mae` when a period/category/block column exists in
+     `detected_structure.block_columns` (Award B is graded by block-averaged MAE), else `mae`.
+     **Prefer the MAE family** — choose MAE/block-MAE over RMSE/R² unless the description forces
+     otherwise. Set `prefer_mae_family: true`.
+   - `binary_classification` → `accuracy`, unless `output_format` is `probability` (then
+     `roc_auc`) or the description/profile flags strong class imbalance (then `f1`).
+   - `multiclass_classification` → `accuracy` (`f1_macro` if the description stresses per-class
+     balance).
+3. **Set `greater_is_better`** correctly: `false` for mae/block_mae/rmse/rmsle/log_loss; `true`
+   for accuracy/f1/f1_macro/roc_auc.
+4. **Never pair a classification metric with a regression task or vice versa.** `prefer_mae_family`
+   applies **only** to regression — MAE must never score a classification task (it silently
+   inverts keep-best). The floor guard-rails this, but emit a consistent pair regardless.
+
+---
+
 ## Part 3 — Completeness constraints
 
 Echo the dataset-specific obligations downstream must honor (these are where plan review earns
@@ -388,6 +414,13 @@ fabricate a `..._000000` timestamp — use the canonical run_id so the field is 
     "rationale": "≤50 words citing the signals that drove this choice",
     "capability_gaps": ["optional: what a specialist model outside the fixed pool could do better"],
     "programmer_instructions": "≤40 words: concrete directive about feature emphasis for the programmer"
+  },
+  "metric_decision": {
+    "primary_metric": "block_mae | mae | rmse | accuracy | f1 | f1_macro | roc_auc",
+    "greater_is_better": false,
+    "prefer_mae_family": true,
+    "source": "description_explicit | task_type_default",
+    "rationale": "≤30 words: which spec_parse signal drove the metric (explicit evaluation_metric vs task_type default)"
   },
   "modeling_hints": {
     "prefer_regularized": false,

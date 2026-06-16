@@ -1,0 +1,60 @@
+{
+  "run_id": "20260616_115612",
+  "status": "ok",
+  "round": 1,
+  "metric_name": "accuracy",
+  "ablation_model": "hist_gradient_boosting",
+  "baseline_mae": 0.830527,
+  "prune_margin": 0.00830527,
+  "per_group": {
+    "per_fold_aggregates": {
+      "mae_without": 0.817059,
+      "delta": -0.013468,
+      "decision": "keep",
+      "n_cols": 6,
+      "cols": [
+        "tgt_mean_Sex",
+        "tgt_mean_Pclass",
+        "tgt_mean_Embarked",
+        "tgt_mean_Sex_Pclass",
+        "ticket_group_size",
+        "ticket_prefix_enc"
+      ]
+    },
+    "other_features": {
+      "mae_without": 0.786756,
+      "delta": -0.043771,
+      "decision": "keep",
+      "n_cols": 17,
+      "cols": [
+        "Age",
+        "Emb_C",
+        "Emb_Q",
+        "Emb_S",
+        "Fare",
+        "Parch",
+        "Pclass",
+        "Pclass_x_Fare",
+        "Sex_female",
+        "Sex_male",
+        "Sex_x_Age",
+        "Sex_x_Pclass",
+        "SibSp",
+        "deck",
+        "family_size",
+        "has_cabin",
+        "title"
+      ]
+    }
+  },
+  "pruned_groups": [],
+  "kept_groups": [
+    "other_features",
+    "per_fold_aggregates"
+  ],
+  "pruned_columns": [],
+  "n_pruned_columns": 0,
+  "feature_spec_full": "outputs/runs/20260616_115612/logs/feature_spec_full.json",
+  "feature_spec_pruned": "outputs/runs/20260616_115612/logs/feature_spec.json",
+  "determinism_seed": 42
+}

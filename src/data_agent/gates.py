@@ -409,13 +409,19 @@ def check_prediction_sanity(
     candidate_score: float | None = None,
     greater_is_better: bool = False,
     clip_fraction: float | None = None,
+    oof_predictions: Any = None,
+    oof_truth: Any = None,
+    reported_cv_score: float | None = None,
     run_id: str | None = None,
 ) -> Verdict:
     """Sanity-check final predictions for the failure modes that slip past a
     green model-selection score: degenerate (near-constant) output, heavy
     clipping, a large distribution shift vs the training target, suspiciously
     perfect holdout fit (leakage/overfit), and a model that fails to beat its
-    own baseline. Dataset-agnostic; thresholds are relative, not absolute."""
+    own baseline. For classification it also checks predicted class balance vs the
+    training base rate and OOF honesty (a saved OOF that reproduces the target far
+    better than the reported CV → an in-sample/leaky OOF). Dataset-agnostic;
+    thresholds are relative, not absolute."""
     reasons: list[str] = []
     corrections: dict = {}
     status = PASS
@@ -449,6 +455,43 @@ def check_prediction_sanity(
         if n and len({str(v) for v in preds.tolist()}) == 1:
             reasons.append("every prediction is the same class label")
             status = _worst(status, WARN)
+        # Predicted class balance vs the training base rate. A model that beats CV but
+        # under/over-predicts a class on test (e.g. far fewer survivors than the base
+        # rate implies) is miscalibrated — exactly the failure that let a sex-only
+        # baseline win. WARN when any class's predicted share is far from its base rate.
+        tt_labels = pd.Series(train_target).dropna()
+        if n and len(tt_labels) > 0:
+            base = tt_labels.astype(str).value_counts(normalize=True)
+            pred_share = pd.Series([str(v) for v in preds.tolist()]).value_counts(normalize=True)
+            for cls, base_share in base.items():
+                if base_share <= 0:
+                    continue
+                ps = float(pred_share.get(cls, 0.0))
+                ratio = ps / float(base_share)
+                if ratio < 0.6 or ratio > 1.66:
+                    reasons.append(
+                        f"predicted share of class {cls} ({ps:.2f}) is far from its training "
+                        f"base rate ({float(base_share):.2f}); ratio {ratio:.2f}")
+                    status = _worst(status, WARN)
+        # OOF honesty: a saved OOF whose own accuracy ≫ the reported CV (or that
+        # correlates almost perfectly with the target) is an in-sample / leaky OOF,
+        # not a genuine out-of-fold prediction — it inflates keep-best decisions.
+        if oof_predictions is not None and oof_truth is not None:
+            op = pd.to_numeric(pd.Series(np.asarray(oof_predictions).ravel()), errors="coerce").to_numpy(dtype=float)
+            oy = pd.to_numeric(pd.Series(np.asarray(oof_truth).ravel()), errors="coerce").to_numpy(dtype=float)
+            m = np.isfinite(op) & np.isfinite(oy)
+            if m.sum() >= 20:
+                op, oy = op[m], oy[m]
+                oof_acc = float(np.mean(np.rint(op) == np.rint(oy)))
+                corr = float(np.corrcoef(op, oy)[0, 1]) if np.std(op) > 0 else 0.0
+                if corr > 0.95:
+                    reasons.append(f"saved OOF correlates {corr:.2f} with the target — likely in-sample/leaky, not true out-of-fold")
+                    corrections["regenerate_true_oof"] = True
+                    status = _worst(status, FAIL)
+                elif reported_cv_score is not None and (oof_acc - float(reported_cv_score)) > 0.10:
+                    reasons.append(f"saved OOF accuracy {oof_acc:.3f} far exceeds reported CV {float(reported_cv_score):.3f} — likely leaky OOF")
+                    corrections["regenerate_true_oof"] = True
+                    status = _worst(status, WARN)
 
     if clip_fraction is not None and clip_fraction > 0.10:
         reasons.append(f"{clip_fraction:.0%} of predictions were clipped to the allowed range")
